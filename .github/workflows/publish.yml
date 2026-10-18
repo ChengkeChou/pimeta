@@ -8,24 +8,36 @@ name: Publish to PyPI
 #   Environment        pypi
 #
 # Trigger it either by publishing a GitHub Release (recommended) or by running
-# this workflow manually from the Actions tab.
+# this workflow manually from the Actions tab. Manual runs default to
+# `dry_run: true`, which exercises the full build + test + artifact pipeline but
+# stops before uploading - use it to validate a workflow change without
+# burning a version number.
 
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build and test only - skip the PyPI upload"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
+# Node 20 was deprecated on GitHub-hosted runners. Every action below is pinned
+# to a major release that runs on node24:
+#   checkout v5, setup-python v6, upload-artifact v6, download-artifact v7.
+# (upload-artifact v5 and download-artifact v5/v6 still use node20.)
 jobs:
   build:
     name: Build and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -52,7 +64,7 @@ jobs:
           python -m pytest tests/ -q
 
       - name: Upload artifacts for the publish job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: dist
           path: dist/
@@ -71,12 +83,17 @@ jobs:
       contents: read
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: dist
           path: dist/
 
+      - name: Show what would be uploaded
+        run: ls -l dist/
+
       - name: Publish
+        # Runs on a GitHub Release, and on manual dispatch unless dry_run is set.
+        if: inputs.dry_run != true
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No `password:` — the action obtains a short-lived OIDC token from PyPI.
-        # No `repository-url:` — defaults to https://upload.pypi.org/legacy/
+        # No `password:` - the action obtains a short-lived OIDC token from PyPI.
+        # No `repository-url:` - defaults to https://upload.pypi.org/legacy/
