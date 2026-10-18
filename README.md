@@ -1,4 +1,4 @@
-# pmeta-analysis
+# pimeta
 
 **Pure-Python meta-analysis — a faithful, numerically verified port of R's
 [`metafor`](https://cran.r-project.org/package=metafor),
@@ -10,11 +10,11 @@ the numeric engine is a direct NumPy/SciPy transcription of the R reference
 implementations, so results reproduce R to floating-point tolerance.
 
 ```bash
-pip install pmeta-analysis
+pip install pimeta
 ```
 
 ```python
-import pmeta as ma
+import pimeta as ma
 
 r = ma.rma(yi=[0.20, 0.40, 0.10, 0.50], vi=[0.04, 0.05, 0.03, 0.06], method="REML")
 print(r.b, r.se, r.tau2, r.I2)     # pooled estimate, SE, tau^2, I^2
@@ -24,7 +24,7 @@ print(r.b, r.se, r.tau2, r.I2)     # pooled estimate, SE, tau^2, I^2
 
 ## Why this package
 
-| | R (`metafor`/`netmeta`/`meta`) | **pmeta-analysis** |
+| | R (`metafor`/`netmeta`/`meta`) | **pimeta** |
 |---|---|---|
 | Runtime | R + C/C++ toolchain | Python + NumPy/SciPy |
 | Integration | subprocess / rpy2 | native Python objects |
@@ -108,7 +108,7 @@ Cochrane `.cdir` / `.mtv` exports directly into analysis-ready objects.
 ### 1. Effect sizes from raw 2×2 data
 
 ```python
-import pmeta as ma
+import pimeta as ma
 
 d = ma.escalc(
     measure="RR",
@@ -166,14 +166,14 @@ print(ma.fsn(d.yi, d.vi, type="Rosenthal").fsnum)
 - Python ≥ 3.10
 - `numpy` ≥ 1.24, `scipy` ≥ 1.10, `matplotlib` ≥ 3.7
 - `pandas` is optional — only needed if you want DataFrame-shaped output
-  (`pip install pmeta-analysis[pandas]`)
+  (`pip install pimeta[pandas]`)
 
 ---
 
 ## Numerical validation
 
 The library is developed against a differential test suite: identical datasets
-are fed to R (`metafor` 5.2-1, `netmeta` 3.7-0, `meta` 8.5-0) and to `pmeta`,
+are fed to R (`metafor` 5.2-1, `netmeta` 3.7-0, `meta` 8.5-0) and to `pimeta`,
 and every reported quantity is compared. Typical agreement:
 
 | Family | Max abs. deviation from R |
@@ -226,12 +226,12 @@ packages and methods:
 
 ## 中文说明
 
-**pmeta-analysis 是 R 生态里 `metafor` + `netmeta` + `meta` 三个包的纯 Python 复现。**
+**pimeta 是 R 生态里 `metafor` + `netmeta` + `meta` 三个包的纯 Python 复现。**
 不装 R、不用 rpy2、不依赖任何第三方 meta 分析库，数值引擎是用 NumPy/SciPy 直接转写的，
 结果与 R 逐位对齐（多数函数误差 < 1e-12）。
 
 ```python
-import pmeta as ma
+import pimeta as ma
 
 # 效应量
 d = ma.escalc(measure="RR", ai=[10, 20, 15], bi=[90, 80, 85],

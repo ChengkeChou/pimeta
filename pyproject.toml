@@ -3,11 +3,11 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-# NOTE: the repository is called `pmeta`, but the PyPI distribution name must be
-# `pmeta-analysis`: plain `pmeta` was registered in 2020 by an unrelated 1 KB
-# stub (no releases since) and PyPI names are first-come-first-served.
-# The *import* name is `pmeta` — `pip install pmeta-analysis` -> `import pmeta`.
-name = "pmeta-analysis"
+# "pimeta" is unregistered on both PyPI and TestPyPI, so the distribution name,
+# the import name and the docs all agree: `pip install pimeta` -> `import pimeta`.
+# (Plain "pmeta" was taken: an unrelated 1 KB stub registered it in 2020.)
+# Source repository: https://github.com/ChengkeChou/pmeta
+name = "pimeta"
 version = "1.0.0"
 description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots — a faithful port of R's metafor, netmeta and meta."
 readme = "README.md"
@@ -73,7 +73,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-pmeta = ["py.typed"]
+pimeta = ["py.typed"]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

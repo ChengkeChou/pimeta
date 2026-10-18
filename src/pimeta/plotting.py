@@ -116,7 +116,7 @@ def forest(
 
     ``yi`` / ``vi`` are per-study effect sizes and sampling variances on the
     *analysis* scale (log scale for ratio types). ``pooled`` is an optional
-    :class:`~pmeta.pooling.PooledResult` (or any object
+    :class:`~pimeta.pooling.PooledResult` (or any object
     exposing ``pooled_est``, ``pooled_se`` / ``pooled_ci_lower``,
     ``pooled_ci_upper`` and ``weights``) used to draw the summary diamond and
     size the study boxes by weight.

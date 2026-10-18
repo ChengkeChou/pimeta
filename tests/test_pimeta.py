@@ -1,7 +1,7 @@
-"""Regression tests for ``pmeta`` against hard-coded R reference results.
+"""Regression tests for ``pimeta`` against hard-coded R reference results.
 
 Every expected value in this file was produced by running the equivalent call
-in R 4.6.1 and pasting the printed scalar, so a failure means ``pmeta`` has
+in R 4.6.1 and pasting the printed scalar, so a failure means ``pimeta`` has
 drifted from the reference implementation:
 
   * ``meta`` 8.5-0     — ``metabin`` / ``metaprop`` / ``metacor`` / ``metainc``
@@ -26,8 +26,8 @@ import pytest
 
 import numpy as np
 
-import pmeta as ma
-from pmeta import (  # noqa: F401
+import pimeta as ma
+from pimeta import (  # noqa: F401
     BaujatResult,
     BeggResult,
     CumulResult,
@@ -2705,7 +2705,7 @@ def test_profile_rma():
 
 
 def test_netcomplex():
-    from pmeta import NetmetaResult  # noqa: F401
+    from pimeta import NetmetaResult  # noqa: F401
 
     class _Fake:
         m = 28
@@ -2751,7 +2751,7 @@ def test_metamerge_requires_same_k():
 # ---------------------------------------------------------------------------
 
 def test_settings_roundtrip():
-    import pmeta as _ma
+    import pimeta as _ma
 
     assert gs("method.tau") == "REML"
     assert gs("method_tau") == "REML"
@@ -2773,7 +2773,7 @@ def test_settings_roundtrip():
 
 
 def test_setvals_positional_pairs():
-    import pmeta as _ma
+    import pimeta as _ma
 
     before = _ma.settings_netmeta.get("nchar.trts")
     try:
