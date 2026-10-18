@@ -1,0 +1,12 @@
+# Keep line endings consistent between the repository, the sdist and the wheel.
+# Python source must stay LF so published artifacts are byte-identical to git.
+* text=auto eol=lf
+
+# Binary assets (none yet, ready for future docs images).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.rm5 binary

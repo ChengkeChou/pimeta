@@ -1,0 +1,88 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pmeta-analysis"
+version = "1.0.0"
+description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots — a faithful port of R's metafor, netmeta and meta."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Zhou Cheng-ke", email = "chengke_zhou@whu.edu.cn" }]
+keywords = [
+    "meta-analysis",
+    "systematic-review",
+    "network-meta-analysis",
+    "meta-regression",
+    "effect-size",
+    "heterogeneity",
+    "forest-plot",
+    "funnel-plot",
+    "metafor",
+    "netmeta",
+    "statistics",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Healthcare Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
+]
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+# DataFrame-shaped return values (as_data_frame_*, read_rm5 tables, ...).
+pandas = ["pandas>=2.0"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "build>=1.0",
+    "twine>=4.0",
+    "ruff>=0.4",
+]
+
+[project.urls]
+# No public repository yet. Uncomment the lines below and replace
+# <your-github-user> once one exists — placeholder URLs would show up as dead
+# 404 links in the PyPI sidebar, which is worse than showing none.
+# Homepage = "https://github.com/<your-github-user>/pmeta-analysis"
+# Repository = "https://github.com/<your-github-user>/pmeta-analysis"
+# Issues = "https://github.com/<your-github-user>/pmeta-analysis/issues"
+# Changelog = "https://github.com/<your-github-user>/pmeta-analysis/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pmeta = ["py.typed"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+filterwarnings = ["error::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
