@@ -4,7 +4,44 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] — unreleased
+## [1.0.1] — 2026-10-18
+
+Documentation release. No library code changed; PyPI description is rebuilt from
+`README.md`, so a version bump was needed to publish the corrected docs.
+
+### Added
+
+- `examples/bcg_meta_analysis.py` — a runnable end-to-end walkthrough on the
+  13 BCG vaccine trials. It writes the study table to CSV, recomputes effect
+  sizes with `escalc()`, pools with `rma(REML)`, draws a forest plot, runs
+  Egger's test, trim-and-fill and Rosenthal's fail-safe N, fits a
+  meta-regression on publication year, and closes with a small network
+  meta-analysis — asserting every number against R's `metafor::dat.bcg` output.
+- README badge row (PyPI, Python versions, licence, CI) and an "API conventions
+  worth knowing" table covering: `I2`/`H2`/`R2` are percentages, `confint()`
+  returns a dict, `result.b` is always an array, `escalc()` returns log-scale
+  `yi` for ratio measures, `netrank(...).ranking_random` holds P-scores, plots
+  return a matplotlib `Axes`.
+- README: Requirements matrix stating that CI runs `numpy` 2.5 / `scipy` 1.18 /
+  `matplotlib` 3.11 and that the same example passes on `numpy` 1.26 / `scipy`
+  1.16.
+
+### Fixed
+
+- README listed five symbols that do not exist in the package: `ranktest`
+  (the function is `begg_test`), `cooks.distance` (`cooks_distance`), bare
+  `dfbetas` and `rstandard` (`dfbetas_rma`, `rstandard_rma`), and `transf_rtor`
+  (removed — `metafor` has no `transf.rtor`). Every backticked API name in the
+  README is now checked against `pimeta.__all__`.
+- README claimed `netrank()` offers SUCRA and frequency rankings; it implements
+  P-scores only, which is what netmeta 3.7-0's `netrank()` returns.
+- README `escalc()` list repeated `RD` and omitted nothing else; corrected.
+- Quick-start pooling example printed the wrong three numbers for its own input
+  data.
+- Documented that `metafor.news()` is the sole unimplemented `metafor` export
+  (278/279).
+
+## [1.0.0] — 2026-10-18
 
 First public release. Complete pure-Python reproduction of R's `metafor`
 5.2-1, `netmeta` 3.7-0 and `meta` 8.5-0.
@@ -80,3 +117,4 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.0.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.1

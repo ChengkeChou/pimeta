@@ -6,3 +6,6 @@ include pyproject.toml
 # Test suite and the reference CSVs it needs, so `pytest` works from the sdist.
 recursive-include tests *.py
 recursive-include tests/data *.csv
+
+# Runnable walkthrough referenced from the README.
+recursive-include examples *.py

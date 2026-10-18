@@ -36,5 +36,8 @@ Thumbs.db
 .mypy_cache/
 .ruff_cache/
 
+# Output produced by examples/bcg_meta_analysis.py
+pimeta-example-output/
+
 # Local scratch
 *.log

@@ -1,5 +1,10 @@
 # pimeta
 
+[![PyPI](https://img.shields.io/pypi/v/pimeta.svg)](https://pypi.org/project/pimeta/)
+[![Python versions](https://img.shields.io/pypi/pyversions/pimeta.svg)](https://pypi.org/project/pimeta/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-203%20passing-brightgreen.svg)](https://github.com/ChengkeChou/pimeta/actions/workflows/publish.yml)
+
 **Pure-Python meta-analysis — a faithful, numerically verified port of R's
 [`metafor`](https://cran.r-project.org/package=metafor),
 [`netmeta`](https://cran.r-project.org/package=netmeta) and
@@ -30,7 +35,7 @@ print(r.b, r.se, r.tau2, r.I2)     # pooled estimate, SE, tau^2, I^2
 | Integration | subprocess / rpy2 | native Python objects |
 | Output | R list-like S3 objects | dataclasses with the **same field names** |
 | Plots | base graphics / grid | matplotlib `Axes` you can further style |
-| Reproducibility | reference implementation | verified against R on 350+ functions |
+| Reproducibility | reference implementation | 351 functions verified against R |
 
 Every result object exposes the **same attribute names as the R object's `$`
 fields**, so code and documentation written for R translate almost one-to-one:
@@ -47,7 +52,7 @@ r.weights, r.fitted, r.residuals              # R: r$weights, r$fitted, r$residu
 ## What is covered
 
 ### Effect sizes — `escalc()`
-`RR`, `OR`, `RD`, `AS`, `PETO`, `RD`, `IRR`, `IRS`, `IRSD`, `MN`, `SMN`,
+`RR`, `OR`, `RD`, `AS`, `PETO`, `IRR`, `IRS`, `IRSD`, `MN`, `SMN`,
 `MRAW`, `SMCC`, `MD`, `SMD`, `SMDH`, `ROM`, `RPB`, `RBIS`, `D2OR`, `COR`, `UCOR`,
 `ZCOR`, `ZPCOR`, `PR`, `PLN`, `PLO`, `PAS`, `PFT`, `PRAW`, `PD` — plus cell
 continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
@@ -63,13 +68,13 @@ continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
 `rma()`, `rma.uni` (`rma_uni`), `rma.mv` (`rma_mv`), `rma.glmm` (`rma_glmm`),
 `rma.peto`, `rma.mh`, `rma.uni.selmodel`, `metagen`, `metabin`, `metacont`,
 `metacor`, `metainc`, `metaprop`, `metarate`, `metamean`, `metacum`, `metainf`,
-`metareg`, `trimfill`, `regtest`, `ranktest`, `funnel`, `forest`, `labbe`,
-`radial`, `baujat`, `leave1out`, `influence`, `cooks.distance`, `rstudent`,
+`metareg`, `trimfill`, `regtest`, `begg_test`, `funnel`, `forest`, `labbe`,
+`radial`, `baujat`, `leave1out`, `influence`, `cooks_distance`, `rstudent`,
 `hatvalues`, `gosh`, `fsn`, `permutest`, `tes`, `vif`, `profile_rma`.
 
 ### Network meta-analysis (`netmeta`)
 `netmeta`, `netmetabin`, `netcomb`, `discomb`, `netcomplex`, `netmetareg`,
-`netmeasures`, `netrank` (P-score / SUCRA / freq), `netimpact`, `netpath`,
+`netmeasures`, `netrank` (P-scores), `netimpact`, `netpath`,
 `netsplit`, `netmatrix`, `netcomparison`, `netbind`, `netcontrib`,
 `netdistance`, `netheat`, `nettable`, `netgraph`, `netposet`, `hasse`,
 `rankogram`, `decomp_design`, `invmat`, `hatmatrix`, `comps`, `combinations`,
@@ -87,8 +92,8 @@ continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
 ### S3-style generics
 `coef`, `vcov`, `fitted`, `residuals`, `logLik`, `deviance`, `nobs`, `formula`,
 `AIC`, `BIC`, `weights`, `sigma`, `df_residual`, `model_matrix`, `simulate`,
-`confint`, `predict`, `hatvalues`, `dfbetas`, `rstandard`, `ranef`,
-`summary`, `print`, `plot`.
+`confint`, `predict`, `hatvalues`, `hatvalues_rma`, `dfbetas_rma`,
+`rstandard_rma`, `ranef`, `summary`, `summary_text`, `print_summary`, `plot`.
 
 ### Readers
 `read_rm5`, `read_cdir`, `read_mtv` — parse Cochrane RevMan `.rm5` files and
@@ -96,7 +101,7 @@ Cochrane `.cdir` / `.mtv` exports directly into analysis-ready objects.
 
 ### Transforms (all 58 of `metafor::transf.*`)
 `transf_logit`, `transf_ilogit`, `transf_probit`, `transf_arcsin`,
-`transf_ztor`, `transf_rtor`, `transf_ztor2`, `transf_dtocliffd`,
+`transf_ztor`, `transf_ztor2`, `transf_dtocliffd`,
 `transf_pft`, `transf_ipft`, `transf_ahw`, `transf_iahw`, `transf_abt`,
 `transf_iabt`, `transf_rpbtod`, `transf_dtou1`, `transf_dtou2`,
 `transf_dtou3`, and the `_int` / `_mode` variants.
@@ -123,8 +128,8 @@ print(d.vi)   # sampling variances
 
 ```python
 r = ma.rma(d.yi, d.vi, method="REML")
-print(r.b, r.ci_lb, r.ci_ub)   # 0.42  0.06  0.46
-print(r.tau2, r.I2, r.QE, r.QEp)
+print(r.b, r.ci_lb, r.ci_ub)   # 0.0266  -0.3557  0.4090   (log RR; exp() -> 1.027)
+print(r.tau2, r.I2, r.QE, r.QEp)  # 0.0  0.0  0.355  0.837
 
 ma.forest(d.yi, d.vi, studlab=["Study A", "Study B", "Study C"],
           pooled=r, effect_type="RR", filename="forest.png")
@@ -133,6 +138,7 @@ ma.forest(d.yi, d.vi, studlab=["Study A", "Study B", "Study C"],
 ### 3. Meta-regression
 
 ```python
+# yi, vi come from your study table; dose / baseline_risk are the moderators
 meta_reg = ma.rma(yi, vi, mods=[dose, baseline_risk], method="REML")
 print(meta_reg.b)          # intercept + slopes
 print(meta_reg.QM, meta_reg.QMp)
@@ -163,10 +169,15 @@ print(ma.fsn(d.yi, d.vi, type="Rosenthal").fsnum)
 
 ## Requirements
 
-- Python ≥ 3.10
+- Python ≥ 3.10 (tested on 3.10 – 3.13)
 - `numpy` ≥ 1.24, `scipy` ≥ 1.10, `matplotlib` ≥ 3.7
-- `pandas` is optional — only needed if you want DataFrame-shaped output
+- `pandas` is optional — only needed for DataFrame-shaped output
   (`pip install pimeta[pandas]`)
+
+CI runs the suite on Python 3.12 with `numpy` 2.5, `scipy` 1.18 and
+`matplotlib` 3.11; the same example script passes locally with `numpy` 1.26 /
+`scipy` 1.16, so both sides of the NumPy 2.0 boundary are covered. Figures use
+the headless `Agg` backend and never need a display.
 
 ---
 
@@ -188,17 +199,61 @@ and every reported quantity is compared. Typical agreement:
 Where R has quirks (non-convergence, `NA` subsets, sign conventions of
 `contrmat`), the behaviour is reproduced rather than "fixed".
 
+Coverage: `meta` 59/59, `netmeta` 38/38 and `metafor` 278/279 exported
+functions. The single exception is `metafor.news()`, a changelog viewer with no
+analytic content.
+
+---
+
+## API conventions worth knowing
+
+A few things differ from what a Python-first user might assume. Each one is
+deliberate: it matches the R object being mirrored.
+
+| Convention | Detail |
+|---|---|
+| `result.I2` is a **percentage** | `92.22`, not `0.9222` — identical to R's `r$I2`. Same for `H2` and `R2`. |
+| `confint(result)` returns a **dict** | `{"tau2", "ci_lb", "ci_ub", "level"}` — the QP/profile confidence interval for τ², mirroring `confint.rma()`. |
+| `result.b` is always an **array** | Even intercept-only models give `np.ndarray` of length 1, like R's `r$b`. Use `float(r.b[0])`. |
+| `escalc()` returns **log-scale** `yi` for ratio measures | `RR` / `OR` / `IRR` are log-transformed; use `math.exp()` to get the reported ratio. |
+| `netrank(...).ranking_random` holds **P-scores**, not ranks | netmeta 3.7-0 names the field `ranking.random` even though it contains P-scores. `Pmatrix_random` holds the pairwise probability matrix. |
+| Plots return a matplotlib `Axes` | Pass `filename="x.png"` to also write the figure, otherwise it stays in memory. The backend is forced to `Agg`, so nothing blocks a headless script. |
+
+`pimeta.__version__` gives the installed version.
+
+---
+
+## Examples
+
+`examples/bcg_meta_analysis.py` is a complete runnable script. It writes the 13
+BCG vaccine trials to a CSV, recomputes the effect sizes with `escalc()`, pools
+them with `rma()`, draws a forest plot, runs Egger's test and trim-and-fill, fits
+a meta-regression on publication year, and finishes with a small network
+meta-analysis — checking the numbers against the values R returns for
+`metafor::dat.bcg` at every step.
+
+```bash
+python examples/bcg_meta_analysis.py
+```
+
 ---
 
 ## Documentation
 
 ```python
+import pimeta as ma
+
+print(ma.__version__)
 help(ma.rma)
 help(ma.netmeta)
 help(ma.escalc)
 ```
 
 Every public symbol carries a docstring that names the R function it mirrors.
+
+- Source and issues: <https://github.com/ChengkeChou/pimeta>
+- Package index: <https://pypi.org/project/pimeta/>
+- Changelog: <https://github.com/ChengkeChou/pimeta/blob/main/CHANGELOG.md>
 
 ---
 
@@ -258,4 +313,19 @@ print(ma.trimfill(d.yi, d.vi).k0)   # 剪补法
 `r$ci.lb` 在 Python 里就是 `r.b`、`r.tau2`、`r.I2`、`r.ci_lb`，
 已有的 R 脚本和教材可以近乎一对一翻译。
 
-覆盖范围：`meta` 59/59、`netmeta` 38/38、`metafor` 278/279 个导出函数。
+**几个需要知道的约定**（都是为了和 R 保持一致）：
+
+| 约定 | 说明 |
+|---|---|
+| `r.I2` 是**百分数** | `92.22` 而不是 `0.9222`，和 R 的 `r$I2` 相同；`H2`、`R2` 同理 |
+| `confint(r)` 返回 **dict** | `{"tau2", "ci_lb", "ci_ub", "level"}`，对应 R 的 `confint.rma()` 给出的 τ² 置信区间 |
+| `r.b` 永远是**数组** | 即使只有截距也是长度为 1 的 `np.ndarray`，取值用 `float(r.b[0])` |
+| `escalc()` 对 RR/OR/IRR 返回**对数尺度** | 要报告比值本身请用 `math.exp()` |
+| 画图返回 matplotlib `Axes` | 加 `filename="x.png"` 才会落盘；后端强制 `Agg`，脚本里不会弹窗卡住 |
+
+完整可运行示例见 [`examples/bcg_meta_analysis.py`](examples/bcg_meta_analysis.py)：
+从 CSV 读入 13 个卡介苗试验 → 算效应量 → 合并 → 森林图 → Egger / 剪补法 →
+元回归 → 网状 meta 分析，每一步都和 R 的 `metafor::dat.bcg` 结果对拍。
+
+覆盖范围：`meta` 59/59、`netmeta` 38/38、`metafor` 278/279 个导出函数
+（唯一未实现的是 `metafor.news()`，它只是查看更新日志，不含分析功能）。
