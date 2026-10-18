@@ -3,6 +3,10 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
+# NOTE: the repository is called `pmeta`, but the PyPI distribution name must be
+# `pmeta-analysis`: plain `pmeta` was registered in 2020 by an unrelated 1 KB
+# stub (no releases since) and PyPI names are first-come-first-served.
+# The *import* name is `pmeta` — `pip install pmeta-analysis` -> `import pmeta`.
 name = "pmeta-analysis"
 version = "1.0.0"
 description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots — a faithful port of R's metafor, netmeta and meta."
@@ -57,13 +61,10 @@ dev = [
 ]
 
 [project.urls]
-# No public repository yet. Uncomment the lines below and replace
-# <your-github-user> once one exists — placeholder URLs would show up as dead
-# 404 links in the PyPI sidebar, which is worse than showing none.
-# Homepage = "https://github.com/<your-github-user>/pmeta-analysis"
-# Repository = "https://github.com/<your-github-user>/pmeta-analysis"
-# Issues = "https://github.com/<your-github-user>/pmeta-analysis/issues"
-# Changelog = "https://github.com/<your-github-user>/pmeta-analysis/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ChengkeChou/pmeta"
+Repository = "https://github.com/ChengkeChou/pmeta"
+Issues = "https://github.com/ChengkeChou/pmeta/issues"
+Changelog = "https://github.com/ChengkeChou/pmeta/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
