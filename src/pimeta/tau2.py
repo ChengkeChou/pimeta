@@ -19,6 +19,7 @@ Estimators implemented (matching ``meta::metagen(method.tau=)``):
 
 from __future__ import annotations
 
+import numpy as np
 from scipy import optimize
 
 # Maximum tau^2 for the root search / iteration. tau^2 > 100 is biologically
@@ -26,20 +27,20 @@ from scipy import optimize
 _TAU2_MAX = 1000.0
 
 
-def _weighted_q(y: list[float], w: list[float]) -> float:
+def _weighted_q(y: list[float] | np.ndarray, w: list[float] | np.ndarray) -> float:
     """Cochran-style Q for a *fixed* weight vector (weights supplied directly)."""
     sw = sum(w)
     mu = sum(wi * yi for wi, yi in zip(w, y)) / sw
     return sum(wi * (yi - mu) ** 2 for wi, yi in zip(w, y))
 
 
-def _q_at(y: list[float], v: list[float], tau2: float) -> float:
+def _q_at(y: list[float] | np.ndarray, v: list[float] | np.ndarray, tau2: float) -> float:
     """Q(tau^2) = sum w_i * (y_i - mu_hat)^2 with w_i = 1/(v_i + tau^2)."""
     w = [1.0 / (vi + tau2) for vi in v]
     return _weighted_q(y, w)
 
 
-def _dl(y: list[float], v: list[float]) -> float:
+def _dl(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """DerSimonian-Laird moment estimator."""
     k = len(y)
     w = [1.0 / vi for vi in v]
@@ -49,7 +50,7 @@ def _dl(y: list[float], v: list[float]) -> float:
     return max(0.0, (q - (k - 1)) / c)
 
 
-def _hs(y: list[float], v: list[float], n: list[float]) -> float:
+def _hs(y: list[float] | np.ndarray, v: list[float] | np.ndarray, n: list[float]) -> float:
     """Hunter-Schmidt estimator (sample-size weights)."""
     k = len(y)
     if not n or any(ni is None or ni <= 0 for ni in n):
@@ -59,7 +60,7 @@ def _hs(y: list[float], v: list[float], n: list[float]) -> float:
     return max(0.0, (q - (k - 1)) / sum(w))
 
 
-def _sj(y: list[float], v: list[float]) -> float:
+def _sj(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """Sidik-Jonkman (2005) one-step estimator."""
     k = len(y)
     ybar = sum(y) / k
@@ -73,7 +74,7 @@ def _sj(y: list[float], v: list[float]) -> float:
     return max(0.0, sum(wi * (yi - mu) ** 2 for wi, yi in zip(w, y)) / (k - 1))
 
 
-def _pm(y: list[float], v: list[float]) -> float:
+def _pm(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """Paule-Mandel estimator: solve Q(tau^2) = k-1 by bisection."""
     k = len(y)
 
@@ -91,7 +92,7 @@ def _pm(y: list[float], v: list[float]) -> float:
     return float(optimize.brentq(f, 0.0, hi))
 
 
-def _eb(y: list[float], v: list[float]) -> float:
+def _eb(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """Empirical Bayes estimator: iterative Paule-Mandel.
 
     metafor's EB converges to the same tau^2 as PM, so we return the PM root.
@@ -117,10 +118,10 @@ SUPPORTED_TAU2_METHODS = frozenset(_METHODS) | LIKELIHOOD_METHODS | {"FE"}
 
 
 def estimate_tau2(
-    y: list[float],
-    v: list[float],
+    y: list[float] | np.ndarray,
+    v: list[float] | np.ndarray,
     method: str,
-    n: list[float] | None = None,
+    n: list[float] | np.ndarray | None = None,
 ) -> float:
     """Return tau-squared for a moment/iterative estimator.
 

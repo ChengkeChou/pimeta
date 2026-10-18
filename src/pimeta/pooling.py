@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 import numpy as np
+from numpy.typing import ArrayLike
 from scipy import integrate, stats
 
 from .tau2 import estimate_tau2
@@ -90,8 +91,8 @@ def _is_ratio(effect_type: str) -> bool:
 
 def _prepare(
     effects: list[StudyEffect], effect_type: str
-) -> tuple[list[float], list[float]]:
-    """Convert raw effects to analysis-scale ``(y, v)`` arrays."""
+) -> tuple[list[float], list[float], list[float]]:
+    """Convert raw effects to analysis-scale ``(y, v, n)`` arrays."""
     if not effects:
         raise ValueError("no studies supplied")
     if effect_type not in SUPPORTED_TYPES:
@@ -151,7 +152,7 @@ def _reml_ml_loglik(
 
 
 def _metafor_fisher_scoring_tau2(
-    y: list[float], v: list[float], X: np.ndarray, method: str
+    y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str
 ) -> float:
     """ML/REML tau^2 via metafor's exact Fisher-scoring iteration.
 
@@ -214,8 +215,8 @@ def _metafor_fisher_scoring_tau2(
 
 
 def _resolve_tau2(
-    y: list[float],
-    v: list[float],
+    y: ArrayLike,
+    v: ArrayLike,
     model: str,
     method: str,
     n: list[float],
@@ -229,17 +230,19 @@ def _resolve_tau2(
         return 0.0, ""
 
     method = method.upper()
+    ya = np.asarray(y, dtype=float).ravel()
+    va = np.asarray(v, dtype=float).ravel()
 
     if method in ("ML", "REML"):
-        X = np.ones((len(y), 1))
-        return _metafor_fisher_scoring_tau2(y, v, X, method), method
+        X = np.ones((ya.size, 1))
+        return _metafor_fisher_scoring_tau2(ya, va, X, method), method
 
     if method == "DL":
-        return estimate_tau2(y, v, "DL", None), "DL"
+        return estimate_tau2(ya, va, "DL", None), "DL"
 
     if method in ("HE", "HS", "SJ", "PM", "EB"):
         n_list = [ni for ni in n if ni == ni and ni > 0] or None
-        return estimate_tau2(y, v, method, n_list), method
+        return estimate_tau2(ya, va, method, n_list), method
 
     raise ValueError(
         f"unsupported tau2 method: {method!r} "
@@ -247,7 +250,7 @@ def _resolve_tau2(
     )
 
 
-def _fit_wls(y: list[float], v: list[float], tau2: float, alpha: float) -> dict:
+def _fit_wls(y: ArrayLike, v: ArrayLike, tau2: float, alpha: float) -> dict:
     """Inverse-variance pooling at a fixed tau^2 (pure NumPy).
 
     ``est``, ``se``, ``ci``, ``z`` and ``p`` are on the analysis scale. Q and
@@ -287,7 +290,7 @@ def _fit_wls(y: list[float], v: list[float], tau2: float, alpha: float) -> dict:
     }
 
 
-def _i2_h2(v: list[float], tau2: float, q: float, model: str) -> tuple[float, float]:
+def _i2_h2(v: ArrayLike, tau2: float, q: float, model: str) -> tuple[float, float]:
     """metafor's I^2 and H^2 for an intercept-only model (p = 1).
 
     metafor computes the 'typical' sampling variance from the FIXED-EFFECT
@@ -304,10 +307,11 @@ def _i2_h2(v: list[float], tau2: float, q: float, model: str) -> tuple[float, fl
 
         H2 = Q/(k - 1),     I2 = max(0, 100*(Q - (k - 1))/Q)
     """
-    k = len(v)
+    va = np.asarray(v, dtype=float)
+    k = va.size
     if k <= 1:
         return 0.0, 1.0
-    wi = 1.0 / np.asarray(v, dtype=float)
+    wi = 1.0 / va
     tr_p = float(wi.sum() - (wi ** 2).sum() / wi.sum())
     vt = (k - 1) / tr_p
     if model == "fixed":
@@ -462,8 +466,8 @@ class Tau2Confint:
 
 
 def confint_tau2(
-    y: list[float],
-    v: list[float],
+    y: ArrayLike,
+    v: ArrayLike,
     tau2: float,
     method: str = "REML",
     level: float = 0.05,

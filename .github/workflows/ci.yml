@@ -1,0 +1,80 @@
+name: CI
+
+# Runs on every push and pull request — the publish workflow only fires on a
+# GitHub Release, which is too late to catch a regression.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test · py${{ matrix.python }} · numpy${{ matrix.numpy }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Oldest supported interpreter on the NumPy 1.x side of the 2.0 split.
+          - { python: "3.10", numpy: "1" }
+          - { python: "3.11", numpy: "1" }
+          # Current interpreters on NumPy 2.x.
+          - { python: "3.12", numpy: "2" }
+          - { python: "3.13", numpy: "2" }
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          if [ "${{ matrix.numpy }}" = "1" ]; then
+            python -m pip install "numpy<2"
+          fi
+          python -m pip install --editable . pytest pytest-cov
+
+      - name: Show resolved versions
+        run: python -c "import sys,numpy,scipy,matplotlib,pimeta; print(sys.version.split()[0], '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| matplotlib', matplotlib.__version__, '| pimeta', pimeta.__version__)"
+
+      - name: Run the test suite with coverage
+        run: python -m pytest tests/ -q --cov=src/pimeta --cov-report=term-missing:skip-covered --cov-report=xml
+
+      - name: Upload coverage report
+        if: matrix.python == '3.12'
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-xml
+          path: coverage.xml
+          if-no-files-found: warn
+          retention-days: 7
+
+  build:
+    name: build + twine check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade build twine
+      - name: Build
+        run: python -m build
+      - name: Validate metadata and README rendering
+        run: python -m twine check dist/*
+      - name: Install the wheel and run the shipped example
+        run: |
+          python -m pip install dist/*.whl
+          python examples/bcg_meta_analysis.py

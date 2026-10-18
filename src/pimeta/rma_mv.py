@@ -50,25 +50,30 @@ class RmaMvResult:
     qe_p: float
     random: str = ""
     int_only: bool = True
-    # internals consumed by robust() (not serialised)
-    M: np.ndarray = field(repr=False, default=None)   # marginal var-cov matrix
-    vb: np.ndarray = field(repr=False, default=None)  # (X'W X)^-1 model vcov
-    X: np.ndarray = field(repr=False, default=None)
-    yi: np.ndarray = field(repr=False, default=None)
+    # internals consumed by robust() (not serialised). These are always supplied
+    # by rma_mv(), so an empty-array factory keeps them non-Optional.
+    M: np.ndarray = field(                          # marginal var-cov matrix
+        repr=False, default_factory=lambda: np.empty((0, 0))
+    )
+    vb: np.ndarray = field(                         # (X'W X)^-1 model vcov
+        repr=False, default_factory=lambda: np.empty((0, 0))
+    )
+    X: np.ndarray = field(repr=False, default_factory=lambda: np.empty((0, 0)))
+    yi: np.ndarray = field(repr=False, default_factory=lambda: np.empty(0))
     level: float = 95.0
     # `~ inner | outer` variance/correlation components (mirrors rma.mv's
     # `$tau2` / `$rho`); None for models with only `~ 1 | factor` terms.
-    tau2: list[float] = None
-    rho: list[float] = None
+    tau2: list[float] | None = None
+    rho: list[float] | None = None
     # fit statistics mirroring rma.mv's `$fit.stats` (both ML and REML columns)
-    ll: float = None                # logLik under the fitted method
-    parms: int = None               # p + number of random-effect parameters
-    fit_stats: dict = None          # {"ML": {...}, "REML": {...}}
-    ddf: list[float] = None         # denominator df (test="t"/"knha"/"adhoc")
+    ll: float | None = None         # logLik under the fitted method
+    parms: int | None = None        # p + number of random-effect parameters
+    fit_stats: dict | None = None   # {"ML": {...}, "REML": {...}}
+    ddf: list[float] | None = None  # denominator df (test="t"/"knha"/"adhoc")
     s2w: float = 1.0                # Knapp-Hartung variance scaling factor
     # internals consumed by ranef() (not serialised)
-    components: list = field(repr=False, default=None)   # random-effect components
-    params: np.ndarray = field(repr=False, default=None)  # final parameter vector
+    components: list | None = field(repr=False, default=None)
+    params: np.ndarray = field(repr=False, default_factory=lambda: np.empty(0))
 
 
 def _encode_levels(values):

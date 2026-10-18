@@ -41,7 +41,6 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
     "Topic :: Scientific/Engineering :: Visualization",
-    "Typing :: Typed",
 ]
 dependencies = [
     "numpy>=1.24",
@@ -72,9 +71,6 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-pimeta = ["py.typed"]
-
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
@@ -87,3 +83,19 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 ignore = ["E501"]
+
+# The package does NOT ship a py.typed marker: the annotations are informative
+# and correct for the public result dataclasses, but the numeric kernel has
+# ~55 known inconsistencies that need a dedicated typing pass. Run
+# `mypy src/pimeta` to see them; the count is tracked in the CHANGELOG.
+# Re-adding py.typed is the goal once that reaches zero.
+[tool.mypy]
+python_version = "3.10"
+files = ["src/pimeta"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = false
+check_untyped_defs = false
+no_implicit_optional = true
+

@@ -4,6 +4,35 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `.github/workflows/ci.yml` — every push and pull request now runs the full
+  suite on a 4-way matrix (Python 3.10/3.11 with `numpy<2`, Python 3.12/3.13 with
+  `numpy` 2.x), reports coverage, and separately builds the sdist/wheel, runs
+  `twine check` and executes `examples/bcg_meta_analysis.py` against the built
+  wheel. Previously the only workflow fired on a GitHub Release, which was far
+  too late to catch a regression.
+- `[tool.mypy]` configuration so contributors get a reproducible
+  `mypy src/pimeta` run.
+
+### Changed
+
+- Corrected several annotations that were objectively wrong rather than merely
+  imprecise: `_prepare()` was declared to return a 2-tuple while returning three
+  values; the τ² helpers in `tau2.py` and the array-taking helpers in
+  `pooling.py` declared `list[float]` while being handed `np.ndarray`; and
+  `RmaMvResult` advertised `np.ndarray` for fields it defaulted to `None`.
+
+### Removed
+
+- The `py.typed` marker and the `Typing :: Typed` classifier. The package ships
+  annotations, but `mypy src/pimeta` still reports ~55 structural
+  inconsistencies in the numeric kernel; advertising PEP 561 support would
+  promise users machine-checked types we cannot yet guarantee. The marker comes
+  back once that count reaches zero.
+
 ## [1.0.1] — 2026-10-18
 
 Documentation release. No library code changed; PyPI description is rebuilt from
