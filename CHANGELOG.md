@@ -79,4 +79,4 @@ First public release. Complete pure-Python reproduction of R's `metafor`
   are reproduced deliberately.
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
-[1.0.0]: https://github.com/ChengkeChou/pmeta/releases/tag/v1.0.0
+[1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0

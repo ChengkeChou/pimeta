@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 # "pimeta" is unregistered on both PyPI and TestPyPI, so the distribution name,
 # the import name and the docs all agree: `pip install pimeta` -> `import pimeta`.
 # (Plain "pmeta" was taken: an unrelated 1 KB stub registered it in 2020.)
-# Source repository: https://github.com/ChengkeChou/pmeta
+# Source repository: https://github.com/ChengkeChou/pimeta
 name = "pimeta"
 version = "1.0.0"
 description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots — a faithful port of R's metafor, netmeta and meta."
@@ -61,10 +61,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ChengkeChou/pmeta"
-Repository = "https://github.com/ChengkeChou/pmeta"
-Issues = "https://github.com/ChengkeChou/pmeta/issues"
-Changelog = "https://github.com/ChengkeChou/pmeta/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/ChengkeChou/pimeta"
+Repository = "https://github.com/ChengkeChou/pimeta"
+Issues = "https://github.com/ChengkeChou/pimeta/issues"
+Changelog = "https://github.com/ChengkeChou/pimeta/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
