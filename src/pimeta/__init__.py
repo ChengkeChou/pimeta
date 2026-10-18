@@ -11,6 +11,14 @@ escalc  : effect-size computation from raw study data (RR/OR/RD/AS/PETO,
 tau2    : moment tau-squared estimators (DL/HE/HS/SJ/PM/EB).
 """
 
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _dist_version
+
+try:
+    __version__ = _dist_version("pimeta")
+except PackageNotFoundError:  # importing straight from a source tree
+    __version__ = "0.0.0+unknown"
+
 from .pooling import (
     DIFF_TYPES,
     RATIO_TYPES,
