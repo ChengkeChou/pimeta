@@ -277,6 +277,90 @@ def _transform_delta(delta, deltas, delta_min, delta_max, mapfun, decreasing):
     return out
 
 
+def _gh_rule(n=200):
+    """Gauss-Hermite rule for ``E[f(U)]`` with ``U ~ N(0, 1)``."""
+    nodes, weights = np.polynomial.hermite_e.hermegauss(int(n))
+    return nodes, weights / math.sqrt(2.0 * math.pi)
+
+
+_GH_RULE_CACHE = {}
+
+
+def _gh():
+    if 200 not in _GH_RULE_CACHE:
+        _GH_RULE_CACHE[200] = _gh_rule(200)
+    return _GH_RULE_CACHE[200]
+
+
+def _wi_array(type_, x, delta, preci, steps):
+    """Vectorised :func:`_wi_scalar` (``x`` and ``preci`` may broadcast)."""
+    x = np.asarray(x, dtype=float)
+    preci = np.asarray(preci, dtype=float)
+    s0 = float(steps[0])
+
+    with np.errstate(over="ignore", divide="ignore", invalid="ignore",
+                     under="ignore"):
+        if type_ == "beta":
+            z = np.clip(x, steps[0], steps[1])
+            return z ** (delta[0] - 1.0) * (1.0 - z) ** (delta[1] - 1.0)
+
+        tiny = np.finfo(float).tiny
+        if type_ == "halfnorm":
+            num = np.exp(-delta[0] * preci * x * x)
+            den = np.exp(-delta[0] * preci * s0 * s0)
+        elif type_ == "negexp":
+            num = np.exp(-delta[0] * preci * x)
+            den = np.exp(-delta[0] * preci * s0)
+        elif type_ == "logistic":
+            num = (2.0 * np.exp(-delta[0] * preci * x)
+                   / (1.0 + np.exp(-delta[0] * preci * x)))
+            den = (2.0 * np.exp(-delta[0] * preci * s0)
+                   / (1.0 + np.exp(-delta[0] * preci * s0)))
+        elif type_ == "power":
+            num = (1.0 - x) ** (preci * delta[0])
+            den = (1.0 - s0) ** (preci * delta[0])
+        elif type_ in ("halfnorm1", "negexp1", "logistic1", "power1"):
+            t = (x - s0) / (1.0 - s0)
+            if type_ == "halfnorm1":
+                num, den = np.exp(-delta[0] * preci * t * t), 1.0
+            elif type_ == "negexp1":
+                num, den = np.exp(-delta[0] * preci * t), 1.0
+            elif type_ == "logistic1":
+                num = 2.0 * np.exp(-delta[0] * preci * t) / (
+                    1.0 + np.exp(-delta[0] * preci * t))
+                den = 1.0
+            else:
+                num, den = (1.0 - t) ** (preci * delta[0]), 1.0
+        elif type_ == "negexppow":
+            num = np.exp(-delta[0] * preci * x ** (1.0 / delta[1]))
+            den = np.exp(-delta[0] * preci * s0 ** (1.0 / delta[1]))
+        elif type_ in ("halfnorm2", "negexp2", "logistic2", "power2"):
+            if type_ == "halfnorm2":
+                inner = (np.exp(-delta[1] * preci * x * x)
+                         / np.exp(-delta[1] * preci * s0 * s0))
+            elif type_ == "negexp2":
+                inner = (np.exp(-delta[1] * preci * x)
+                         / np.exp(-delta[1] * preci * s0))
+            elif type_ == "logistic2":
+                num = (2.0 * np.exp(-delta[1] * preci * x)
+                       / (1.0 + np.exp(-delta[1] * preci * x)))
+                den_ = (2.0 * np.exp(-delta[1] * preci * s0)
+                        / (1.0 + np.exp(-delta[1] * preci * s0)))
+                inner = num / den_
+            else:
+                inner = ((1.0 - x) ** (preci * delta[1])
+                         / (1.0 - s0) ** (preci * delta[1]))
+            return (delta[0] + inner) / (1.0 + delta[0])
+        else:
+            raise ValueError(f"unsupported selection model type: {type_!r}")
+
+        with np.errstate(divide="ignore", invalid="ignore"):
+            out = num / den
+        out = np.where(den == 0.0, np.where(num == 0.0, 1.0, np.inf), out)
+    out = np.where(x <= s0, 1.0, out) if type_ != "beta" else out
+    return np.maximum(out, tiny)
+
+
 def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                   mapfun, delta_min, delta_max, decreasing, delta_transf,
                   tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
@@ -287,6 +371,12 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
     metafor passes to R's ``integrate()`` (``rel.tol = .Machine$double.eps^0.25``,
     ``subdivisions = 100``), so the numerical accuracy — and hence the point at
     which the optimiser stops — matches the reference implementation.
+
+    A fixed Gauss-Hermite rule would be two orders of magnitude faster, but the
+    selection weights ``exp(-delta * preci * p^2)`` are step functions once
+    ``delta`` grows (the exponent reaches -600 on the realistic fits), and a
+    200-node rule loses 5e-4 of relative accuracy there — enough to move the
+    optimum more than R's own quadrature does.  Accuracy wins over speed.
     """
     k = len(yi)
     sub_idx = np.where(subset)[0]
@@ -932,9 +1022,9 @@ def selmodel(
     if delta is None:
         delta_arg = np.full(deltas, np.nan)
     else:
-        delta_arg = np.asarray(delta, dtype=float)
+        delta_arg = np.atleast_1d(np.asarray(delta, dtype=float)).ravel()
         if delta_arg.size == 1 and deltas > 1:
-            delta_arg = np.full(deltas, float(delta_arg))
+            delta_arg = np.full(deltas, float(delta_arg[0]))
         if len(delta_arg) != deltas:
             raise ValueError(f"'delta' should be of length {deltas}")
 
@@ -946,13 +1036,17 @@ def selmodel(
 
     # --- con overrides ------------------------------------------------------- #
     if con["delta.min"] is not None:
-        delta_min = np.asarray(con["delta.min"], dtype=float)
+        delta_min = np.atleast_1d(np.asarray(con["delta.min"], dtype=float)).ravel()
         if delta_min.size == 1 and deltas > 1:
-            delta_min = np.full(deltas, float(delta_min))
+            delta_min = np.full(deltas, float(delta_min[0]))
+        if delta_min.size != deltas:
+            raise ValueError(f"'delta.min' should be of length {deltas}")
     if con["delta.max"] is not None:
-        delta_max = np.asarray(con["delta.max"], dtype=float)
+        delta_max = np.atleast_1d(np.asarray(con["delta.max"], dtype=float)).ravel()
         if delta_max.size == 1 and deltas > 1:
-            delta_max = np.full(deltas, float(delta_max))
+            delta_max = np.full(deltas, float(delta_max[0]))
+        if delta_max.size != deltas:
+            raise ValueError(f"'delta.max' should be of length {deltas}")
 
     # mapfun / mapinvfun (default: scaled-logistic onto [delta.min, delta.max]).
     # ``stepfun`` (decreasing) and ``truncest`` set their own maps above; an
@@ -1068,6 +1162,31 @@ def selmodel(
         )
 
     opt_res = _run_opt(ll_fun, par0)
+
+    # The truncated / step-function likelihoods are piecewise constant in the
+    # cut-point, so the score is exactly zero across whole intervals and a
+    # gradient method happily stops on such a plateau; two-parameter weights
+    # are flat enough to stall as well.  metafor's optim() has the same
+    # weakness (its ``truncest`` and ``negexppow`` fits are not the maxima).
+    # One derivative-free restart costs little and never makes the fit worse.
+    _restart = type_ in ("trunc", "truncest", "stepfun", "stepcon",
+                         "negexppow")
+    if _restart and np.any(np.isnan(delta_arg)):
+        try:
+            nm = optimize.minimize(
+                ll_fun, np.asarray(opt_res.x, dtype=float),
+                method="Nelder-Mead",
+                options={"maxiter": 250, "xatol": 1e-8,
+                         "fatol": 1e-10, "adaptive": True},
+            )
+            if (np.isfinite(nm.fun)
+                    and float(np.asarray(nm.fun)) < float(np.asarray(opt_res.fun))):
+                polished = _run_opt(ll_fun, np.asarray(nm.x, dtype=float))
+                opt_res = (polished
+                           if float(np.asarray(polished.fun))
+                           <= float(np.asarray(nm.fun)) else nm)
+        except Exception:
+            pass
     par_opt = opt_res.x
 
     fit = make(

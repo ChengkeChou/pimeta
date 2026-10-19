@@ -60,6 +60,50 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   refits where metafor re-estimates it. `cooks_distance_rma` now matches R to
   1e-9 and returns an array instead of a dict keyed on study names.
   `update_rma` also works again without an explicit `mods` argument.
+- **`treats()` did not reproduce R's `abbreviate()`.** It claimed to, but
+  emitted `aa1`/`aa2`/`bb1` where R gives `a1`/`a2`/`bb`. `stripchars()` from
+  `src/main/character.c` and `base::abbreviate()`'s `left.kept` loop are now
+  transcribed: spaces first, then lower-case vowels, then lower-case
+  consonants, then anything, always from the end of a word and never touching
+  the first character. All six reference cases match R exactly.
+- **`netcomplex()` was a different function than R's.** It returned the number
+  of independent cycles of the comparison graph, but `netmeta::netcomplex()`
+  computes the *combination effects* of a component network meta-analysis
+  (`C %*% Comp`, `se = sqrt(diag(C %*% Lplus %*% t(C)))`). `netcomplex()` now
+  implements the latter and returns a `NetcomplexResult`; the cycle count lives
+  on as `netcomplexity()`.
+- **`netpath()` crashed with `NameError: name 'scipy' is not defined`** whenever
+  the path-incidence matrix was rank deficient, because `scipy.linalg` was never
+  imported for the pivoted QR.
+- **`netmeta()` raised `ValueError: could not broadcast input array from shape
+  (2,) into shape (1,)` for a two-treatment network.** `fX(n)` is degenerate at
+  `n == 2`; the single contrast is now `-theta_1` as in R.
+- **`nettable()` omitted comparisons without direct evidence.** netmeta lists
+  all `n(n-1)/2` rows and leaves the direct columns as `.` (NA here).
+- **`subgroup()` silently dropped studies.** It zipped the study labels against
+  the comparison rows, so a one-label-per-study vector (the normal case) only
+  covered the first few rows and every subgroup fit used the wrong studies. It
+  now accepts a study-level or a comparison-level vector and validates the
+  length.
+- **`hatmatrix()` defaulted to `method="Davies"`**; netmeta 3.7-0 defaults to
+  `"Ruecker"`.
+- **`pairwise()` iterated scalar `n`/`event`/`mean`/`sd`** (`TypeError: 'int'
+  object is not iterable`) and produced a confusing error when no outcome data
+  was supplied. Length-1 vectors are recycled like in R and the missing-data
+  error names the alternatives.
+- **`selmodel()` crashed on a scalar `delta`, or on a scalar
+  `control={"delta.min"/"delta.max"}``** (`TypeError: len() of unsized object`
+  and `IndexError: too many indices`); both are broadcast now, and a wrong
+  length raises a clear error.
+- **`selmodel()` stopped short of the maximum for the plateau models.** The
+  truncated likelihoods are piecewise constant in the cut-point, so the score
+  is exactly zero across whole intervals and BFGS halts on the plateau —
+  `type="truncest"` returned a log-likelihood of 9.38 where R already reaches
+  13.57 and the true maximum is 13.72. A derivative-free restart now runs for
+  the types with flat regions (`trunc`, `truncest`, `stepfun`, `stepcon`,
+  `negexppow`); it never makes the fit worse and it beats metafor's own
+  `optim()` result on `truncest` (13.7243 vs 13.5676) and `negexppow`
+  (29.3369 vs 29.3326).
 
 ### Added
 
@@ -133,6 +177,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `regtest` with the `sei`/`vi`/`ni` predictors, `begg_test`, `trimfill`
   (L0/R0/Q0), `leave1out`, `influence` and its components (`cooks_distance`,
   `hatvalues`, `rstudent`), `baujat`, `cumul`, and `metareg`.
+- `tests/test_transforms.py` — 64 tests pinning every `metafor:::transf.*`
+  helper (the `*_int` integral transforms, the `*_mode`/`*_pct`/`*_d` families,
+  `transf_iprev`, `transf_ilogit`, `transf_*_props`, and the argument checking)
+  to R reference values.
+- `tests/test_fmt_conv_extras.py` — 21 tests for `fmtx`/`formatx`/`dfround`,
+  `conv_delta`/`conv_wald`/`conv_fivenum`, `matreg`, `simulate_rma`, `vcalc`,
+  `hettest` and `profile_rma`.
+- `tests/test_netmeta_api.py` — 94 tests pinning the rest of the netmeta API:
+  `nettable`, `netrank` (P-scores), `netmeasures` (`minpar`, `minpar.study`,
+  `proportion`), `netsplit` (direct/indirect and the inconsistency test),
+  `decomp_design`, `netdistance`, `netmatrix`, `netconnection`, `hatmatrix`
+  (`Davies` full/short/long and `Krahn`), `vikor`, `subgroup`, `netcomplex`,
+  `pairwise`, `treats`, `comps`, `combinations`, `createC` and the
+  `gemtc2netmeta`/`crossnma2netmeta` converters.
+- `tests/test_selmodel_models.py` — 49 tests covering all 18 selection-model
+  types, both alternative hypotheses, `prec`, fixed `delta`, `subset`,
+  `control` overrides and the `LRT` against the plain model. The fits are
+  memoised because each one costs seconds.
 - `[tool.mypy]` configuration so contributors get a reproducible
   `mypy src/pimeta` run.
 
