@@ -11,6 +11,7 @@ the ``calculus`` package that metafor uses for :func:`deltamethod`.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -624,76 +625,322 @@ def vif(result, btt=None, intercept=False):
 
 @dataclass
 class PermutestResult:
-    """Result of :func:`permutest` (``metafor::permutest``)."""
+    """Result of :func:`permutest` (``metafor::permutest``).
+
+    ``pval`` holds one permutation p-value per model coefficient (``p``
+    entries), ``QMp_perm`` the permutation p-value of the omnibus statistic.
+    ``ci_lb`` / ``ci_ub`` are only filled in when ``permci`` was requested.
+    """
 
     pval: list[float]
     QM: float
     QMp: float
-    QMp_perm: list[float]
+    QMp_perm: float
     dfs: list[int]
     k: int
     p: int
     nperm: int
+    exact: bool = False
+    beta: list[float] | None = None
+    se: list[float] | None = None
+    ci_lb: list[float] | None = None
+    ci_ub: list[float] | None = None
 
 
-def permutest(result, exact=False, iter=1000, permci=False, seed=None):
+#: metafor's ``comptol = .Machine$double.eps^0.5``
+_PERM_COMPTOL = math.sqrt(2.220446049250313e-16)
+
+
+def _perm_fit(y, vi, X, *, method, test):
+    """``rma.uni`` with ``X`` used verbatim (metafor: ``intercept = FALSE``)."""
+    from .rma_uni import rma
+
+    p = X.shape[1]
+    r = rma(y, vi=vi, mods=(None if p == 1 else X[:, 1:]),
+            method=method, test=test)
+    return (np.asarray(r.b, dtype=float),
+            np.asarray(r.zval, dtype=float),
+            float(r.QM))
+
+
+def _unique_row_perms(key: list) -> list[list[int]]:
+    """Every distinct ordering of ``key`` (used by ``exact=TRUE``)."""
+    from itertools import permutations
+
+    seen: set = set()
+    out: list[list[int]] = []
+    for perm in permutations(range(len(key))):
+        cand = tuple(key[i] for i in perm)
+        if cand in seen:
+            continue
+        seen.add(cand)
+        out.append(list(perm))
+    return out
+
+
+def _perm_distribution(yi, vi, X, *, method, test, n_iter, exact, rng):
+    """Permutation distribution of (beta, zval, QM).
+
+    Without moderators metafor flips the *signs* of the outcomes -- row
+    permutations leave an intercept-only design matrix unchanged, so a
+    permutation test would be degenerate.  With moderators the rows of ``X``
+    are permuted.
+    """
+    k, p = X.shape
+    int_only = p == 1 and np.all(X[:, 0] == X[0, 0])
+    beta = np.full((n_iter, p), np.nan)
+    zval = np.full((n_iter, p), np.nan)
+    qm = np.full(n_iter, np.nan)
+
+    if int_only:
+        if exact:
+            from itertools import product as _product
+
+            signs = np.array(list(_product((-1.0, 1.0), repeat=k)))
+        else:
+            signs = None
+        for i in range(n_iter):
+            s = signs[i] if signs is not None else rng.choice([-1.0, 1.0], size=k)
+            b, z, q = _perm_fit(s * yi, vi, X, method=method, test=test)
+            beta[i], zval[i], qm[i] = b, z, q
+    else:
+        if exact:
+            key = [tuple(r) for r in X]
+            perms = _unique_row_perms(key)
+        else:
+            perms = None
+        for i in range(n_iter):
+            idx = perms[i] if perms is not None else rng.permutation(k)
+            b, z, q = _perm_fit(yi, vi, X[idx, :], method=method, test=test)
+            beta[i], zval[i], qm[i] = b, z, q
+
+    if not exact:
+        # metafor inserts the observed fit as the first replicate so that it is
+        # always counted in the reference distribution.
+        b0, z0, q0 = _perm_fit(yi, vi, X, method=method, test=test)
+        beta[0], zval[0], qm[0] = b0, z0, q0
+    return beta, zval, qm
+
+
+def _perm_pvals(zval_perm, beta_perm, zval_obs, beta_obs, *, stat, alternative,
+                p2defn):
+    """Per-coefficient permutation p-values (metafor's branches)."""
+    with np.errstate(invalid="ignore"):
+        if alternative == "two.sided":
+            if p2defn == "abs":
+                obs = np.abs(zval_obs) if stat == "test" else np.abs(beta_obs)
+                arr = np.abs(zval_perm if stat == "test" else beta_perm)
+                return np.nanmean(arr >= obs - _PERM_COMPTOL, axis=0)
+            out = np.full(zval_obs.shape, np.nan)
+            arr = zval_perm if stat == "test" else beta_perm
+            obs = zval_obs if stat == "test" else beta_obs
+            for j in range(obs.size):
+                med = np.nanmedian(arr[:, j])
+                if obs[j] > med:
+                    out[j] = 2.0 * np.nanmean(arr[:, j] >= obs[j] - _PERM_COMPTOL)
+                else:
+                    out[j] = 2.0 * np.nanmean(arr[:, j] <= obs[j] + _PERM_COMPTOL)
+            return np.minimum(out, 1.0)
+        arr = zval_perm if stat == "test" else beta_perm
+        obs = zval_obs if stat == "test" else beta_obs
+        if alternative == "less":
+            out = np.nanmean(arr <= obs + _PERM_COMPTOL, axis=0)
+        else:
+            out = np.nanmean(arr >= obs - _PERM_COMPTOL, axis=0)
+        return np.minimum(out, 1.0)
+
+
+def permutest(result, exact=False, iter=1000, btt=None, permci=False,
+              seed=None, alternative="two.sided", stat="test",
+              p2defn="abs"):
     """Permutation test for the model coefficients (``metafor::permutest``).
 
-    The observed data are repeatedly permuted (rows of ``X`` kept aligned with
-    the outcome only under H0) and the Wald-type statistic is recomputed.
+    With moderators the rows of the design matrix are permuted; without them
+    the outcomes get random **sign flips**, which is the randomisation
+    distribution of a single-group meta-analysis (permuting the outcomes there
+    would leave the fit unchanged).  Each coefficient gets its own p-value from
+    its own permuted z-distribution, and the omnibus ``QM`` gets one too.
 
     Args:
         result: fitted :class:`RmaResult`.
-        exact: enumerate all permutations (only feasible for small ``k``).
-        iter: number of random permutations when ``exact=False``.
-        permci: also compute permutation confidence intervals (not implemented;
-            accepted for API compatibility).
+        exact: enumerate the whole permutation set (2^k sign patterns without
+            moderators, k!/prod(c!) row permutations with them).  Ignored (and
+            silently switched on/off) exactly as metafor does: if the exact
+            count is no larger than ``iter`` the exact test is used anyway.
+        iter: number of random permutations when the exact set is too large.
+        btt: 1-based indices of the coefficients to test (metafor's ``btt``).
+            Defaults to the moderator coefficients (or 1 when there are none).
+        permci: also compute permutation confidence intervals for the
+            coefficients (a root search on the permutation p-value, so this
+            costs roughly ``2 * p`` full permutation distributions).
         seed: optional RNG seed.
+        alternative: ``"two.sided"`` (default), ``"less"`` or ``"greater"``.
+        stat: ``"test"`` (z-values, default) or ``"coef"`` (raw coefficients).
+        p2defn: ``"abs"`` (default) or ``"px2"`` two-sided convention.
 
     Returns:
         :class:`PermutestResult`.
     """
-    from .rma_uni import rma
+    from scipy import optimize as _opt
 
-    rng = np.random.default_rng(seed)
+    alternative = str(alternative)
+    if alternative not in ("two.sided", "less", "greater"):
+        raise ValueError("alternative must be 'two.sided', 'less' or 'greater'")
+    stat = str(stat)
+    if stat not in ("test", "coef"):
+        raise ValueError("stat must be 'test' or 'coef'")
+    p2defn = str(p2defn)
+    if p2defn not in ("abs", "px2"):
+        raise ValueError("p2defn must be 'abs' or 'px2'")
+
     yi = np.asarray(result.yi, dtype=float)
     vi = np.asarray(result.vi, dtype=float)
     X = np.asarray(result.X, dtype=float)
-    p = X.shape[1]
-    k = yi.size
-    btt = [0] if result.int_only else list(range(1, p))
-    m = len(btt)
-
-    def _stat(beta, vb):
-        idx = np.ix_(btt, btt)
-        try:
-            return float(beta[btt] @ np.linalg.solve(vb[idx], beta[btt]))
-        except np.linalg.LinAlgError:
-            return np.nan
+    k, p = X.shape
+    method = result.method
+    test = result.test if result.test in ("z", "t", "knha") else "z"
+    if test in ("t", "knha"):
+        test = "z"  # metafor's permutest refits keep `test`; z is what it uses
+    if btt is None:
+        btt = [1] if result.int_only else list(range(2, p + 1))
+    btt = [int(b) - 1 for b in np.atleast_1d(btt)]
+    if min(btt) < 0 or max(btt) >= p:
+        raise ValueError(f"'btt' must index the {p} coefficient(s)")
 
     beta_obs = np.asarray(result.b, dtype=float)
-    QM = _stat(beta_obs, np.asarray(result.vb, dtype=float))
-    QMp = float(stats.chi2.sf(QM, m)) if m > 0 else np.nan
+    zval_obs = np.asarray(result.zval, dtype=float)
+    QM_obs = float(result.QM)
 
-    def _fit(Y):
-        # permute the design instead of the outcome (equivalent under H0 and
-        # keeps the var-cov structure intact)
-        r = rma(Y, vi=vi, mods=(X[:, 1:] if p > 1 else None),
-                method=result.method, test="z", level=result.level)
-        return _stat(np.asarray(r.b, dtype=float), np.asarray(r.vb, dtype=float))
-
-    stats_perm = []
-    if exact:
-        from itertools import permutations as _perms
-        for perm in _perms(range(k)):
-            stats_perm.append(_fit(yi[list(perm)]))
+    # --- how many permutations? -------------------------------------------
+    int_only = bool(result.int_only)
+    if int_only:
+        n_exact = 2 ** k
     else:
-        for _ in range(int(iter)):
-            stats_perm.append(_fit(yi[rng.permutation(k)]))
+        counts: dict = {}
+        for row in X:
+            counts[tuple(row)] = counts.get(tuple(row), 0) + 1
+        n_exact = math.factorial(k)
+        for c in counts.values():
+            n_exact //= math.factorial(c)
+        if n_exact > 10 ** 7:
+            n_exact = None
+    if n_exact is None:
+        use_exact, n_iter = False, int(iter)
+    elif exact or n_exact <= int(iter):
+        use_exact, n_iter = True, int(n_exact)
+    else:
+        use_exact, n_iter = False, int(iter)
 
-    stats_perm = np.asarray(stats_perm, dtype=float)
-    pvals = [float(np.mean(stats_perm >= QM)) for _ in range(m)]
+    rng = np.random.default_rng(seed)
+    beta_perm, zval_perm, QM_perm = _perm_distribution(
+        yi, vi, X, method=method, test=test,
+        n_iter=n_iter, exact=use_exact, rng=rng,
+    )
+
+    pvals = _perm_pvals(zval_perm, beta_perm, zval_obs, beta_obs,
+                        stat=stat, alternative=alternative, p2defn=p2defn)
+    QMp_perm = float(np.nanmean(QM_perm >= QM_obs - _PERM_COMPTOL))
+
+    # --- permutation confidence intervals ---------------------------------
+    ci_lb = ci_ub = None
+    if permci is not False:
+        alpha = 1.0 - float(result.level)
+        if 1.0 / n_iter > alpha / 2.0:
+            warnings.warn(
+                f"cannot obtain {100 * (1 - alpha):g}% permutation CI: "
+                f"{n_iter} permutations is too few",
+                stacklevel=2,
+            )
+        else:
+            coefs = (list(range(p)) if permci is True
+                     else [int(c) - 1 for c in np.atleast_1d(permci)])
+            ci_lb = [float("nan")] * p
+            ci_ub = [float("nan")] * p
+
+            # One fixed permutation set for the whole search keeps the profile
+            # smooth; metafor redraws at every step, which makes uniroot jittery.
+            prng = np.random.default_rng(seed)
+            if int_only:
+                perms = None
+                signs = prng.choice([-1.0, 1.0], size=(n_iter, k))
+            else:
+                signs = None
+                if use_exact:
+                    perms = _unique_row_perms([tuple(r) for r in X])
+                else:
+                    perms = [prng.permutation(k) for _ in range(n_iter)]
+
+            def _pval_at(val, j, altern):
+                ynull = yi - val * X[:, j]
+                if int_only:
+                    arr = np.empty(n_iter)
+                    for i in range(n_iter):
+                        bz = _perm_fit(signs[i] * ynull, vi, X,
+                                       method=method, test=test)
+                        arr[i] = bz[1][j] if stat == "test" else bz[0][j]
+                    obs = _perm_fit(ynull, vi, X, method=method, test=test)
+                else:
+                    arr = np.empty(n_iter)
+                    for i in range(n_iter):
+                        bz = _perm_fit(ynull, vi, X[perms[i], :],
+                                       method=method, test=test)
+                        arr[i] = bz[1][j] if stat == "test" else bz[0][j]
+                    obs = _perm_fit(ynull, vi, X, method=method, test=test)
+                o = obs[1][j] if stat == "test" else obs[0][j]
+                if altern == "greater":
+                    return float(np.nanmean(arr >= o - _PERM_COMPTOL))
+                return float(np.nanmean(arr <= o + _PERM_COMPTOL))
+
+            for j in coefs:
+                bj = beta_obs[j]
+                lo0 = float(result.ci_lb[j])
+                hi0 = float(result.ci_ub[j])
+                for direction in ("lower", "upper"):
+                    if direction == "lower":
+                        lo, hi = lo0 - (bj - lo0), bj
+                        altern, extend = "greater", -1
+                    else:
+                        lo, hi = bj, hi0 + (hi0 - bj)
+                        altern, extend = "less", 1
+                    try:
+                        root = _opt.brentq(
+                            lambda v: _pval_at(v, j, altern) - alpha,
+                            lo, hi, xtol=1e-8, maxiter=200,
+                        )
+                    except ValueError:
+                        # bracket does not change sign: extend once like
+                        # metafor's extendInt = "upX" / "downX"
+                        try:
+                            span = abs(hi - lo)
+                            if extend < 0:
+                                lo2 = lo - span
+                                root = _opt.brentq(
+                                    lambda v: _pval_at(v, j, altern) - alpha,
+                                    lo2, hi, xtol=1e-8, maxiter=200)
+                            else:
+                                hi2 = hi + span
+                                root = _opt.brentq(
+                                    lambda v: _pval_at(v, j, altern) - alpha,
+                                    lo, hi2, xtol=1e-8, maxiter=200)
+                        except ValueError:
+                            root = float("nan")
+                    if direction == "lower":
+                        ci_lb[j] = float(root)
+                    else:
+                        ci_ub[j] = float(root)
+
     return PermutestResult(
-        pval=pvals, QM=QM, QMp=QMp, QMp_perm=pvals,
-        dfs=[k - p] * m, k=k, p=p, nperm=stats_perm.size,
+        pval=[float(v) for v in pvals],
+        QM=QM_obs,
+        QMp=float(result.QMp),
+        QMp_perm=QMp_perm,
+        dfs=[int(k - p)] * len(btt),
+        k=k,
+        p=p,
+        nperm=n_iter,
+        exact=use_exact,
+        beta=[float(v) for v in beta_obs],
+        se=[float(v) for v in result.se],
+        ci_lb=ci_lb,
+        ci_ub=ci_ub,
     )

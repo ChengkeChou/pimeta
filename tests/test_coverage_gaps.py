@@ -729,3 +729,104 @@ def test_predict_without_newmods_on_a_moderator_model_errors():
 def test_predict_with_wrong_newmods_width_errors():
     with pytest.raises(ValueError, match="column"):
         _ci_fit().predict(newmods=[[1, 2], [3, 4]])
+
+
+# =========================================================================
+# permutest — sign-flip randomisation test, per-coefficient p-values, permci
+# =========================================================================
+PERM_YI = [-0.88931133, -1.58538866, -1.34807315, -1.44155119, -0.21754732,
+           -0.78611559, -1.59664331, -0.32966938, -0.55783318, -0.49888521,
+           -0.96960854, -0.48266968, -0.41683796]
+PERM_VI = [0.13320328, 0.26373142, 0.21275645, 0.14693293, 0.14293235,
+           0.12151837, 0.44437921, 0.15956733, 0.13432539, 0.33222552,
+           0.20969889, 0.17053331, 0.13000306]
+PERM_MODS = list(range(1, 14))
+
+
+def test_permutest_intercept_only_matches_r():
+    """R: permutest(rma(yi, vi), iter = 999)$pval = 0.001001."""
+    fit = ma.rma(PERM_YI, PERM_VI, method="REML")
+    pt = ma.permutest(fit, iter=999, seed=42)
+    assert pt.nperm == 999
+    assert pt.exact is False
+    assert pt.pval[0] == pytest.approx(0.001001, abs=1e-6)
+    assert pt.QMp_perm == pytest.approx(0.001001, abs=1e-6)
+
+
+def test_permutest_exact_sign_flips_match_r():
+    """Exact enumeration of the 2^k sign patterns: R also gives 0.031250."""
+    fit = ma.rma(PERM_YI[:6], PERM_VI[:6], method="REML")
+    pt = ma.permutest(fit, exact=True, seed=1)
+    assert pt.exact is True
+    assert pt.nperm == 2 ** 6
+    assert pt.pval[0] == pytest.approx(0.031250, abs=1e-9)
+
+
+def test_permutest_gives_one_p_value_per_coefficient():
+    """R: 0.028028 / 0.069069; ours differs only by the RNG draw."""
+    fit = ma.rma(PERM_YI, PERM_VI, mods=PERM_MODS, method="REML")
+    pt = ma.permutest(fit, iter=999, seed=7)
+    assert len(pt.pval) == 2
+    assert pt.pval[0] != pytest.approx(pt.pval[1])
+    assert pt.pval[0] == pytest.approx(0.028, abs=0.03)
+    assert pt.pval[1] == pytest.approx(0.069, abs=0.03)
+
+
+def test_permutest_uses_sign_flips_for_intercept_only():
+    """Row permutations leave a constant design unchanged, so the old
+    implementation returned p = 1 for every data set."""
+    strong = ma.rma(PERM_YI, PERM_VI, method="REML")
+    p_strong = ma.permutest(strong, iter=499, seed=3).pval[0]
+    # a null data set: 13 effects centred on zero with the same variances
+    null_yi = [-0.05, 0.10, -0.02, 0.07, -0.11, 0.03, 0.08, -0.06,
+               0.01, -0.09, 0.04, 0.02, -0.03]
+    null = ma.rma(null_yi, PERM_VI, method="REML")
+    p_null = ma.permutest(null, iter=499, seed=3).pval[0]
+    assert p_strong < 0.05
+    assert p_null > 0.10
+    assert p_strong < p_null
+
+
+def test_permutest_permci_contains_the_estimate():
+    fit = ma.rma(PERM_YI, PERM_VI, method="REML")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pt = ma.permutest(fit, iter=199, permci=True, seed=11)
+    assert pt.ci_lb is not None and pt.ci_ub is not None
+    assert pt.ci_lb[0] < pt.beta[0] < pt.ci_ub[0]
+    # A permutation CI is Monte-Carlo (only 199 permutations, so the reference
+    # distribution itself is estimated); metafor's is noisier still because it
+    # redraws at every root-search step.  Require agreement in magnitude with
+    # the model CI rather than a strict ordering.
+    assert abs(pt.ci_lb[0] - fit.ci_lb[0]) < 0.2
+    assert abs(pt.ci_ub[0] - fit.ci_ub[0]) < 0.2
+    assert (pt.ci_ub[0] - pt.ci_lb[0]) == pytest.approx(
+        fit.ci_ub[0] - fit.ci_lb[0], rel=0.5)
+
+
+def test_permutest_permci_on_a_selected_coefficient():
+    fit = ma.rma(PERM_YI, PERM_VI, mods=PERM_MODS, method="REML")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pt = ma.permutest(fit, iter=199, permci=[2], seed=11)
+    assert np.isnan(pt.ci_lb[0]) and np.isnan(pt.ci_ub[0])
+    assert pt.ci_lb[1] < fit.b[1] < pt.ci_ub[1]
+
+
+def test_permutest_permci_warns_when_there_are_too_few_permutations():
+    fit = ma.rma(PERM_YI[:6], PERM_VI[:6], method="REML")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        pt = ma.permutest(fit, iter=10, permci=True, seed=1)
+    assert any("too few" in str(w.message) for w in caught)
+    assert pt.ci_lb is None
+
+
+def test_permutest_rejects_bad_options():
+    fit = ma.rma(PERM_YI, PERM_VI, method="REML")
+    with pytest.raises(ValueError, match="alternative"):
+        ma.permutest(fit, alternative="both")
+    with pytest.raises(ValueError, match="stat"):
+        ma.permutest(fit, stat="pval")
+    with pytest.raises(ValueError, match="btt"):
+        ma.permutest(fit, btt=[5])
