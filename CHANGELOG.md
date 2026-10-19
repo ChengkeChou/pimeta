@@ -39,6 +39,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   implemented.
 - **`netmetabin(method="LRP")` and `metabin(method="LRP")` were not
   available at all** (R needs `brglm2`). Both are implemented now.
+- **`escalc(measure="SMD"/"SMDH")` had the wrong Hedges correction and the
+  wrong variance.** It used the large-sample shortcut
+  `1 - 3/(4*mi - 1)` where metafor uses the exact `cmicalc(mi)`, and it
+  multiplied the *whole* variance by `J^2` when metafor only rescales the
+  `yi^2/(2*n)` term: metafor's `vtype="LS"` is
+  `1/n1 + 1/n2 + yi^2/(2*(n1+n2))`. `SMDH` was also an alias for `SMD` even
+  though it standardises by `sqrt((sd1^2+sd2^2)/2)`. On the test data SMD was
+  off by 4.8e-6 and SMDH by 7.2e-4; both now match R to 1e-12, and the other
+  `vtype` choices (`LS2`, `LS3`, `UB`, `AV`, `H0`) are accepted.
+- **`bldiag(..., order=...)` applied the wrong permutation.** The inverse of a
+  plain index vector is `order(order)` in R, i.e. a single argsort of the
+  0-based indices; the code applied two, so `bldiag(c(1,2,3), order=c(3,1,2))`
+  returned `diag(2,3,1)` instead of `diag(3,1,2)`.
+- **`cooks_distance_rma()`, `dfbetas_rma()` and `update_rma()` crashed on any
+  model with moderators.** All three handed `influence()` (or `rma()`) a design
+  matrix that already contained an intercept column, so a second one was
+  prepended and every refit was singular (`LinAlgError`). `cooks_distance_rma`
+  also passed `tau2=` explicitly, which *fixes* tau^2 in the leave-one-out
+  refits where metafor re-estimates it. `cooks_distance_rma` now matches R to
+  1e-9 and returns an array instead of a dict keyed on study names.
+  `update_rma` also works again without an explicit `mods` argument.
 
 ### Added
 
@@ -91,7 +112,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   search (metafor redraws at every step, which leaves `uniroot` chasing a noisy
   step function).
 - **`netcontrib` / `netmetabin` / `netmetareg` gained 25 R-pinned tests**, plus
-  12 for `confint`/`predict`, 9 for `permutest` and 14 for `LRP`.
+  12 for `confint`/`predict`, 9 for `permutest`, 14 for `LRP`, 33 for the
+  utility helpers / `escalc` and 18 for the `rma` accessors.
+- `tests/test_utils_escalc.py` and `tests/test_rma_object_helpers.py` pin
+  `bldiag`, `blsplit`, `vec2mat`, `replmiss`, `cmicalc`, `contrmat`, `pairmat`,
+  `ci`, `units2inches`/`inches2units`, `jama_labels`, `getmfopt`/`setmfopt`,
+  `escalc` across every supported measure, and the `rma` accessors
+  (`coef`, `vcov`, `fitted`, `residuals`, `weights`, `logLik`, `deviance`,
+  `AIC`, `BIC`, `nobs`, `formula`, `model_matrix`, `hatvalues`, `cooks.distance`,
+  `dfbetas`, `rstandard`, `blup`, `summary`).
 - `.github/workflows/ci.yml` — every push and pull request now runs the full
   suite on a 4-way matrix (Python 3.10/3.11 with `numpy<2`, Python 3.12/3.13 with
   `numpy` 2.x), reports coverage, and separately builds the sdist/wheel, runs
@@ -118,7 +147,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   before.
 - Coverage of the six previously thinnest modules: `fsn` 24 %→72 %,
   `publication_bias` 28 %→76 %, `sensitivity` 43 %→92 %, `cumul` 44 %→96 %,
-  `metareg` 44 %→79 %, `tau2` 46 %→89 %.
+  `metareg` 44 %→79 %, `tau2` 46 %→89 %. A second pass took `escalc` 59 %→86 %,
+  `s3` 61 %→79 % and `utils` 58 %→75 %, for 78 %→80 % overall on 13740
+  statements.
 - Corrected several annotations that were objectively wrong rather than merely
   imprecise: `_prepare()` was declared to return a 2-tuple while returning three
   values; the τ² helpers in `tau2.py` and the array-taking helpers in

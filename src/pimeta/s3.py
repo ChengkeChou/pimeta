@@ -310,9 +310,20 @@ def dfbetas_rma(x):
     X = _first(x, "X", "X_matrix")
     if yi is None or vi is None or X is None:
         raise TypeError(f"dfbetas() is not defined for {type(x).__name__}")
+    # influence() prepends its own intercept column, so hand it the moderator
+    # matrix without the model's intercept (otherwise the refit is singular).
+    X = np.asarray(X, dtype=float)
+    if X.ndim == 1:
+        X = X.reshape(-1, 1)
+    if X.shape[1] > 1 and np.allclose(X[:, 0], 1.0):
+        X = X[:, 1:]
+    elif X.shape[1] == 1 and np.allclose(X[:, 0], 1.0):
+        X = None
     inf = influence(list(yi), list(vi), X=X,
                     method=_opt(x, "method") or "REML",
-                    tau2=_opt(x, "tau2"), test=_opt(x, "test") or "z")
+                    tau2=(float(_opt(x, "tau2"))
+                          if _opt(x, "tau2_fix") else None),
+                    test=_opt(x, "test") or "z")
     return np.asarray(inf.dfbs, dtype=float)
 
 

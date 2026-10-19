@@ -78,6 +78,7 @@ def escalc(
     ri=None,
     add: float = 0.5,
     drop00: bool = True,
+    vtype: str = "LS",
 ) -> EscalcResult:
     """Compute effect sizes and variances.
 
@@ -85,7 +86,8 @@ def escalc(
     ci, di`` (treatment/control events and non-events) or ``ai, ci, n1i, n2i``
     (events plus group sizes). ``add`` is the continuity correction for OR
     (0.5 by default, matching metafor). ``drop00`` drops rows with zero events
-    in both arms (metafor's default for RR).
+    in both arms (metafor's default for RR).  ``vtype`` selects the variance
+    estimator for SMD/SMDH (metafor's ``vtype``, default ``"LS"``).
     """
     measure = measure.upper()
     if measure not in SUPPORTED_MEASURES:
@@ -123,7 +125,8 @@ def escalc(
         n2i = _vec(n2i, "n2i")
         if any(x is None for x in (m1i, m2i, sd1i, sd2i, n1i, n2i)):
             raise ValueError("continuous measures need m1i/m2i/sd1i/sd2i/n1i/n2i")
-        return _escalc_continuous(measure, m1i, m2i, sd1i, sd2i, n1i, n2i)
+        return _escalc_continuous(measure, m1i, m2i, sd1i, sd2i, n1i, n2i,
+                                  vtype=vtype)
 
     if measure in _RATE_MEASURES:
         x1i = _vec(x1i, "x1i")
@@ -190,25 +193,92 @@ def _escalc_binary(measure: str, rows: list, add: float) -> EscalcResult:
     return EscalcResult(measure, yi, vi, ni, len(yi))
 
 
+def _cmicalc(mi: float) -> float:
+    """metafor's ``cmicalc(mi, method="exact")`` — the exact Hedges correction.
+
+    ``exp(lgamma(mi/2) - log(sqrt(mi/2)) - lgamma((mi-1)/2))``.  The common
+    large-sample shortcut ``1 - 3/(4*mi - 1)`` is *not* what metafor uses, and
+    differs in the 6th decimal for realistic group sizes.
+    """
+    from scipy.special import gammaln
+
+    if mi <= 1:
+        return float("nan")
+    return float(math.exp(gammaln(mi / 2.0) - math.log(math.sqrt(mi / 2.0))
+                          - gammaln((mi - 1.0) / 2.0)))
+
+
+#: Which ``vtype`` values metafor accepts for each standardised measure.
+_SMD_VTYPES = {"LS", "LS2", "LS3", "UB", "AV", "H0"}
+_SMDH_VTYPES = {"LS", "LS2", "LS3"}
+
+
 def _escalc_continuous(
-    measure: str, m1i, m2i, sd1i, sd2i, n1i, n2i
+    measure: str, m1i, m2i, sd1i, sd2i, n1i, n2i, vtype: str = "LS"
 ) -> EscalcResult:
     yi: list[float] = []
     vi: list[float] = []
     ni: list[float] = []
+    vt = str(vtype).upper()
+    if measure == "SMD" and vt not in _SMD_VTYPES:
+        raise ValueError(
+            f"vtype must be one of {sorted(_SMD_VTYPES)} for SMD"
+        )
+    if measure == "SMDH" and vt not in _SMDH_VTYPES:
+        raise ValueError(
+            f"vtype must be one of {sorted(_SMDH_VTYPES)} for SMDH"
+        )
+    # metafor's vtype="AV" standardises by the sample-size-weighted mean g.
+    if measure == "SMD" and vt == "AV":
+        raw = []
+        for m1, m2, sd1, sd2, n1, n2 in zip(m1i, m2i, sd1i, sd2i, n1i, n2i):
+            mi = n1 + n2 - 2
+            sp = math.sqrt(((n1 - 1) * sd1 ** 2 + (n2 - 1) * sd2 ** 2) / mi)
+            raw.append((m1 - m2) / sp * _cmicalc(mi))
+        wsum = sum(w for w in (n1i[i] + n2i[i] for i in range(len(raw))))
+        mnwyi = sum(raw[i] * (n1i[i] + n2i[i]) for i in range(len(raw))) / wsum
+
     for m1, m2, sd1, sd2, n1, n2 in zip(m1i, m2i, sd1i, sd2i, n1i, n2i):
+        mi = n1 + n2 - 2
         if measure == "MD":
             y = m1 - m2
             v = sd1 ** 2 / n1 + sd2 ** 2 / n2
-        else:  # SMD / SMDH: Hedges' g
-            sp = math.sqrt(
-                ((n1 - 1) * sd1 ** 2 + (n2 - 1) * sd2 ** 2) / (n1 + n2 - 2)
-            )
+        elif measure == "SMD":
+            sp = math.sqrt(((n1 - 1) * sd1 ** 2 + (n2 - 1) * sd2 ** 2) / mi)
             d = (m1 - m2) / sp
-            J = 1.0 - 3.0 / (4.0 * (n1 + n2 - 2) - 1.0)
-            y = J * d
-            v_d = 1.0 / n1 + 1.0 / n2 + d ** 2 / (2.0 * (n1 + n2))
-            v = J ** 2 * v_d
+            y = _cmicalc(mi) * d
+            if vt == "LS":
+                v = 1.0 / n1 + 1.0 / n2 + y ** 2 / (2.0 * (n1 + n2))
+            elif vt == "LS2":
+                v = _cmicalc(mi) ** 2 * (
+                    1.0 / n1 + 1.0 / n2 + d ** 2 / (2.0 * (n1 + n2)))
+            elif vt == "LS3":
+                v = 1.0 / n1 + 1.0 / n2 + y ** 2 / (2.0 * (n1 + n2 - 3.94))
+            elif vt == "UB":
+                cmi = _cmicalc(mi)
+                v = (1.0 / n1 + 1.0 / n2
+                     + (1.0 - (mi - 2.0) / (mi * cmi ** 2)) * y ** 2)
+            elif vt == "AV":
+                v = 1.0 / n1 + 1.0 / n2 + mnwyi ** 2 / (2.0 * (n1 + n2))
+            else:  # H0
+                cmi = _cmicalc(mi)
+                v = (cmi ** 2 * (1.0 / n1 + 1.0 / n2) * mi / (mi - 2.0)
+                     if mi > 2 else float("nan"))
+        else:  # SMDH — standardised by the average of the two SDs
+            sdpi = math.sqrt((sd1 ** 2 + sd2 ** 2) / 2.0)
+            d = (m1 - m2) / sdpi
+            y = _cmicalc(mi) * d
+            if vt == "LS":
+                v = (y ** 2 * (sd1 ** 4 / (n1 - 1) + sd2 ** 4 / (n2 - 1))
+                     / (8.0 * sdpi ** 4)
+                     + (sd1 ** 2 / (n1 - 1) + sd2 ** 2 / (n2 - 1)) / sdpi ** 2)
+            elif vt == "LS2":
+                v = (sd1 ** 2 / (n1 * sdpi ** 2) + sd2 ** 2 / (n2 * sdpi ** 2)
+                     + y ** 2 / (8.0 * sdpi ** 4) * (sd1 ** 4 / n1 + sd2 ** 4 / n2))
+            else:  # LS3
+                v = (sd1 ** 2 / (n1 * sdpi ** 2) + sd2 ** 2 / (n2 * sdpi ** 2)
+                     + y ** 2 / (8.0 * sdpi ** 4)
+                     * (sd1 ** 4 / (n1 - 1) + sd2 ** 4 / (n2 - 1)))
         yi.append(y)
         vi.append(v)
         ni.append(float(n1 + n2))

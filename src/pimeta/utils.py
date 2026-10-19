@@ -98,9 +98,10 @@ def bldiag(*blocks, order=None):
             )
         if idx.dtype == bool or idx.size == 0:
             idx = np.flatnonzero(idx)
-        # R: out[sort.vec, sort.vec] <- out, i.e. the inverse permutation is
-        # applied to the identity layout.
-        inv = np.argsort(np.argsort(idx))
+        # R: out[sort.vec, sort.vec] <- out with sort.vec <- order(order) for a
+        # plain index vector, i.e. the *inverse* permutation (one argsort on the
+        # 0-based indices, not two).
+        inv = np.argsort(idx)
         tmp = np.zeros_like(out)
         tmp[np.ix_(inv, inv)] = out
         out = tmp
@@ -775,9 +776,22 @@ def cooks_distance_rma(result):
     """``metafor::cooks.distance.rma.uni`` — Cook's distance per study."""
     from .sensitivity import influence
 
-    inf = influence(result)
-    return dict(zip(getattr(inf, "names", range(len(inf.cook_d))),
-                    [float(v) for v in inf.cook_d]))
+    yi = np.asarray(result.yi, dtype=float)
+    vi = np.asarray(result.vi, dtype=float)
+    # influence() takes the moderator matrix WITHOUT an intercept (it prepends
+    # one itself); passing result.X verbatim duplicated the intercept column and
+    # made every refit singular.
+    X = None
+    if not getattr(result, "int_only", False):
+        x = np.asarray(result.X, dtype=float)
+        if x.ndim == 1:
+            x = x.reshape(-1, 1)
+        X = x[:, 1:] if np.allclose(x[:, 0], 1.0) else x
+    inf = influence(yi, vi, X, method=str(result.method),
+                    tau2=(float(result.tau2)
+                          if getattr(result, "tau2_fix", False) else None),
+                    test=str(getattr(result, "test", "z")))
+    return np.asarray([float(v) for v in inf.cook_d], dtype=float)
 
 
 class BlupResult:
@@ -872,11 +886,13 @@ def update_rma(result, mods=None, **kwargs):
         "measure": getattr(result, "measure", None),
     }
     if mods is None:
-        mods_arr = np.asarray(result.X, dtype=float)
         if getattr(result, "int_only", False):
             mods_arr = None
-        elif mods_arr.shape[1] == 1 and getattr(result, "int_incl", True):
-            mods_arr = None
+        else:
+            x = np.asarray(result.X, dtype=float)
+            # rma() prepends its own intercept column, so drop the model's one
+            # (passing the full X duplicated it and made the refit singular).
+            mods_arr = x[:, 1:] if np.allclose(x[:, 0], 1.0) else x
     else:
         mods_arr = mods
     opts.update(kwargs)
