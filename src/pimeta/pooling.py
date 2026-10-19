@@ -346,18 +346,24 @@ def _back_transform(value: float, effect_type: str) -> float:
 # "HT" is Higgins & Thompson's analytic interval on the log-H scale.
 
 
-def _qe_func(tau2: float, y: np.ndarray, v: np.ndarray, objective: float = 0.0) -> float:
-    """metafor's ``.QE.func`` for an intercept-only model (p = 1).
+def _qe_func(tau2: float, y: np.ndarray, v: np.ndarray, objective: float = 0.0,
+             X: np.ndarray | None = None) -> float:
+    """metafor's ``.QE.func``.
 
     Returns ``RSS - objective`` where ``RSS = y' P y`` with
-    ``P = W - W 1 (1'W 1)^-1 1' W`` and ``W = diag(1/(vi + tau2))``. For an
-    intercept-only model this collapses to
+    ``P = W - W X (X'WX)^-1 X' W`` and ``W = diag(1/(vi + tau2))``.  Without
+    ``X`` this is the intercept-only form
     ``sum(wi yi^2) - (sum(wi yi))^2 / sum(wi)``.
     """
     wi = 1.0 / (v + tau2)
-    sw = float(wi.sum())
-    sy = float(np.sum(wi * y))
-    rss = float(np.sum(wi * y * y)) - sy * sy / sw
+    if X is None:
+        sw = float(wi.sum())
+        sy = float(np.sum(wi * y))
+        rss = float(np.sum(wi * y * y)) - sy * sy / sw
+        return rss - objective
+    WX = wi[:, None] * X
+    beta = np.linalg.solve(X.T @ WX, WX.T @ y)
+    rss = float(y @ (wi * y - WX @ beta))
     return rss - objective
 
 
@@ -402,6 +408,7 @@ def confint_tau2(
     method: str = "REML",
     level: float = 0.05,
     type: str = "QP",
+    X: np.ndarray | None = None,
 ) -> Tau2Confint:
     """CI for tau^2 (transcribed from ``metafor::confint.rma.uni``).
 
@@ -415,23 +422,33 @@ def confint_tau2(
             ``x$level`` convention.
         type: "QP" (Q-profile, default), "PL" (profile-likelihood), or "HT"
             (Higgins-Thompson).
+        X: the fitted design matrix (``k x p``, intercept included).  Omitted
+            for an intercept-only model.  metafor refuses ``type="HT"`` when
+            the model has moderators, and so do we.
     """
     y = np.asarray(y, dtype=float).ravel()
     v = np.asarray(v, dtype=float).ravel()
     k = y.shape[0]
-    p = 1  # intercept-only
+    X = None if X is None else np.asarray(X, dtype=float)
+    p = 1 if X is None else X.shape[1]
     type = type.upper()
     if type not in ("QP", "PL", "HT"):
         raise ValueError(f"unsupported confint type: {type!r}")
 
     # Typical sampling variance (fixed-effect weights 1/vi) + I^2/H^2.
+    # metafor: vt <- (k - p) / .tr(P)  with  P = W.FE - W.FE X (X'W.FE X)^-1 X' W.FE
     wi_fe = 1.0 / v
-    tr_p = float(wi_fe.sum() - (wi_fe ** 2).sum() / wi_fe.sum())
-    vt = (k - 1) / tr_p
+    if X is None:
+        tr_p = float(wi_fe.sum() - (wi_fe ** 2).sum() / wi_fe.sum())
+    else:
+        WX = wi_fe[:, None] * X
+        tr_p = float(wi_fe.sum() - np.trace(
+            np.linalg.solve(X.T @ WX, X.T @ ((wi_fe ** 2)[:, None] * X))))
+    vt = (k - p) / tr_p
     i2 = 100.0 * tau2 / (vt + tau2)
     h2 = tau2 / vt + 1.0
     # Cochran Q at tau^2 = 0 (QE.func with objective=0).
-    q = _qe_func(0.0, y, v, 0.0)
+    q = _qe_func(0.0, y, v, 0.0, X=X)
 
     tau2_min = min(0.0, tau2)
     tau2_max = max(100.0, tau2 * 10.0, tau2_min * 10.0)
@@ -443,9 +460,9 @@ def confint_tau2(
     if type == "QP":
         crit_u = float(stats.chi2.ppf(1.0 - level / 2.0, k - p))
         crit_l = float(stats.chi2.ppf(level / 2.0, k - p))
-        qe_max = _qe_func(tau2_max, y, v, 0.0)
+        qe_max = _qe_func(tau2_max, y, v, 0.0, X=X)
         try:
-            qe_min = _qe_func(tau2_min, y, v, 0.0)
+            qe_min = _qe_func(tau2_min, y, v, 0.0, X=X)
         except Exception:
             qe_min = math.nan
 
@@ -459,8 +476,9 @@ def confint_tau2(
                 ub_sign = ">"
                 ub_conv = True
             else:
-                tau2_ub = float(_zeroin(lambda t: _qe_func(t, y, v, crit_l),
-                                        tau2_min, tau2_max))
+                tau2_ub = float(_zeroin(
+                    lambda t: _qe_func(t, y, v, crit_l, X=X),
+                    tau2_min, tau2_max))
                 ub_conv = True
 
         if qe_max > crit_u:
@@ -474,13 +492,14 @@ def confint_tau2(
                 if tau2_min > 0:
                     lb_sign = "<"
             else:
-                tau2_lb = float(_zeroin(lambda t: _qe_func(t, y, v, crit_u),
-                                        tau2_min, tau2_max))
+                tau2_lb = float(_zeroin(
+                    lambda t: _qe_func(t, y, v, crit_u, X=X),
+                    tau2_min, tau2_max))
                 lb_conv = True
 
     elif type == "PL":
         objective = float(stats.chi2.ppf(1.0 - level, 1.0))
-        X = np.ones((k, 1))
+        X = np.ones((k, 1)) if X is None else X
         ll_opt = _reml_ml_loglik(y, v, X, tau2, method)
 
         try:
@@ -516,6 +535,11 @@ def confint_tau2(
                 ub_conv = True
 
     elif type == "HT":
+        if p > 1:
+            # metafor: "Method only applicable to models without moderators."
+            raise ValueError(
+                "HT method is only applicable to models without moderators"
+            )
         if k <= 2:
             raise ValueError("HT method requires k > 2")
         if q > k:

@@ -265,40 +265,84 @@ class RmaResult:
             "slab": self.slab,
         }
 
-    def predict(self, level: float | None = None, transf=None, targs=None, **kw):
-        """Prediction + CI/PI (``metafor::predict.rma``).
+    def predict(self, level: float | None = None, transf=None, targs=None,
+                newmods=None, **kw):
+        """Prediction (+ CI/PI) — ``metafor::predict.rma``.
 
-        Only the intercept-only case is supported here (the general
-        ``newmods`` case is provided by :func:`.predict_rma` for single
-        predictions). ``level`` is the confidence level (0.95 -> 95%).
+        Without ``newmods`` this returns the single prediction for the model's
+        reference point (intercept-only models only).  With ``newmods`` it
+        returns one prediction per row of the moderator matrix, exactly as
+        ``predict(fit, newmods = ...)`` does: ``newmods`` must *not* include an
+        intercept column (one is prepended).  ``level`` is the confidence
+        level (0.95 -> 95%).
         """
-        if not self.int_only:
-            raise NotImplementedError(
-                "predict() with moderators requires newmods; "
-                "use predict_rma() directly"
-            )
         conf = self.level if level is None else level
         alpha = 1.0 - conf
-        return predict_rma(
-            est=self.b[0],
-            se=self.se[0],
-            tau2=self.tau2,
-            k=self.k,
-            p=self.p,
-            parms=self.parms,
-            level=alpha,
-            test=self.test,
-            transf=transf,
-            targs=targs,
-            **kw,
-        )
+        if newmods is None:
+            if not self.int_only:
+                raise ValueError(
+                    "the model has moderators; pass 'newmods' to predict()"
+                )
+            return predict_rma(
+                est=self.b[0],
+                se=self.se[0],
+                tau2=self.tau2,
+                k=self.k,
+                p=self.p,
+                parms=self.parms,
+                level=alpha,
+                test=self.test,
+                transf=transf,
+                targs=targs,
+                **kw,
+            )
+
+        new = np.asarray(newmods, dtype=float)
+        if new.ndim == 1:
+            # metafor: a plot vector of length p-1 is one new study, otherwise
+            # a plain vector of values is one new study per element when the
+            # model has a single moderator.
+            if self.p - 1 == 1:
+                new = new.reshape(-1, 1)
+            elif new.size == self.p - 1:
+                new = new.reshape(1, -1)
+            else:
+                raise ValueError(
+                    f"'newmods' has {new.size} value(s); the model has "
+                    f"{self.p - 1} moderator(s)"
+                )
+        if new.shape[1] != self.p - 1:
+            raise ValueError(
+                f"'newmods' has {new.shape[1]} column(s); the model has "
+                f"{self.p - 1}"
+            )
+        Xnew = np.hstack([np.ones((new.shape[0], 1)), new])
+        est = Xnew @ self.b
+        se = np.sqrt(np.maximum(np.einsum("ij,jk,ik->i", Xnew, self.vb, Xnew), 0.0))
+        out = [
+            predict_rma(
+                est=float(est[r]),
+                se=float(se[r]),
+                tau2=self.tau2,
+                k=self.k,
+                p=self.p,
+                parms=self.parms,
+                level=alpha,
+                test=self.test,
+                transf=transf,
+                targs=targs,
+                **kw,
+            )
+            for r in range(Xnew.shape[0])
+        ]
+        return out[0] if len(out) == 1 else out
 
     def confint(self, level: float | None = None, type: str = "QP"):
-        """CI for tau^2 / tau / I^2 / H^2 (``metafor::confint.rma.uni``)."""
-        if not self.int_only:
-            raise NotImplementedError(
-                "confint() with moderators is not yet transcribed"
-            )
+        """CI for tau^2 / tau / I^2 / H^2 (``metafor::confint.rma.uni``).
+
+        Works with and without moderators.  ``type="HT"`` needs an
+        intercept-only model, as in metafor.
+        """
         conf = self.level if level is None else level
         alpha = 1.0 - conf
         return confint_tau2(
@@ -308,6 +352,7 @@ class RmaResult:
             method=self.method,
             level=alpha,
             type=type,
+            X=None if self.int_only else self.X,
         )
 
 

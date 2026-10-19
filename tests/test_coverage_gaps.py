@@ -655,3 +655,77 @@ def test_netmetareg_inconsistency_rejects_out_of_range_directions():
     with pytest.raises(ValueError, match="-1, 0, or 1"):
         ma.netmetareg(_ia_net(), IA_YR, consistency=False,
                       direction1=[0] * 10, direction2=[2] * 10)
+
+
+# =========================================================================
+# confint() and predict(newmods=) on a model WITH moderators
+# =========================================================================
+CI_YI = [0.10, 0.35, -0.20, 0.55, 0.05, 0.40, -0.10, 0.25]
+CI_VI = [0.04, 0.06, 0.05, 0.09, 0.03, 0.07, 0.08, 0.05]
+CI_MODS = [1, 3, 5, 7, 2, 4, 6, 8]
+
+
+def _ci_fit():
+    return ma.rma(CI_YI, CI_VI, mods=CI_MODS, method="REML")
+
+
+def test_rma_with_moderators_matches_r():
+    fit = _ci_fit()
+    assert list(fit.b) == pytest.approx(
+        [0.071455317166275401, 0.017528984831107555], abs=1e-12)
+    assert list(fit.se) == pytest.approx(
+        [0.16042397648149287, 0.034399302919051515], abs=1e-12)
+    assert fit.tau2 == pytest.approx(0.0010805786744490066, abs=1e-12)
+    assert fit.QE == pytest.approx(6.8863753331529729, abs=1e-10)
+    assert fit.I2 == pytest.approx(1.9338902721202715, abs=1e-10)
+    assert fit.H2 == pytest.approx(1.019720271126147, abs=1e-12)
+
+
+def test_confint_qp_with_moderators_matches_r():
+    ci = _ci_fit().confint(type="QP")
+    assert ci.tau2_lb == pytest.approx(0.0, abs=1e-12)
+    assert ci.tau2_ub == pytest.approx(0.29534380876337607, abs=1e-8)
+    assert ci.i2_ub == pytest.approx(84.3504138, abs=1e-6)
+    assert ci.h2_ub == pytest.approx(6.3899453, abs=1e-6)
+
+
+def test_confint_pl_with_moderators_matches_r():
+    ci = _ci_fit().confint(type="PL")
+    assert ci.tau2_ub == pytest.approx(0.1999417, abs=1e-6)
+    assert ci.i2_ub == pytest.approx(78.4894537, abs=1e-5)
+    assert ci.h2_ub == pytest.approx(4.6488824, abs=1e-5)
+
+
+def test_confint_ht_with_moderators_is_rejected():
+    """metafor: "Method only applicable to models without moderators."."""
+    with pytest.raises(ValueError, match="without moderators"):
+        _ci_fit().confint(type="HT")
+
+
+def test_predict_newmods_matches_r():
+    pr = _ci_fit().predict(newmods=[2, 6])
+    assert isinstance(pr, list) and len(pr) == 2
+    assert pr[0].pred == pytest.approx(0.10651328682849051, abs=1e-12)
+    assert pr[0].se == pytest.approx(0.10714918265841189, abs=1e-12)
+    assert pr[0].ci_lb == pytest.approx(-0.10349525215490049, abs=1e-12)
+    assert pr[0].pi_lb == pytest.approx(-0.11315597576041736, abs=1e-12)
+    assert pr[0].pi_ub == pytest.approx(0.32618254941739838, abs=1e-12)
+    assert pr[1].pred == pytest.approx(0.17662922615292073, abs=1e-12)
+    assert pr[1].ci_ub == pytest.approx(0.38562634027830955, abs=1e-12)
+    assert pr[1].pi_ub == pytest.approx(0.39533174601301951, abs=1e-12)
+
+
+def test_predict_single_newmods_returns_one_result():
+    pr = _ci_fit().predict(newmods=[2])
+    assert not isinstance(pr, list)
+    assert pr.pred == pytest.approx(0.10651328682849051, abs=1e-12)
+
+
+def test_predict_without_newmods_on_a_moderator_model_errors():
+    with pytest.raises(ValueError, match="newmods"):
+        _ci_fit().predict()
+
+
+def test_predict_with_wrong_newmods_width_errors():
+    with pytest.raises(ValueError, match="column"):
+        _ci_fit().predict(newmods=[[1, 2], [3, 4]])
