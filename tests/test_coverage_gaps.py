@@ -551,12 +551,6 @@ def test_netmetabin_nch_and_mh_differ():
     assert np.max(np.abs(nch - mh)) > 1e-3
 
 
-def test_netmetabin_lrp_raises_a_clear_error():
-    with pytest.raises(NotImplementedError, match="brglm2"):
-        ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
-                      studlab=NCH_ST, method="LRP")
-
-
 # =========================================================================
 # netmetareg(consistency = False) — the inconsistency model
 # =========================================================================
@@ -830,3 +824,239 @@ def test_permutest_rejects_bad_options():
         ma.permutest(fit, stat="pval")
     with pytest.raises(ValueError, match="btt"):
         ma.permutest(fit, btt=[5])
+
+
+# =========================================================================
+# Firth / Jeffreys-penalised logistic regression + metabin / netmetabin "LRP"
+# =========================================================================
+LRP_E1 = [9, 12, 7, 15]
+LRP_N1 = [60, 65, 55, 70]
+LRP_E2 = [5, 6, 4, 9]
+LRP_N2 = [58, 62, 50, 68]
+
+LRP_E1H = [20, 6, 18, 4, 15, 7]
+LRP_N1H = [50, 55, 48, 52, 45, 60]
+LRP_E2H = [5, 22, 6, 20, 4, 18]
+LRP_N2H = [52, 48, 55, 50, 58, 54]
+
+
+def _lrp_design(e1, n1, e2, n2):
+    """meta:::runLRP's design: treat arm labelled B, control arm labelled A."""
+    from pimeta._firth import treatment_design
+
+    k = len(e1)
+    trt_idx, study_idx, succ, tot = [], [], [], []
+    for i in range(k):
+        trt_idx += [1, 0]
+        study_idx += [i, i]
+        succ += [float(e1[i]), float(e2[i])]
+        tot += [float(n1[i]), float(n2[i])]
+    return (treatment_design(trt_idx, study_idx, 2, k),
+            np.array(succ), np.array(tot))
+
+
+# ---------------------------------------------------------------- Firth ---
+def test_firth_logit_matches_brglm2_when_brglm2_is_converged():
+    """brglm2 with epsilon=1e-12; its *default* epsilon=1e-8 stops ~4e-7 short."""
+    from pimeta._firth import firth_logit
+
+    X, succ, tot = _lrp_design(LRP_E1, LRP_N1, LRP_E2, LRP_N2)
+    beta, vcov, _mu = firth_logit(X, succ, tot)
+    # same column order as R: (Intercept), treat, study2, study3, study4
+    want = [-2.3149447523982016, 0.61132859910140214, 0.19663950165447863,
+            -0.14157232005528059, 0.43813210454295293]
+    assert list(beta) == pytest.approx(want, abs=1e-11)
+    want_se = [0.32843779198771483, 0.27018088635989368, 0.37913434126216877,
+               0.42246539947503026, 0.36058889982279713]
+    got_se = [float(np.sqrt(vcov[j, j])) for j in range(len(want))]
+    assert got_se == pytest.approx(want_se, abs=1e-11)
+
+
+def test_firth_logit_score_is_zero_at_the_solution():
+    from pimeta._firth import _expit, _fisher, firth_logit
+
+    X, succ, tot = _lrp_design(LRP_E1, LRP_N1, LRP_E2, LRP_N2)
+    beta, _vcov, _mu = firth_logit(X, succ, tot)
+    mu = _expit(X @ beta)
+    w = tot * mu * (1.0 - mu)
+    info_inv = np.linalg.inv(_fisher(X, w))
+    hhat = np.einsum("ij,jk,ik->i", X, info_inv, X)
+    grad = X.T @ ((succ - tot * mu) + w * hhat * (0.5 - mu))
+    assert np.max(np.abs(grad)) < 1e-10
+
+
+def test_firth_logit_is_finite_with_zero_cells():
+    """Complete separation would send the unpenalised MLE to +/-infinity."""
+    from pimeta._firth import firth_logit
+
+    X, succ, tot = _lrp_design([0, 12, 7], [60, 65, 55], [5, 0, 4], [58, 62, 50])
+    beta, vcov, mu = firth_logit(X, succ, tot)
+    assert np.all(np.isfinite(beta))
+    assert np.all(np.isfinite(vcov))
+    assert np.all((mu > 0) & (mu < 1))
+
+
+def test_dispersion_phi_matches_meta():
+    from pimeta._firth import dispersion_phi, firth_logit
+
+    X, succ, tot = _lrp_design(LRP_E1H, LRP_N1H, LRP_E2H, LRP_N2H)
+    _beta, _vcov, mu = firth_logit(X, succ, tot)
+    assert dispersion_phi(succ, tot, mu, X.shape[1]) == pytest.approx(
+        13.668012298174339, abs=1e-5)
+    # no residual df -> not estimable, metafor/meta report 1
+    assert dispersion_phi(succ[:2], tot[:2], mu[:2], 2) == 1.0
+
+
+# --------------------------------------------------------------- metabin ---
+def test_metabin_lrp_matches_r():
+    m = ma.metabin(LRP_E1, LRP_N1, LRP_E2, LRP_N2, sm="OR", method="LRP")
+    assert m.method == "Lrp"
+    assert m.phi == pytest.approx(1.0)
+    assert m.fixed.pooled_est == pytest.approx(0.61132822173082302, abs=1e-6)
+    assert m.fixed.pooled_se == pytest.approx(0.27018088357202591, abs=1e-6)
+    assert m.fixed.q == pytest.approx(0.08875379, abs=1e-6)
+    assert m.random.pooled_est == pytest.approx(m.fixed.pooled_est, abs=1e-12)
+    assert m.random.pooled_se == pytest.approx(m.fixed.pooled_se, abs=1e-12)
+
+
+def test_metabin_lrp_overdispersion_matches_r():
+    m = ma.metabin(LRP_E1H, LRP_N1H, LRP_E2H, LRP_N2H, sm="OR", method="LRP")
+    assert m.fixed.pooled_est == pytest.approx(-0.074340412573228945, abs=1e-6)
+    assert m.fixed.pooled_se == pytest.approx(0.18947928093484381, abs=1e-6)
+    assert m.phi == pytest.approx(13.668012298174339, abs=1e-4)
+    # "random" = common estimate with the SE multiplied by phi
+    assert m.random.pooled_est == pytest.approx(m.fixed.pooled_est, abs=1e-12)
+    assert m.random.pooled_se == pytest.approx(2.5898051420666759, abs=1e-4)
+    # LRP has no tau^2, but Q / I^2 are still reported
+    assert np.isnan(m.fixed.tau2)
+    assert m.fixed.q == pytest.approx(63.22606, abs=1e-4)
+    assert m.fixed.i2 == pytest.approx(92.09187, abs=1e-3)
+
+
+def test_metabin_lrp_single_study():
+    m = ma.metabin([9], [60], [5], [58], sm="OR", method="LRP")
+    assert m.fixed.pooled_est == pytest.approx(0.58464355260034029, abs=1e-10)
+    assert m.fixed.pooled_se == pytest.approx(0.57508736709903696, abs=1e-10)
+    assert m.phi == 1.0
+
+
+def test_metabin_lrp_zero_cells():
+    m = ma.metabin([0, 12, 7], [60, 65, 55], [5, 0, 4], [58, 62, 50],
+                   sm="OR", method="LRP")
+    assert m.fixed.pooled_est == pytest.approx(0.71522938222902366, abs=1e-6)
+    assert m.fixed.pooled_se == pytest.approx(0.40848284782939448, abs=1e-6)
+    assert m.phi == pytest.approx(6.4835208278433907, abs=1e-4)
+
+
+def test_metabin_lrp_rejects_non_or():
+    with pytest.raises(ValueError, match="sm='OR'"):
+        ma.metabin([9], [60], [5], [58], sm="RR", method="LRP")
+
+
+# ------------------------------------------------------------ netmetabin ---
+LRP_R_TE = [
+    [0.0, 0.3468862, 0.5178376, 0.8980439],
+    [-0.3468862, 0.0, 0.1709515, 0.5511578],
+    [-0.5178376, -0.1709515, 0.0, 0.3802063],
+    [-0.8980439, -0.5511578, -0.3802063, 0.0],
+]
+LRP_R_SE = [
+    [0.0, 0.3961894, 0.3688837, 0.3544509],
+    [0.3961894, 0.0, 0.4094774, 0.3985177],
+    [0.3688837, 0.4094774, 0.0, 0.3606714],
+    [0.3544509, 0.3985177, 0.3606714, 0.0],
+]
+LRP_R_DIRECT = [
+    [np.nan, 0.5846436, 0.7084855, 0.5591415],
+    [-0.5846436, np.nan, 0.4687141, 0.5297278],
+    [-0.7084855, -0.4687141, np.nan, 0.7384950],
+    [-0.5591415, -0.5297278, -0.7384950, np.nan],
+]
+
+
+def _nma_lrp():
+    return ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
+                         studlab=NCH_ST, method="LRP")
+
+
+def test_netmetabin_lrp_matches_r():
+    res = _nma_lrp()
+    assert res.method == "LRP"
+    assert res.phi == pytest.approx(1.0)
+    assert np.asarray(res.TE_common) == pytest.approx(
+        np.array(LRP_R_TE), abs=1e-6)
+    assert np.asarray(res.seTE_common) == pytest.approx(
+        np.array(LRP_R_SE), abs=1e-6)
+    # the direct (per-comparison) estimates also come from LRP, not MH
+    got = np.asarray(res.TE_direct_common, dtype=float)
+    assert np.nanmax(np.abs(got - np.array(LRP_R_DIRECT))) < 1e-6
+
+
+def test_netmetabin_lrp_random_effects_scale_with_phi():
+    res = _nma_lrp()
+    assert np.asarray(res.TE_random) == pytest.approx(
+        np.asarray(res.TE_common), abs=1e-12)
+    assert np.asarray(res.seTE_random) == pytest.approx(
+        np.asarray(res.seTE_common) * res.phi, abs=1e-12)
+
+
+def test_netmetabin_lrp_large_network_matches_r():
+    e1 = [48, 33, 14, 48, 11, 9, 46, 46, 48, 13, 13, 6, 27, 27, 27, 13, 13, 17,
+          68, 68, 68, 51, 51, 57, 25, 25, 25, 30, 30, 25]
+    n1 = [145, 139, 111, 177, 95, 93, 123, 123, 129, 164, 164, 80, 184, 184,
+          189, 127, 127, 167, 163, 163, 163, 122, 122, 137, 134, 134, 134, 166,
+          166, 139]
+    e2 = [38, 22, 23, 29, 13, 11, 48, 39, 39, 6, 12, 12, 27, 23, 23, 17, 16, 16,
+          51, 57, 81, 57, 81, 81, 30, 25, 34, 25, 34, 34]
+    n2 = [116, 96, 184, 108, 108, 113, 129, 105, 105, 80, 154, 154, 189, 160,
+          160, 167, 163, 163, 122, 137, 195, 137, 195, 195, 166, 139, 185, 139,
+          185, 185]
+    t1 = ["A", "A", "B", "C", "D", "A", "A", "A", "B", "B", "B", "C", "A", "A",
+          "D", "C", "C", "D", "A", "A", "A", "B", "B", "C", "B", "B", "B", "C",
+          "C", "D"]
+    t2 = ["B", "C", "D", "E", "E", "E", "B", "C", "C", "C", "D", "D", "D", "E",
+          "E", "D", "E", "E", "B", "C", "D", "C", "D", "D", "C", "D", "E", "D",
+          "E", "E"]
+    st = (["S1", "S2", "S3", "S4", "S5", "S6"] + ["S7"] * 3 + ["S8"] * 3
+          + ["S9"] * 3 + ["S10"] * 3 + ["S11"] * 6 + ["S12"] * 6)
+    res = ma.netmetabin(e1, n1, e2, n2, t1, t2, studlab=st, method="LRP")
+    want_te = [
+        [0.0, 0.004457298, 0.0192353728, 0.022202070, 0.0188699474],
+        [-0.004457298, 0.0, 0.0147780753, 0.017744772, 0.0144126499],
+        [-0.019235373, -0.014778075, 0.0, 0.002966697, -0.0003654255],
+        [-0.022202070, -0.017744772, -0.0029666967, 0.0, -0.0033321222],
+        [-0.018869947, -0.014412650, 0.0003654255, 0.003332122, 0.0],
+    ]
+    want_se = [
+        [0.0, 0.1279832, 0.1287471, 0.1336333, 0.1527798],
+        [0.1279832, 0.0, 0.1327887, 0.1325331, 0.1580782],
+        [0.1287471, 0.1327887, 0.0, 0.1303105, 0.1407403],
+        [0.1336333, 0.1325331, 0.1303105, 0.0, 0.1422686],
+        [0.1527798, 0.1580782, 0.1407403, 0.1422686, 0.0],
+    ]
+    assert np.asarray(res.TE_common) == pytest.approx(np.array(want_te),
+                                                      abs=1e-6)
+    assert np.asarray(res.seTE_common) == pytest.approx(np.array(want_se),
+                                                        abs=1e-6)
+
+
+def test_netmetabin_lrp_has_no_tau2_and_no_inconsistency_q():
+    res = _nma_lrp()
+    assert np.isnan(res.tau2)
+    assert np.isnan(res.Q_inconsistency)
+    assert np.isnan(np.asarray(res.tau2_direct, dtype=float)).all()
+
+
+def test_netmetabin_lrp_rejects_non_or():
+    with pytest.raises(ValueError, match="sm='OR'"):
+        ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
+                      studlab=NCH_ST, method="LRP", sm="RR")
+
+
+def test_netmetabin_lrp_differs_from_mh_and_nch():
+    lrp = np.asarray(_nma_lrp().TE_common)
+    mh = np.asarray(ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1,
+                                  NCH_T2, studlab=NCH_ST, method="MH").TE_common)
+    nch = np.asarray(_nch().TE_common)
+    assert np.max(np.abs(lrp - mh)) > 1e-3
+    assert np.max(np.abs(lrp - nch)) > 1e-3

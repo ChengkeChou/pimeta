@@ -37,18 +37,20 @@ class MetabResult:
     """Binary meta-analysis result: fixed + random pooled effects."""
 
     sm: str                       # summary measure
-    method: str                   # "Inverse" | "MH" | "Peto"
+    method: str                   # "Inverse" | "MH" | "Peto" | "LRP"
     k: int
     fixed: PooledResult
     random: PooledResult | None
     yi: list[float]               # per-study effect (analysis scale)
     vi: list[float]               # per-study sampling variance (analysis scale)
+    phi: float = 1.0              # dispersion factor (method="LRP" only)
 
     def to_dict(self) -> dict:
         return {
             "sm": self.sm,
             "method": self.method,
             "k": self.k,
+            "phi": self.phi,
             "fixed": _result_dict(self.fixed),
             "random": _result_dict(self.random) if self.random else None,
             "yi": self.yi,
@@ -181,6 +183,47 @@ def _mh_rd(a, b, c, d, n1, n2):
     return est, var
 
 
+def lrp_common(event_e, n_e, event_c, n_c) -> tuple[float, float, float]:
+    """Penalised-likelihood log OR and its SE (``meta:::runLRP``).
+
+    Fits ``cbind(events, nonevents) ~ treat + study`` by Jeffreys-penalised
+    logistic regression (Firth), i.e. exactly what ``glm(..., method =
+    brglm2::brglmFit, type = "MPL_Jeffreys")`` does.  Study fixed effects make
+    every study contribute its own baseline risk, so the treatment coefficient
+    is the common (conditional-on-study) log OR.
+
+    Returns ``(est, se, phi)`` where ``phi`` is meta's c-hat dispersion factor
+    (1 for a single study or when there is no overdispersion).
+    """
+    from ._firth import dispersion_phi, firth_logit, treatment_design
+
+    a = np.asarray(event_e, dtype=float)
+    n1 = np.asarray(n_e, dtype=float)
+    c = np.asarray(event_c, dtype=float)
+    n2 = np.asarray(n_c, dtype=float)
+    k = a.size
+
+    # Long format: per study the treatment arm first (labelled "B"), control
+    # second (labelled "A"), so R's factor() puts "A" (the control) first and
+    # the "B" coefficient is the treat-vs-control log OR.
+    trt_idx: list[int] = []
+    study_idx: list[int] = []
+    succ: list[float] = []
+    tot: list[float] = []
+    for i in range(k):
+        trt_idx += [1, 0]
+        study_idx += [i, i]
+        succ += [float(a[i]), float(c[i])]
+        tot += [float(n1[i]), float(n2[i])]
+
+    x = treatment_design(trt_idx, study_idx, 2, k)
+    beta, vcov, mu = firth_logit(x, succ, tot)
+    est = float(beta[1])
+    se = float(np.sqrt(vcov[1, 1]))
+    phi = 1.0 if k == 1 else dispersion_phi(succ, tot, mu, x.shape[1])
+    return est, se, phi
+
+
 def _peto_or(a, b, c, d, n1, n2):
     """Peto log OR, variance and heterogeneity Q (Yusuf et al. 1985)."""
     N = n1 + n2
@@ -283,16 +326,25 @@ def metabin(
         event_e, n_e: treatment-arm events and group size (per study).
         event_c, n_c: control-arm events and group size (per study).
         sm: summary measure, one of RR/OR/RD/AS.
-        method: "Inverse", "MH" or "Peto".
+        method: "Inverse", "MH", "Peto" or "LRP" (penalised logistic
+            regression, Firth/Jeffreys; ``sm="OR"`` only).
         random: also fit the random-effects model (method_tau tau^2 estimator).
+            For ``method="LRP"`` the "random" result is the common estimate with
+            its SE multiplied by the dispersion factor ``phi``.
         method_tau: DL/HE/HS/SJ/ML/REML/PM/EB (default DL, matching meta).
+            Unused by "LRP", which has no tau^2 (``tau2`` is NaN, as in R).
     """
     sm = sm.upper()
     method = method.capitalize()
     if sm not in _SM:
         raise ValueError(f"sm must be one of {sorted(_SM)}")
-    if method not in ("Inverse", "Mh", "Peto"):
-        raise ValueError("method must be 'Inverse', 'MH' or 'Peto'")
+    if method not in ("Inverse", "Mh", "Peto", "Lrp"):
+        raise ValueError("method must be 'Inverse', 'MH', 'Peto' or 'LRP'")
+    if method == "Lrp" and sm != "OR":
+        raise ValueError(
+            "logistic regression with penalised likelihood only possible with "
+            "sm='OR'"
+        )
 
     a = np.asarray(event_e, dtype=float)
     n1 = np.asarray(n_e, dtype=float)
@@ -328,6 +380,21 @@ def metabin(
         use_q_cochrane = method_tau.upper() == "DL"
         q, q_p = _cochran_q(yi, vi, center=mh_est if use_q_cochrane else None)
         fixed = _fixed_result(mh_est, math.sqrt(var), sm, k, q, q_p)
+    elif method == "Lrp":
+        lrp_est, lrp_se, phi_lrp = lrp_common(a, n1, c, n2)
+        # R still reports the usual Cochran Q / I^2 for LRP, but no tau^2.
+        q, q_p = _cochran_q(yi, vi)
+        lrp_fixed = _fixed_result(lrp_est, lrp_se, sm, k, q, q_p, tau2=math.nan)
+        if not random:
+            return MetabResult(sm, method, k, lrp_fixed, None, yi, vi, phi_lrp)
+        # "Random" for LRP is the common estimate with the SE inflated by phi.
+        random_result = _fixed_result(
+            lrp_est, lrp_se * phi_lrp, sm, k, q, q_p, tau2=math.nan
+        )
+        random_result.model = "random"
+        random_result.method = "LRP"
+        return MetabResult(sm, method, k, lrp_fixed, random_result, yi, vi,
+                           phi_lrp)
     else:  # Peto
         if sm != "OR":
             raise ValueError("Peto method supports OR only")

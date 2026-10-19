@@ -37,6 +37,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`netmetabin(method="NCH")` and `netmetareg(consistency=FALSE)` were
   advertised in the docstrings but raised `NotImplementedError`.** Both are
   implemented.
+- **`netmetabin(method="LRP")` and `metabin(method="LRP")` were not
+  available at all** (R needs `brglm2`). Both are implemented now.
 
 ### Added
 
@@ -58,6 +60,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   interaction per comparison (`assumption="independent"`) or a single common one
   (`"common"`), with `direction1`/`direction2`, netmeta's `mkIval()` fallback,
   `max.ia`, and `check_Ival`-style validation of the direction assignment.
+- **`metabin(method="LRP")` and `netmetabin(method="LRP")`** — Jeffreys-penalised
+  (Firth) logistic regression, which is what R delegates to
+  `brglm2::brglmFit(type="MPL_Jeffreys")`. The new `_firth.py` maximises
+  `l(b) + 0.5 log|X' diag(n p (1-p)) X|` with Newton's method using the analytic
+  score and Hessian, and returns `I^-1` at the estimate as the covariance (R's
+  `vcov(res.lrp)`). `meta:::phi` — the c-hat dispersion factor that inflates the
+  LRP standard errors, `(sum of squared Pearson residuals / df) / (1 + s.bar)`
+  floored at 1 — is reproduced too.
+  `netmetabin(method="LRP")` fits one logistic model over all arms with fixed
+  study effects and expands the treatment coefficients with the same `H` matrix
+  the MH and NCH branches use; it is the only `netmetabin` method with a
+  random-effects counterpart (`TE_random` = common estimate, `seTE_random` =
+  common SE x `phi`). `netmetabin` also reports `phi`.
+
+  One honest difference: `brglm2` stops at `epsilon = 1e-8` on the penalised
+  deviance and lands ~4e-7 from the optimum (`max|score|` 8e-6 on the 4-study
+  test set). Our Newton iteration converges to `max|score| < 1e-12`, and with
+  `brglm_control(epsilon = 1e-12)` R reproduces our numbers to 1e-13, which is
+  asserted in the tests. Against R's *default* settings the agreement is 4e-7.
 - **`RmaResult.confint()` now works with moderators**, and
   **`RmaResult.predict(newmods=...)`** is implemented. `_qe_func()` and
   `confint_tau2()` take an optional design matrix, so the Q-profile uses the
@@ -70,7 +91,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   search (metafor redraws at every step, which leaves `uniroot` chasing a noisy
   step function).
 - **`netcontrib` / `netmetabin` / `netmetareg` gained 25 R-pinned tests**, plus
-  12 for `confint`/`predict` and 9 for `permutest`.
+  12 for `confint`/`predict`, 9 for `permutest` and 14 for `LRP`.
 - `.github/workflows/ci.yml` — every push and pull request now runs the full
   suite on a 4-way matrix (Python 3.10/3.11 with `numpy<2`, Python 3.12/3.13 with
   `numpy` 2.x), reports coverage, and separately builds the sdist/wheel, runs
@@ -106,11 +127,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Not implemented
 
-- `netmetabin(method="LRP")` still raises `NotImplementedError`. It needs
-  `brglm2`'s Firth-penalised logistic regression (`brglmFit`,
-  `type = "MPL_Jeffreys"`) plus the matching `metabin(method="LRP")` for the
-  per-comparison direct estimates, neither of which has a `pimeta` equivalent.
-  The error message now says so instead of lumping it in with `"NCH"`.
+- Nothing from `meta` / `metafor` / `netmeta` that `pimeta` advertises any
+  more. `metabin`/`netmetabin` `method="LRP"` used to be the last gap and now
+  works without `brglm2`.
 
 ### Fixed
 

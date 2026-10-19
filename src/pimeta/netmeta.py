@@ -4563,6 +4563,14 @@ class NetmetabinResult:
     tau: float = float("nan")
     tau2: float = float("nan")
 
+    # Random effects (method="LRP" only: the common estimate with the SE
+    # multiplied by the dispersion factor `phi`).
+    TE_random: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
+    seTE_random: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
+    lower_random: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
+    upper_random: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
+    phi: float = float("nan")
+
     A_matrix: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
     H_matrix_common: np.ndarray = field(default_factory=lambda: np.empty((0, 0)))
 
@@ -4607,6 +4615,11 @@ class NetmetabinResult:
             "df_Q_inconsistency": self.df_Q_inconsistency,
             "pval_Q_inconsistency": self.pval_Q_inconsistency,
             "I2": self.I2, "tau": self.tau, "tau2": self.tau2,
+            "TE_random": self._m(self.TE_random),
+            "seTE_random": self._m(self.seTE_random),
+            "lower_random": self._m(self.lower_random),
+            "upper_random": self._m(self.upper_random),
+            "phi": self.phi,
             "A_matrix": self._m(self.A_matrix),
             "H_matrix_common": self._m(self.H_matrix_common),
             "TE": self.TE, "seTE": self.seTE,
@@ -4710,6 +4723,53 @@ def _netmetabin_nch(event1, n1, event2, n2, treat1, treat2, studlab, trts):
     te_basic = -x[1:]
     cov_basic = np.linalg.inv(info[1:, 1:])
     return te_basic, cov_basic
+
+def _netmetabin_lrp(event1, n1, event2, n2, treat1, treat2, studlab, trts):
+    """Penalised-likelihood network estimate (netmetabin method = "LRP").
+
+    Fits one logistic regression over all arms,
+
+        logit(p_ik) = alpha + (treatment effects) + (study effects)
+
+    by Jeffreys-penalised (Firth) maximum likelihood -- R's
+    ``glm(cbind(event, non.event) ~ as.factor(treat) + as.factor(studlab),
+    method = brglm2::brglmFit, type = "MPL_Jeffreys")``.  The study effects
+    absorb each study's baseline risk, so the treatment coefficients are the
+    common log ORs against the alphabetically first treatment.
+
+    Returns ``(TE_basic, cov_basic, phi)`` with ``TE_basic[k] = -(theta_k -
+    theta_1)``, i.e. the same sign convention the MH and NCH branches use.
+    """
+    from ._firth import dispersion_phi, firth_logit, treatment_design
+
+    tindex = {t: i for i, t in enumerate(trts)}
+    arms: dict[str, dict[str, tuple[float, float]]] = {}
+    for s, t, e, nn in zip(studlab, treat1, event1, n1):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+    for s, t, e, nn in zip(studlab, treat2, event2, n2):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+
+    studies = sorted(arms)
+    sindex = {s: i for i, s in enumerate(studies)}
+    trt_idx: list[int] = []
+    study_idx: list[int] = []
+    succ: list[float] = []
+    tot: list[float] = []
+    for s in studies:
+        for t in sorted(arms[s], key=lambda v: tindex[v]):
+            trt_idx.append(tindex[t])
+            study_idx.append(sindex[s])
+            succ.append(arms[s][t][0])
+            tot.append(arms[s][t][1])
+
+    x = treatment_design(trt_idx, study_idx, len(trts), len(studies))
+    beta, vcov, mu = firth_logit(x, succ, tot)
+    n_par = len(trts) - 1
+    te_basic = -np.asarray(beta[1:1 + n_par], dtype=float)
+    cov_basic = np.asarray(vcov[1:1 + n_par, 1:1 + n_par], dtype=float)
+    phi = 1.0 if len(studies) == 1 else dispersion_phi(succ, tot, mu, x.shape[1])
+    return te_basic, cov_basic, phi
+
 
 def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
                    level, level_ma, reference_group, cc_pooled, method="MH"):
@@ -4912,8 +4972,13 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
             for k in range(n_treat - 1):
                 H[idx_ + n_treat - 1, k] = -float(i == k + 1) + float(j == k + 1)
 
+    phi = float("nan")
     if method == "NCH":
         TE_basic, cov_basic = _netmetabin_nch(
+            event1, n1, event2, n2, treat1, treat2, studlab, trts)
+        cov_d_hat = H @ cov_basic @ H.T
+    elif method == "LRP":
+        TE_basic, cov_basic, phi = _netmetabin_lrp(
             event1, n1, event2, n2, treat1, treat2, studlab, trts)
         cov_d_hat = H @ cov_basic @ H.T
     else:
@@ -4985,10 +5050,16 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
             nn2 = np.array([n2[k] for k in sel], dtype=float)
             b = nn1 - a
             dd = nn2 - c
-            mh_est, mh_var = _mh_or(a, b, c, dd, nn1, nn2)
-            TE_direct[i, j] = mh_est
-            TE_direct[j, i] = -mh_est
-            seTE_direct[i, j] = seTE_direct[j, i] = math.sqrt(mh_var)
+            if method == "LRP":
+                from .metabin import lrp_common
+
+                pair_est, pair_se, _pair_phi = lrp_common(a, nn1, c, nn2)
+            else:
+                pair_est, _mh_var = _mh_or(a, b, c, dd, nn1, nn2)
+                pair_se = math.sqrt(_mh_var)
+            TE_direct[i, j] = pair_est
+            TE_direct[j, i] = -pair_est
+            seTE_direct[i, j] = seTE_direct[j, i] = pair_se
             # Cochran Q centered on the inverse-variance mean (Q.Cochrane=FALSE).
             yi = np.log((a * dd) / (b * c))
             vi = 1.0 / a + 1.0 / b + 1.0 / c + 1.0 / dd
@@ -4996,7 +5067,9 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
             q_pair = _cochran_q(yi, se_i)
             k_pair = len(sel)
             Q_direct[i, j] = Q_direct[j, i] = q_pair
-            tau2_direct[i, j] = tau2_direct[j, i] = _dl_tau2(yi, se_i)
+            tau2_direct[i, j] = tau2_direct[j, i] = (
+                float("nan") if method == "LRP" else _dl_tau2(yi, se_i)
+            )
             I2_direct[i, j] = I2_direct[j, i] = (
                 max(0.0, (q_pair - (k_pair - 1)) / q_pair) * 100.0
                 if q_pair > 0 else 0.0
@@ -5031,7 +5104,7 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
         "statistic_direct": statistic_direct, "pval_direct": pval_direct,
         "Q_direct": Q_direct, "tau2_direct": tau2_direct, "I2_direct": I2_direct,
         "Q": Q, "df_Q": df_Q, "pval_Q": pval_Q,
-        "A": A, "H": H,
+        "A": A, "H": H, "phi": phi,
         "TE": TE_per, "seTE": seTE_per,
     }
 
@@ -5065,8 +5138,10 @@ def netmetabin(
         studlab: study labels. If None, each comparison is its own study.
         sm: summary measure ("OR" for MH; "OR"/"RR" for Inverse).
         method: "MH" (Mantel-Haenszel, default), "NCH" (conditional
-            non-central hypergeometric likelihood), "Inverse" (classic NMA
-            via :func:`netmeta`), or "LRP" (needs brglm2, not available).
+            non-central hypergeometric likelihood), "LRP" (Jeffreys-penalised
+            logistic regression, Firth -- the only method with a random-effects
+            counterpart, obtained by inflating the SEs by ``phi``), or
+            "Inverse" (classic NMA via :func:`netmeta`).
         level, level_ma: confidence levels.
         common, random: fit common / random effects (Inverse method only).
         cc_pooled: pool zero cells across studies (MH method).
@@ -5079,18 +5154,19 @@ def netmetabin(
         raise ValueError(
             "method must be one of 'MH', 'NCH', 'LRP' or 'Inverse'"
         )
-    if method == "LRP":
-        raise NotImplementedError(
-            "netmetabin method='LRP' needs brglm2's Firth-penalised logistic "
-            "regression, which has no pimeta equivalent yet; use 'MH', "
-            "'NCH' or 'Inverse'"
-        )
 
     sm = sm.upper()
     if method in ("MH", "NCH"):
         if sm != "OR":
             sm = "OR"
         random = False
+    elif method == "LRP":
+        if sm not in ("", "OR"):
+            raise ValueError(
+                "logistic regression with penalised likelihood only possible "
+                "with sm='OR'"
+            )
+        sm = "OR"
 
     event1 = np.asarray(event1, dtype=float)
     n1 = np.asarray(n1, dtype=float)
@@ -5141,6 +5217,17 @@ def netmetabin(
         method=method,
     )
 
+    te_r = se_r = lo_r = up_r = None
+    if method == "LRP":
+        zz = stats.norm.ppf(1.0 - (1.0 - level_ma) / 2.0)
+        te_r = np.asarray(res["TE_common"], dtype=float)
+        se_r = np.asarray(res["seTE_common"], dtype=float) * res["phi"]
+        lo_r = te_r - zz * se_r
+        up_r = te_r + zz * se_r
+        np.fill_diagonal(se_r, 0.0)
+        np.fill_diagonal(lo_r, float("nan"))
+        np.fill_diagonal(up_r, float("nan"))
+
     return NetmetabinResult(
         trts=res["trts"], k=res["k"], m=res["m"], n=res["n"], d=res["d"],
         designs=res["designs"], sm="OR", method=method,
@@ -5159,6 +5246,11 @@ def netmetabin(
         Q_inconsistency=res["Q"], df_Q_inconsistency=res["df_Q"],
         pval_Q_inconsistency=res["pval_Q"],
         I2=float("nan"), tau=float("nan"), tau2=float("nan"),
+        TE_random=te_r if te_r is not None else np.empty((0, 0)),
+        seTE_random=se_r if se_r is not None else np.empty((0, 0)),
+        lower_random=lo_r if lo_r is not None else np.empty((0, 0)),
+        upper_random=up_r if up_r is not None else np.empty((0, 0)),
+        phi=res["phi"],
         A_matrix=res["A"], H_matrix_common=res["H"],
         TE=res["TE"], seTE=res["seTE"],
         treat1=treat1, treat2=treat2, studlab=studlab,
