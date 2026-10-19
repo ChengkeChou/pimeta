@@ -1623,6 +1623,198 @@ def netrank(
     )
 
 
+def _calc_v_block(x: dict, sm: str) -> np.ndarray:
+    """netmeta:::calcV — within-study covariance of one (multi-arm) study.
+
+    Off-diagonals all equal the *reference arm's* variance (arm 2 after the
+    star-shaped re-orientation); diagonals are ``seTE^2``.
+    """
+    k = len(x["seTE"])
+    incr = float(x["incr2"][0]) if "incr2" in x else 0.0
+    n2 = float(x["n2"][0]) + 2.0 * incr
+    e2 = float(x["event2"][0]) + incr
+    p2 = e2 / n2 if n2 > 0 else float("nan")
+    sm = str(sm).upper()
+    if sm == "OR":
+        v = 1.0 / e2 + 1.0 / (float(x["n2"][0]) - float(x["event2"][0]) + incr)
+    elif sm == "RR":
+        v = (1.0 - p2) / (n2 * p2)
+    elif sm == "RD":
+        v = p2 * (1.0 - p2) / n2
+    elif sm == "ASD":
+        v = 0.25 / n2
+    elif sm == "MD":
+        v = float(x["sd2"][0]) ** 2 / n2
+    elif sm == "SMD":
+        v = 1.0 / n2
+    elif sm == "IRR":
+        v = 1.0 / e2
+    elif sm == "IRD":
+        v = e2 / float(x["time2"][0]) ** 2
+    elif sm == "IRSD":
+        v = 0.25 / float(x["time2"][0])
+    elif k == 1:
+        v = float(x["seTE"][0]) ** 2
+    else:
+        v = 0.0
+    mat = np.full((k, k), v, dtype=float)
+    np.fill_diagonal(mat, np.asarray(x["seTE"], dtype=float) ** 2)
+    return mat
+
+
+def _nma_tau_ml_reml(
+    studlab,
+    treat1,
+    treat2,
+    TE,
+    seTE,
+    reference_group: str,
+    method: str,
+    sm: str = "",
+    arm_data: dict | None = None,
+) -> float:
+    """ML / REML network heterogeneity SD (netmeta's ``method.tau`` branch).
+
+    R reduces the network to one *star* per study — every comparison that
+    touches the study's reference treatment — expresses each as
+    "comparison vs reference", then fits ``metafor::rma.mv`` with
+
+    * ``mods = ~ V1 + ... + V(n-1) - 1`` where ``Vj`` are the ``contrmat``
+      dummies for the non-reference treatments,
+    * ``random = ~ factor(comparison) | studlab`` with ``struct = "CS"`` and
+      ``rho = 0.5`` fixed,
+
+    and returns ``sqrt(tau2)``.
+
+    ``arm_data`` may carry the arm-level columns netmeta uses to build a
+    blocked ``V`` (``n``, ``event``, ``mean``, ``sd``, ``time``, ``incr2``);
+    without them ``V = diag(seTE^2)``, exactly as R does.
+    """
+    from collections import Counter
+
+    from .rma_mv import rma_mv as _rma_mv
+
+    m = len(TE)
+    cols: dict[str, list] = {
+        "studlab": list(studlab),
+        "treat1": list(treat1),
+        "treat2": list(treat2),
+        "TE": list(TE),
+        "seTE": list(seTE),
+    }
+    if arm_data:
+        for name in ("n", "event", "mean", "sd", "time"):
+            a, b = arm_data.get(name + "1"), arm_data.get(name + "2")
+            if a is not None and b is not None:
+                cols[name + "1"] = [float(v) for v in a]
+                cols[name + "2"] = [float(v) for v in b]
+        if "event1" in cols and arm_data.get("incr2") is not None:
+            cols["incr2"] = [float(v) for v in arm_data["incr2"]]
+
+    # 1. R's order(studlab, treat1, treat2) — lexicographic, stable.
+    order_idx = sorted(range(m), key=lambda i: (cols["studlab"][i],
+                                                cols["treat1"][i],
+                                                cols["treat2"][i]))
+    for key in cols:
+        cols[key] = [cols[key][i] for i in order_idx]
+
+    # 2. Keep only comparisons touching the study's reference arm, and
+    #    re-orient them so that treat2 is always the reference.
+    keep: list[bool] = []
+    wo: list[bool] = []
+    pos = 0
+    while pos < m:
+        study = cols["studlab"][pos]
+        end = pos
+        while end < m and cols["studlab"][end] == study:
+            end += 1
+        trts_i = sorted({cols["treat1"][i] for i in range(pos, end)}
+                        | {cols["treat2"][i] for i in range(pos, end)})
+        ref_i = reference_group if reference_group in trts_i else trts_i[-1]
+        for i in range(pos, end):
+            keep.append(not (cols["treat1"][i] != ref_i
+                             and cols["treat2"][i] != ref_i))
+            wo.append(cols["treat1"][i] == ref_i)
+        pos = end
+
+    sel = [i for i, k in enumerate(keep) if k]
+    wo = [wo[i] for i in sel]
+    for key in cols:
+        cols[key] = [cols[key][i] for i in sel]
+
+    for i, flip in enumerate(wo):
+        if not flip:
+            continue
+        cols["TE"][i] = -cols["TE"][i]
+        cols["treat1"][i], cols["treat2"][i] = cols["treat2"][i], cols["treat1"][i]
+        for name in ("event", "n", "mean", "sd"):
+            a, b = name + "1", name + "2"
+            if a in cols:
+                cols[a][i], cols[b][i] = cols[b][i], cols[a][i]
+        # netmeta has a copy-paste slip here: time2 is left untouched while
+        # time1 receives the old time2.  Reproduced verbatim.
+        if "time1" in cols:
+            cols["time1"][i], cols["time2"][i] = cols["time2"][i], cols["time2"][i]
+
+    # 3. contrmat(): full dummies for treat1 minus treat2, with the most
+    #    frequent treat2 level moved last and its column dropped.
+    levels_ = sorted(set(cols["treat1"]) | set(cols["treat2"]))
+    counts = Counter(cols["treat2"])
+    last = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[0][0]
+    lvls = [v for v in levels_ if v != last] + [last]
+
+    k = len(cols["TE"])
+    mods = np.zeros((k, max(len(lvls) - 1, 1)), dtype=float)
+    for j, level in enumerate(lvls[:-1]):
+        for i in range(k):
+            mods[i, j] = (1.0 if cols["treat1"][i] == level else 0.0) \
+                       - (1.0 if cols["treat2"][i] == level else 0.0)
+    mods = mods[:, : len(lvls) - 1]
+
+    # 4. Sampling covariance.
+    if cols.get("n1") is not None and (
+        "event1" in cols or "time1" in cols or "sd1" in cols
+    ):
+        blocks = []
+        pos = 0
+        while pos < k:
+            end = pos
+            study = cols["studlab"][pos]
+            while end < k and cols["studlab"][end] == study:
+                end += 1
+            sub = {key: cols[key][pos:end] for key in cols}
+            blocks.append(_calc_v_block(sub, sm))
+            pos = end
+        V = np.zeros((k, k), dtype=float)
+        offset = 0
+        for block in blocks:
+            nb = block.shape[0]
+            V[offset:offset + nb, offset:offset + nb] = block
+            offset += nb
+    else:
+        V = np.diag(np.asarray(cols["seTE"], dtype=float) ** 2)
+
+    if k == 1:
+        # R fits rma.uni here and sets tau <- NA.
+        return float("nan")
+
+    comparison = [f"{cols['treat1'][i]} vs {cols['treat2'][i]}" for i in range(k)]
+    res = _rma_mv(
+        yi=cols["TE"],
+        V=V,
+        mods=mods,
+        data={"comparison": comparison, "studlab": cols["studlab"]},
+        random="~ comparison | studlab",
+        struct="CS",
+        rho=0.5,
+        method=method.upper(),
+        intercept=False,
+    )
+    if not res.tau2:
+        return float("nan")
+    return float(math.sqrt(max(res.tau2[0], 0.0)))
+
+
 def netmeta(
     TE,
     seTE,
@@ -1638,6 +1830,17 @@ def netmeta(
     reference_group: str = "",
     baseline_reference: bool = True,
     small_values: str = "desirable",
+    n1=None,
+    n2=None,
+    event1=None,
+    event2=None,
+    incr2=None,
+    mean1=None,
+    mean2=None,
+    sd1=None,
+    sd2=None,
+    time1=None,
+    time2=None,
 ) -> NetmetaResult:
     """Frequentist graph-theoretical network meta-analysis (Rücker 2012).
 
@@ -1651,14 +1854,21 @@ def netmeta(
         level: confidence level (0.95 -> 95%).
         common: fit the common-effects model.
         random: fit the random-effects model.
-        method_tau: tau^2 estimator ("DL" only for the method-of-moments
-            network estimator; "ML"/"REML" would use metafor::rma.mv and are
-            not yet implemented).
+        method_tau: tau^2 estimator.  ``"DL"`` (default) is Jackson et al.'s
+            network method of moments; ``"ML"`` and ``"REML"`` reproduce
+            netmeta's ``metafor::rma.mv`` fit on the star-shaped per-study
+            design (needs ``reference_group`` semantics identical to R, and
+            optionally the arm-level data below for the blocked ``V``).
         tau_preset: optional preset tau (square-root of tau^2).
         reference_group: reference treatment label (informational).
         baseline_reference: whether the reference group is the baseline
             (comparisons are expressed as "other treatment vs reference").
         small_values: "desirable" if smaller effects are beneficial (P-scores).
+        n1, n2: arm sample sizes (only used by ``method_tau="ML", "REML"``).
+        event1, event2: arm event counts.
+        incr2: continuity increment applied to the reference arm.
+        mean1, mean2, sd1, sd2: arm means / SDs.
+        time1, time2: arm person-times.
     """
     TE = list(TE)
     seTE = list(seTE)
@@ -1673,10 +1883,10 @@ def netmeta(
     if not (len(seTE) == len(treat1) == len(treat2) == m):
         raise ValueError("TE, seTE, treat1, treat2 must have equal length")
 
-    if method_tau.upper() not in ("DL",):
+    if method_tau.upper() not in ("DL", "ML", "REML"):
         raise ValueError(
-            f"method_tau={method_tau!r} not supported; only 'DL' "
-            "(Jackson 2012 method of moments) is implemented"
+            f"method_tau={method_tau!r} not supported; use 'DL' (Jackson "
+            "2012 method of moments), 'ML' or 'REML'"
         )
 
     # Treatment ordering: sorted alphabetically (netmeta default).
@@ -1729,6 +1939,22 @@ def netmeta(
     # Random effects: tau from DL (or preset).
     if tau_preset is not None:
         tau = float(tau_preset)
+        tau2 = tau * tau
+    elif method_tau.upper() in ("ML", "REML"):
+        tau = _nma_tau_ml_reml(
+            studlab_raw, treat1_raw, treat2_raw, TE_raw, seTE_raw,
+            reference_group=str(reference_group or ""),
+            method=method_tau.upper(),
+            sm=sm,
+            arm_data={
+                "n1": n1, "n2": n2,
+                "event1": event1, "event2": event2,
+                "incr2": incr2,
+                "mean1": mean1, "mean2": mean2,
+                "sd1": sd1, "sd2": sd2,
+                "time1": time1, "time2": time2,
+            },
+        )
         tau2 = tau * tau
     else:
         tau = res_c["tau"]

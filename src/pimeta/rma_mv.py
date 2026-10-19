@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from scipy import stats
-from scipy.optimize import minimize
+from scipy.optimize import minimize, minimize_scalar
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -362,11 +362,14 @@ class _StructComp:
                  inner_labels: list[str] | None = None,
                  outer_labels: list[str] | None = None,
                  name: str | None = None,
-                 fixed_tau2: np.ndarray | None = None):
+                 fixed_tau2: np.ndarray | None = None,
+                 fixed_rho: float | None = None):
         self.inner_idx = inner_idx
         self.outer_groups = outer_groups
         self.J = J
         self.struct = str(struct).upper()
+        # metafor treats a user-supplied 'rho' as fixed, not as a start value.
+        self.fixed_rho = fixed_rho
         self.inner_labels = inner_labels if inner_labels is not None else [str(i) for i in range(J)]
         n_outer = int(outer_groups.max()) + 1
         self.outer_labels = outer_labels if outer_labels is not None else [str(i) for i in range(n_outer)]
@@ -394,7 +397,15 @@ class _StructComp:
 
     @property
     def has_rho(self) -> bool:
+        if self.fixed_rho is not None:
+            return False
         return self.struct in ("CS", "HCS", "AR", "HAR", "CAR")
+
+    def _rho(self, p: np.ndarray) -> float:
+        """Correlation used by ``_G``: fixed when supplied, else estimated."""
+        if self.fixed_rho is not None:
+            return float(self.fixed_rho)
+        return float(p[-1])
 
     @property
     def n_params(self) -> int:
@@ -422,7 +433,7 @@ class _StructComp:
         J = self.J
         s = self.struct
         if s == "CS":
-            tau2, rho = p[0], p[1]
+            tau2, rho = p[0], self._rho(p)
             G = np.full((J, J), rho * tau2)
             np.fill_diagonal(G, tau2)
             return G
@@ -432,23 +443,23 @@ class _StructComp:
             return np.diag(self._full_tau2(p))
         if s == "HCS":
             tau2 = self._full_tau2(p)
-            rho = p[-1]
+            rho = self._rho(p)
             sq = np.sqrt(tau2)
             G = rho * np.outer(sq, sq)
             np.fill_diagonal(G, tau2)
             return G
         if s == "AR":
-            tau2, rho = p[0], p[1]
+            tau2, rho = p[0], self._rho(p)
             return tau2 * self._toeplitz(rho)
         if s == "HAR":
             tau2 = self._full_tau2(p)
-            rho = p[-1]
+            rho = self._rho(p)
             sq = np.sqrt(tau2)
             G = np.outer(sq, sq) * self._toeplitz(rho)
             np.fill_diagonal(G, tau2)
             return G
         if s == "CAR":
-            tau2, rho = p[0], p[1]
+            tau2, rho = p[0], self._rho(p)
             x = self.inner_values
             cor = rho ** np.abs(x[:, None] - x[None, :])
             return tau2 * cor
@@ -513,6 +524,8 @@ class _StructComp:
             tau2 = [float(p[0])]
         if self.has_rho:
             rho = [float(p[-1])]
+        elif self.fixed_rho is not None:
+            rho = [float(self.fixed_rho)]
         else:
             rho = [0.0]  # ID / DIAG: rho fixed at 0 (metafor)
         return [0.0], tau2, rho
@@ -821,9 +834,19 @@ def _cooccur_comb_k(inner_idx: np.ndarray, outer_groups: np.ndarray, J: int) -> 
     return np.array(out)
 
 
-def _build_components(descs: list[dict], data, k: int) -> list:
-    """Instantiate random-effect component objects from descriptors."""
+def _build_components(descs: list[dict], data, k: int,
+                      rho=None) -> list:
+    """Instantiate random-effect component objects from descriptors.
+
+    ``rho`` (scalar or per-term list) fixes the correlation of the structured
+    ``~ inner | outer`` terms, mirroring ``rma.mv`` where a supplied ``rho`` is
+    a fixed value rather than a starting value.
+    """
     comps = []
+    rho_list = None
+    if rho is not None:
+        rho_list = list(rho) if isinstance(rho, (list, tuple, np.ndarray)) else [rho]
+    rho_pos = 0
     for desc in descs:
         kind = desc["kind"]
         if kind == "intercept":
@@ -861,13 +884,18 @@ def _build_components(descs: list[dict], data, k: int) -> list:
             if struct in ("DIAG", "HCS", "HAR"):
                 # k=1 inner levels -> tau2 fixed to 0
                 fixed_tau2 = _levels_k(inner_idx, outer_groups, J) == 1
+            fixed_rho = None
+            if rho_list:
+                fixed_rho = float(rho_list[min(rho_pos, len(rho_list) - 1)])
+                rho_pos += 1
             comps.append(_StructComp(
                 inner_idx, outer_groups, J, struct,
                 inner_values=inner_values,
                 inner_labels=[str(x) for x in inner_levels],
                 outer_labels=[str(x) for x in outer_levels],
                 name=desc.get("name"),
-                fixed_tau2=fixed_tau2))
+                fixed_tau2=fixed_tau2,
+                fixed_rho=fixed_rho))
         elif kind == "un":
             inner_vals = _get_col(data, desc["inner"])
             outer_vals = _get_col(data, desc["outer"])
@@ -940,10 +968,12 @@ def rma_mv(
     data=None,
     random: str = "~ 1 | study",
     struct: str = "CS",
+    rho=None,
     method: str = "REML",
     level: float = 95.0,
     test: str = "z",
     dfs: str = "residual",
+    intercept: bool = True,
 ) -> RmaMvResult:
     """Fit a multilevel / multivariate random-effects model (``metafor::rma.mv``).
 
@@ -962,6 +992,8 @@ def rma_mv(
         struct: variance structure for an ``~ inner | outer`` term --
             ``"CS"`` (default) or ``"GEN"`` (random slopes with unstructured
             covariance).  A list matches multiple ``~ inner | outer`` terms.
+        rho: fixes the correlation of the structured term(s) instead of
+            estimating it, as ``rma.mv`` does.  Scalar or one value per term.
         method: ``"REML"`` (default) or ``"ML"``.
         level: confidence level (95 -> 95% CI).
         test: ``"z"`` (default) or ``"t"`` / ``"knha"`` / ``"adhoc"``.
@@ -971,6 +1003,8 @@ def rma_mv(
             ``max(RSS/(k-p), 1)``.
         dfs: ``"residual"`` (default, ``k-p``), ``"contain"``, or a numeric
             value / array (one df per coefficient).
+        intercept: prepend an intercept column to ``mods`` (``False`` matches
+            R's ``mods = ~ x1 + x2 - 1``).
     """
     Y = np.asarray(yi, dtype=float).reshape(-1, 1)
     k = Y.shape[0]
@@ -990,9 +1024,11 @@ def rma_mv(
         mods = np.asarray(mods, dtype=float)
         if mods.ndim == 1:
             mods = mods.reshape(-1, 1)
-        X = np.hstack([np.ones((k, 1)), mods])
-    else:
+        X = np.hstack([np.ones((k, 1)), mods]) if intercept else mods
+    elif intercept:
         X = np.ones((k, 1))
+    else:
+        raise ValueError("'intercept=False' requires 'mods'")
     p = X.shape[1]
 
     method = method.upper()
@@ -1000,7 +1036,8 @@ def rma_mv(
         raise ValueError("method must be 'REML' or 'ML'")
 
     # --- random-effects components ---------------------------------------
-    components = _build_components(_parse_random_components(random, struct), data, k)
+    components = _build_components(
+        _parse_random_components(random, struct), data, k, rho=rho)
     n_terms = sum(c.n_params for c in components)
     n_vc = sum(c.n_vc for c in components)
 
@@ -1046,6 +1083,29 @@ def rma_mv(
         )
         if obj(opt_nm.x) < obj(opt.x):
             opt = minimize(obj, opt_nm.x, method="L-BFGS-B", bounds=bounds, options=lbfgsb_opts)
+
+    # With a single variance component the profile likelihood is very flat
+    # around its maximum and L-BFGS-B stops a few 1e-8 short of it.  Golden
+    # section on the 1-D objective polishes the estimate to machine precision.
+    if len(init) == 1 and bounds[0][1] is None:
+        best = float(opt.x[0])
+        best_f = float(obj(opt.x))
+        lo = max(0.0, best - max(1e-3, 0.5 * abs(best)))
+        hi = best + max(1e-3, 0.5 * abs(best))
+        for _ in range(4):
+            if not hi > lo:
+                break
+            sc = minimize_scalar(
+                lambda t: float(obj(np.array([t]))),
+                bounds=(lo, hi),
+                method="bounded",
+                options={"xatol": 1e-14 * max(1.0, abs(hi))},
+            )
+            if sc.fun < best_f:
+                best, best_f = float(sc.x), float(sc.fun)
+            span = max(1e-8, 0.02 * max(1.0, abs(best)))
+            lo, hi = max(0.0, best - span), best + span
+        opt.x = np.array([best])
     params = opt.x
 
     # final fit at the optimum
@@ -1157,7 +1217,7 @@ def rma_mv(
         qe_df=qe_df,
         qe_p=qe_p,
         random=str(random),
-        int_only=(p == 1),
+        int_only=(p == 1 and intercept),
         M=M,
         vb=vb,
         X=X,

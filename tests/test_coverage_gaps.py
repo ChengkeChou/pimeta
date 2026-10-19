@@ -343,3 +343,107 @@ def test_netcontrib_randomwalk_agrees_with_shortestpath_on_complete_network():
     rw = np.asarray(ma.netcontrib(nm, method="randomwalk").random, dtype=float)
     sp = np.asarray(ma.netcontrib(nm, method="shortestpath").random, dtype=float)
     assert rw == pytest.approx(sp, abs=1e-8)
+
+
+# =========================================================================
+# netmeta(method_tau = "ML" / "REML") — metafor::rma.mv on the star design
+# =========================================================================
+NMA1_TE = [0.10, -0.20, 0.05, -0.15, 0.30, 0.25]
+NMA1_SE = [0.10, 0.12, 0.11, 0.13, 0.14, 0.15]
+NMA1_T1 = ["Placebo", "Placebo", "DrugA", "DrugA", "DrugB", "DrugC"]
+NMA1_T2 = ["DrugA", "DrugB", "DrugB", "DrugC", "DrugC", "Placebo"]
+NMA1_ST = [f"s{i}" for i in range(1, 7)]
+# netmeta(..., reference.group = "Placebo")$tau (R 4.6.1 / netmeta 3.7-0)
+NMA1_TAU = {
+    "DL": 0.17102725023638912,
+    "ML": 0.082442793611206794,
+    "REML": 0.17024539107325981,
+}
+
+NMA4_TE = [0.10, -0.30, -0.40, 0.55, -0.25, 0.20, 0.40, 0.20, 0.50, -0.10]
+NMA4_SE = [0.05, 0.06, 0.07, 0.10, 0.12, 0.09, 0.11, 0.13, 0.15, 0.14]
+NMA4_T1 = ["A", "A", "B", "A", "A", "D", "D", "E", "B", "B"]
+NMA4_T2 = ["B", "C", "C", "D", "D", "E", "C", "C", "E", "E"]
+NMA4_ST = ["k1", "k1", "k1", "k2", "k3", "k4", "k4", "k4", "k5", "k6"]
+# $tau with reference.group = "" (per-study reference) and = "A"
+NMA4_TAU = {
+    "": {"DL": 0.46030534745646717, "ML": 0.30909902431853664,
+         "REML": 0.45591212187397667},
+    "A": {"DL": 0.46030534745646717, "ML": 0.30665168954488048,
+          "REML": 0.45454522862451824},
+}
+
+#: DL is a closed-form expression, so it reproduces R to machine precision.
+#: ML/REML go through a numerical optimiser and agree to ~1e-8 relative.
+NMA_TAU_TOL = {"DL": 1e-12, "ML": 1e-7, "REML": 1e-7}
+
+
+def _nma4(ref):
+    return ma.netmeta(TE=NMA4_TE, seTE=NMA4_SE, treat1=NMA4_T1, treat2=NMA4_T2,
+                      studlab=NMA4_ST, sm="MD", reference_group=ref)
+
+
+@pytest.mark.parametrize("method", ["DL", "ML", "REML"])
+def test_netmeta_method_tau_matches_r(method):
+    m = ma.netmeta(TE=NMA1_TE, seTE=NMA1_SE, treat1=NMA1_T1, treat2=NMA1_T2,
+                   studlab=NMA1_ST, sm="MD", reference_group="Placebo",
+                   method_tau=method)
+    assert m.method_tau == method
+    assert m.tau == pytest.approx(NMA1_TAU[method], abs=NMA_TAU_TOL[method])
+    # tau^2 is what the random-effects pooling actually consumes
+    assert m.tau ** 2 == pytest.approx(NMA1_TAU[method] ** 2,
+                                       abs=2 * NMA1_TAU[method] * NMA_TAU_TOL[method])
+
+
+@pytest.mark.parametrize("ref", ["", "A"])
+@pytest.mark.parametrize("method", ["DL", "ML", "REML"])
+def test_netmeta_method_tau_multistudy_three_arm(ref, method):
+    m = ma.netmeta(TE=NMA4_TE, seTE=NMA4_SE, treat1=NMA4_T1, treat2=NMA4_T2,
+                   studlab=NMA4_ST, sm="MD", reference_group=ref,
+                   method_tau=method)
+    want = NMA4_TAU[ref][method]
+    assert m.tau == pytest.approx(want, abs=NMA_TAU_TOL[method])
+
+
+def test_netmeta_dl_tau_is_invariant_to_reference_group():
+    """Jackson's method of moments never depends on the per-study reference."""
+    a = _nma4("") .tau
+    b = _nma4("A").tau
+    assert a == pytest.approx(b, abs=1e-12)
+
+
+def test_netmeta_ml_reml_tau_can_differ_by_reference_group():
+    """ML/REML fit the star-shaped design, which *does* depend on it."""
+    ml_default = ma.netmeta(TE=NMA4_TE, seTE=NMA4_SE, treat1=NMA4_T1,
+                            treat2=NMA4_T2, studlab=NMA4_ST, sm="MD",
+                            reference_group="", method_tau="ML").tau
+    ml_ref_a = ma.netmeta(TE=NMA4_TE, seTE=NMA4_SE, treat1=NMA4_T1,
+                          treat2=NMA4_T2, studlab=NMA4_ST, sm="MD",
+                          reference_group="A", method_tau="ML").tau
+    assert abs(ml_default - ml_ref_a) > 1e-4
+
+
+def test_netmeta_rejects_unknown_tau_estimator():
+    with pytest.raises(ValueError, match="method_tau"):
+        ma.netmeta(TE=NMA1_TE, seTE=NMA1_SE, treat1=NMA1_T1, treat2=NMA1_T2,
+                   studlab=NMA1_ST, method_tau="PM")
+
+
+def test_netmeta_ml_with_events_uses_the_blocked_calc_v():
+    """With n/events the reference arm supplies the within-study covariance."""
+    te = [-0.31015492830383962, 0.2607526605731495, -0.064538521137571178,
+          0.16472036131694595, -0.34858230543772495, 0.2336148511815051]
+    se = [0.31109532788247246, 0.31081886686117899, 0.36438685181792407,
+          0.27155060999096053, 0.31739150709904934, 0.41345251535834238]
+    t1 = ["P", "P", "A", "A", "B", "C"]
+    t2 = ["A", "B", "B", "C", "C", "P"]
+    st = [f"t{i}" for i in range(1, 7)]
+    kwargs = dict(TE=te, seTE=se, treat1=t1, treat2=t2, studlab=st, sm="OR",
+                  reference_group="P", n1=[120, 100, 90, 150, 130, 110],
+                  n2=[118, 105, 95, 140, 125, 108],
+                  event1=[24, 31, 18, 40, 22, 15],
+                  event2=[30, 27, 20, 33, 28, 12])
+    # R: tau = 2.4672384063227577e-06 (REML) — i.e. the boundary tau^2 = 0.
+    m = ma.netmeta(**kwargs, method_tau="REML")
+    assert 0.0 <= m.tau < 1e-5
+    assert m.tau == pytest.approx(0.0, abs=1e-5)
