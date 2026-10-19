@@ -4617,8 +4617,102 @@ class NetmetabinResult:
         }
 
 
+def _netmetabin_nch(event1, n1, event2, n2, treat1, treat2, studlab, trts):
+    """Conditional (non-central hypergeometric) network estimate.
+
+    netmetabin(method = "NCH") maximises the study-conditional likelihood
+
+        logL(x) = sum_i [ sum_{k >= 2} r_ik * eta_ik
+                          - N1_i * log(n_i1 + sum_{k >= 2} n_ik exp(eta_ik)) ]
+
+    with ``eta_ik = x[t_ik] - x[t_i1] * (t_i1 != 1)``, i.e. each study's total
+    number of events is conditioned on, which removes the study-specific
+    baseline risks.  Treatment 1 (the alphabetically first) is the implicit
+    reference: ``x[1]`` cancels out of every ``eta`` and is left at 0.
+
+    Returns ``(TE_basic, cov_basic)`` where ``TE_basic[k] = -x[k+1]`` and
+    ``cov_basic`` is the inverse observed information of ``x[2:]`` -- exactly
+    R's ``TE.basic`` and ``W``.
+    """
+    from scipy.optimize import minimize
+
+    n_treat = len(trts)
+    tindex = {t: i for i, t in enumerate(trts)}
+
+    # Arm-level data grouped by study, arms ordered by treatment index.
+    arms: dict[str, dict[str, tuple[float, float]]] = {}
+    for s, t, e, nn in zip(studlab, treat1, event1, n1):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+    for s, t, e, nn in zip(studlab, treat2, event2, n2):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+
+    studies = []
+    for s in sorted(arms):
+        ordered = sorted(arms[s], key=lambda t: tindex[t])
+        studies.append([(tindex[t], arms[s][t][0], arms[s][t][1]) for t in ordered])
+
+    def _terms(x):
+        """Per-study (loglik, gradient, observed information)."""
+        ll = 0.0
+        grad = np.zeros(n_treat)
+        info = np.zeros((n_treat, n_treat))
+        for arm_list in studies:
+            t0, r0, n0 = arm_list[0]
+            cond = 1.0 if t0 != 0 else 0.0
+            total_events = r0
+            a = []
+            for (tk, rk, nk) in arm_list[1:]:
+                eta = x[tk] - cond * x[t0]
+                ak = nk * math.exp(eta)
+                ll += rk * eta
+                total_events += rk
+                a.append((tk, rk, ak))
+            s_tot = n0 + sum(ak for _tk, _rk, ak in a)
+            ll -= total_events * math.log(s_tot)
+            w = [(tk, ak / s_tot) for tk, _rk, ak in a]
+
+            wbar = np.zeros(n_treat)
+            outer = np.zeros((n_treat, n_treat))
+            for k, (tk, wk) in enumerate(w):
+                v = np.zeros(n_treat)
+                v[tk] += 1.0
+                v[t0] -= cond
+                grad += (a[k][1] - total_events * wk) * v
+                wbar += wk * v
+                outer += wk * np.outer(v, v)
+            info += total_events * (outer - np.outer(wbar, wbar))
+        return ll, grad, info
+
+    x0 = np.zeros(n_treat)
+    opt = minimize(
+        lambda z: -_terms(np.concatenate([[0.0], z]))[0],
+        x0[1:],
+        jac=lambda z: -_terms(np.concatenate([[0.0], z]))[1][1:],
+        method="L-BFGS-B",
+        options={"ftol": 1e-16, "gtol": 1e-12, "maxiter": 10000, "maxls": 60},
+    )
+    x = np.concatenate([[0.0], opt.x])
+
+    # Newton polish on the analytic information: L-BFGS-B stops a little short
+    # on this flat conditional likelihood.
+    for _ in range(50):
+        _ll, grad, info = _terms(x)
+        sub = info[1:, 1:]
+        try:
+            step = np.linalg.solve(sub, grad[1:])
+        except np.linalg.LinAlgError:
+            break
+        if not np.all(np.isfinite(step)) or np.max(np.abs(step)) < 1e-13:
+            break
+        x[1:] += step
+    _ll, grad, info = _terms(x)
+
+    te_basic = -x[1:]
+    cov_basic = np.linalg.inv(info[1:, 1:])
+    return te_basic, cov_basic
+
 def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
-                   level, level_ma, reference_group, cc_pooled):
+                   level, level_ma, reference_group, cc_pooled, method="MH"):
     """Mantel-Haenszel network meta-analysis (Stijnen et al. 2010).
 
     ``event1/n1`` describe the ``treat1`` arm and ``event2/n2`` the ``treat2``
@@ -4803,7 +4897,6 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
     W = np.linalg.inv(V)
     XWX = X.T @ W @ X
     XWy = X.T @ W @ y
-    TE_basic = np.linalg.solve(XWX, XWy)
 
     # Hat-like matrix expanding basic contrasts to all pairwise contrasts.
     nrows_H = n_treat * (n_treat - 1) // 2
@@ -4819,6 +4912,14 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
             for k in range(n_treat - 1):
                 H[idx_ + n_treat - 1, k] = -float(i == k + 1) + float(j == k + 1)
 
+    if method == "NCH":
+        TE_basic, cov_basic = _netmetabin_nch(
+            event1, n1, event2, n2, treat1, treat2, studlab, trts)
+        cov_d_hat = H @ cov_basic @ H.T
+    else:
+        TE_basic = np.linalg.solve(XWX, XWy)
+        cov_d_hat = H @ np.linalg.solve(XWX, H.T)
+
     d_hat = H @ TE_basic
 
     # Expand to the n x n TE.common / seTE.common matrices.
@@ -4831,7 +4932,6 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
         TE_common[r, c] = -d_hat[pos]
     np.fill_diagonal(TE_common, 0.0)
 
-    cov_d_hat = H @ np.linalg.solve(XWX, H.T)
     se_diag = np.sqrt(np.diag(cov_d_hat))
     seTE_common = np.full((n_treat, n_treat), np.nan)
     for pos, (r, c) in enumerate(idx_lower):
@@ -4841,11 +4941,14 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
         seTE_common[r, c] = se_diag[pos]
     np.fill_diagonal(seTE_common, 0.0)
 
-    # Stijnen Q (inconsistency).
-    resid = y - X @ TE_basic
-    Q = float(resid @ np.linalg.solve(V, resid))
-    df_Q = sum(nn - 1 for nn in n_d) - (n_treat - 1)
-    pval_Q = float(stats.chi2.sf(Q, df_Q)) if df_Q > 0 else float("nan")
+    # Stijnen Q (inconsistency) -- only defined for the Mantel-Haenszel fit.
+    if method == "MH":
+        resid = y - X @ TE_basic
+        Q = float(resid @ np.linalg.solve(V, resid))
+        df_Q = sum(nn - 1 for nn in n_d) - (n_treat - 1)
+        pval_Q = float(stats.chi2.sf(Q, df_Q)) if df_Q > 0 else float("nan")
+    else:
+        Q = df_Q = pval_Q = float("nan")
 
     # Confidence intervals (netmeta::ci).
     z = stats.norm.ppf(1.0 - (1.0 - level_ma) / 2.0)
@@ -4961,8 +5064,9 @@ def netmetabin(
         treat1, treat2: treatment labels for each comparison.
         studlab: study labels. If None, each comparison is its own study.
         sm: summary measure ("OR" for MH; "OR"/"RR" for Inverse).
-        method: "MH" (Mantel-Haenszel, default), "Inverse" (classic NMA via
-            :func:`netmeta`), "NCH" or "LRP" (not yet implemented).
+        method: "MH" (Mantel-Haenszel, default), "NCH" (conditional
+            non-central hypergeometric likelihood), "Inverse" (classic NMA
+            via :func:`netmeta`), or "LRP" (needs brglm2, not available).
         level, level_ma: confidence levels.
         common, random: fit common / random effects (Inverse method only).
         cc_pooled: pool zero cells across studies (MH method).
@@ -4975,10 +5079,11 @@ def netmetabin(
         raise ValueError(
             "method must be one of 'MH', 'NCH', 'LRP' or 'Inverse'"
         )
-    if method in ("NCH", "LRP"):
+    if method == "LRP":
         raise NotImplementedError(
-            f"netmetabin method={method!r} is not implemented; "
-            "use 'MH' or 'Inverse'"
+            "netmetabin method='LRP' needs brglm2's Firth-penalised logistic "
+            "regression, which has no pimeta equivalent yet; use 'MH', "
+            "'NCH' or 'Inverse'"
         )
 
     sm = sm.upper()
@@ -5033,11 +5138,12 @@ def netmetabin(
     res = _netmetabin_mh(
         list(event1), list(n1), list(event2), list(n2),
         treat1, treat2, studlab, level, level_ma, reference_group, cc_pooled,
+        method=method,
     )
 
     return NetmetabinResult(
         trts=res["trts"], k=res["k"], m=res["m"], n=res["n"], d=res["d"],
-        designs=res["designs"], sm="OR", method="MH",
+        designs=res["designs"], sm="OR", method=method,
         level=level, level_ma=level_ma, reference_group=reference_group,
         cc_pooled=cc_pooled,
         TE_common=res["TE_common"], seTE_common=res["seTE_common"],

@@ -447,3 +447,109 @@ def test_netmeta_ml_with_events_uses_the_blocked_calc_v():
     m = ma.netmeta(**kwargs, method_tau="REML")
     assert 0.0 <= m.tau < 1e-5
     assert m.tau == pytest.approx(0.0, abs=1e-5)
+
+
+# =========================================================================
+# netmetabin(method = "NCH") — conditional non-central hypergeometric fit
+# =========================================================================
+NCH_E1 = [9, 12, 7, 15, 8, 14]
+NCH_N1 = [60, 65, 55, 70, 58, 62]
+NCH_E2 = [5, 6, 4, 9, 5, 7]
+NCH_N2 = [58, 62, 50, 68, 60, 59]
+NCH_T1 = ["A", "A", "B", "A", "B", "C"]
+NCH_T2 = ["B", "C", "C", "D", "D", "D"]
+NCH_ST = [f"s{i}" for i in range(1, 7)]
+
+# netmetabin(..., method = "NCH")$TE.common (R 4.6.1 / netmeta 3.7-0)
+NCH_R_TE = [
+    [0.0, 0.2971123, 0.4593067, 0.7828089],
+    [-0.2971123, 0.0, 0.1621943, 0.4856965],
+    [-0.4593067, -0.1621943, 0.0, 0.3235022],
+    [-0.7828089, -0.4856965, -0.3235022, 0.0],
+]
+NCH_R_SE = [
+    [0.0, 0.3784877, 0.3474910, 0.3325432],
+    [0.3784877, 0.0, 0.3916154, 0.3806076],
+    [0.3474910, 0.3916154, 0.0, 0.3365944],
+    [0.3325432, 0.3806076, 0.3365944, 0.0],
+]
+
+
+def _nch():
+    return ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
+                         studlab=NCH_ST, method="NCH")
+
+
+def test_netmetabin_nch_matches_r():
+    res = _nch()
+    assert res.method == "NCH"
+    assert res.trts == ["A", "B", "C", "D"]
+    # R's optim() stops at reltol 1e-8 on a very flat conditional likelihood,
+    # so it lands ~1e-5 away from the maximum; see the next test.
+    assert np.asarray(res.TE_common).ravel() == pytest.approx(
+        np.asarray(NCH_R_TE).ravel(), abs=1e-4)
+    assert np.asarray(res.seTE_common).ravel() == pytest.approx(
+        np.asarray(NCH_R_SE).ravel(), abs=1e-6)
+    assert np.all(np.isfinite(np.asarray(res.TE_common)))
+
+
+def test_netmetabin_nch_reaches_a_higher_likelihood_than_r():
+    """R's L-BFGS-B stops short; our Newton polish must not do worse."""
+    import math
+
+    trts = ["A", "B", "C", "D"]
+    tindex = {t: i for i, t in enumerate(trts)}
+    arms = {}
+    for s, t, e, nn in zip(NCH_ST, NCH_T1, NCH_E1, NCH_N1):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+    for s, t, e, nn in zip(NCH_ST, NCH_T2, NCH_E2, NCH_N2):
+        arms.setdefault(s, {})[t] = (float(e), float(nn))
+    studies = []
+    for s in sorted(arms):
+        ordered = sorted(arms[s], key=lambda t: tindex[t])
+        studies.append([(tindex[t], arms[s][t][0], arms[s][t][1]) for t in ordered])
+
+    def loglik(x):
+        total_ll = 0.0
+        for arm_list in studies:
+            t0, r0, n0 = arm_list[0]
+            cond = 1.0 if t0 != 0 else 0.0
+            n_events = r0
+            s_tot = n0
+            for tk, rk, nk in arm_list[1:]:
+                eta = x[tk] - cond * x[t0]
+                total_ll += rk * eta
+                n_events += rk
+                s_tot += nk * math.exp(eta)
+            total_ll -= n_events * math.log(s_tot)
+        return total_ll
+
+    # TE.common[1, k] == theta_1 - theta_k == -x_k (x_1 is left at 0).
+    x_r = np.array([0.0] + [-NCH_R_TE[0][k] for k in range(1, 4)])
+    res = _nch()
+    x_o = np.array([0.0] + [-res.TE_common[0][k] for k in range(1, 4)])
+    assert loglik(x_o) >= loglik(x_r)
+
+
+def test_netmetabin_nch_has_no_mh_inconsistency_statistics():
+    res = _nch()
+    assert np.isnan(res.Q_inconsistency)
+    # Direct per-comparison estimates are still the Mantel-Haenszel ones.
+    mh = ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
+                       studlab=NCH_ST, method="MH")
+    assert np.asarray(res.TE_direct_common) == pytest.approx(
+        np.asarray(mh.TE_direct_common), abs=1e-12, nan_ok=True)
+
+
+def test_netmetabin_nch_and_mh_differ():
+    nch = np.asarray(_nch().TE_common)
+    mh = np.asarray(ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1,
+                                  NCH_T2, studlab=NCH_ST,
+                                  method="MH").TE_common)
+    assert np.max(np.abs(nch - mh)) > 1e-3
+
+
+def test_netmetabin_lrp_raises_a_clear_error():
+    with pytest.raises(NotImplementedError, match="brglm2"):
+        ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
+                      studlab=NCH_ST, method="LRP")
