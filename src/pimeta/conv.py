@@ -44,6 +44,22 @@ class ConvWaldResult:
         return f"ConvWaldResult(yi={self.yi}, vi={self.vi})"
 
 
+def _apply(fun, arr):
+    """Evaluate ``fun`` on an array, falling back to a per-element loop.
+
+    ``transf`` is conventionally vectorised (``numpy.exp``), but users often
+    pass a scalar function from :mod:`math`.  Calling it with an array raised a
+    bare ``TypeError: only 0-dimensional arrays...`` from the middle of the
+    derivative code, so both forms are accepted.
+    """
+    try:
+        return np.asarray(fun(arr), dtype=float)
+    except (TypeError, ValueError):
+        a = np.asarray(arr)
+        flat = [fun(v.item() if hasattr(v, "item") else v) for v in a.ravel()]
+        return np.asarray(flat, dtype=float).reshape(a.shape)
+
+
 def _num_deriv(fun, x, h=None):
     """Derivative of a scalar-vector function.
 
@@ -61,7 +77,7 @@ def _num_deriv(fun, x, h=None):
         pass
     if h is None:
         h = np.finfo(float).eps ** (1.0 / 3.0) * np.maximum(np.abs(x), 1e-8)
-    return (np.asarray(fun(x + h), dtype=float) - np.asarray(fun(x - h), dtype=float)) / (2.0 * h)
+    return (_apply(fun, x + h) - _apply(fun, x - h)) / (2.0 * h)
 
 
 def conv_delta(yi, vi, transf):
@@ -82,7 +98,7 @@ def conv_delta(yi, vi, transf):
     vi = np.asarray(vi, dtype=float).ravel()
     if yi.size != vi.size:
         raise ValueError("length of 'yi' and 'vi' are not the same")
-    yi_new = np.asarray(transf(yi), dtype=float).ravel()
+    yi_new = _apply(transf, yi).ravel()
     d = _num_deriv(transf, yi)
     return ConvDeltaResult(yi_new, (d ** 2) * vi)
 

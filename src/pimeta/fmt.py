@@ -32,6 +32,15 @@ def _formatc(x, fmt="f", digits=4, flag="", width=None, drop0trailing=False):
     if drop0trailing and "." in s:
         s = s.rstrip("0").rstrip(".")
 
+    # formatC's sign flags: "+" always shows a sign, " " pads positives with a
+    # space.  They were silently ignored before, so fmtx(..., flag="+") never
+    # printed a leading plus.
+    if fmt in ("f", "e", "g") and flag:
+        if flag[0] == "+" and not s.startswith("-"):
+            s = "+" + s
+        elif flag[0] == " " and not s.startswith("-"):
+            s = " " + s
+
     if flag == "-":
         if width is not None:
             s = s.ljust(int(width))

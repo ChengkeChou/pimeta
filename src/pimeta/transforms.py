@@ -97,7 +97,8 @@ def _hi(n1i, n2i, k):
 def _chktargsint(targs):
     """metafor's ``.chktargsint`` — ``targs`` must carry ``tau2``."""
     if targs is None:
-        return {"tau2": 0.0, "lower": None, "upper": None}
+        # R: "Must specify a 'tau2' value via the 'targs' argument."
+        raise ValueError("must specify a 'tau2' value via the 'targs' argument")
     if isinstance(targs, dict):
         if "tau2" not in targs:
             raise ValueError("must specify a 'tau2' value via the 'targs' argument")
@@ -106,27 +107,43 @@ def _chktargsint(targs):
 
 
 def _int_over_dist(fun, xi, targs, lower=None, upper=None, density=None):
-    """Integrate ``fun(z) * dnorm(z; xi, tau) [/ density]`` over ``[lower, upper]``."""
+    """Integrate ``fun(z) * dnorm(z; xi, tau) [/ density]`` over ``[lower, upper]``.
+
+    metafor's ``transf.*.int`` functions integrate over ``xi +/- 10*sqrt(tau2)``
+    separately for **each** element of ``xi``.  The bounds used to be evaluated
+    once for the whole vector and only their first entry was reused, which was
+    wrong for every element after the first (and raised a TypeError when the
+    bound was written as ``mu - 10*tau`` and ``mu`` was a Python list).
+    """
     targs = _chktargsint(targs)
     tau2 = float(targs["tau2"])
     if tau2 < _EPS:
         tau2 = 0.0
     tau = math.sqrt(tau2)
-    lo = targs.get("lower")
-    up = targs.get("upper")
-    if lo is None:
-        lo = lower(xi, tau) if callable(lower) else -np.inf
-    if up is None:
-        up = upper(xi, tau) if callable(upper) else np.inf
+    user_lo = targs.get("lower")
+    user_up = targs.get("upper")
 
     xi_arr, scalar = _asarray(xi)
     out = np.empty(xi_arr.size)
+
+    def _bound(user, default, mu):
+        if user is not None:
+            val = user(mu, tau) if callable(user) else user
+        elif default is None:
+            return None
+        else:
+            val = default(mu, tau)
+        arr = np.atleast_1d(np.asarray(val, dtype=float)).ravel()
+        return float(arr[0]) if arr.size else None
+
     for i, mu in enumerate(xi_arr):
         if tau2 == 0.0:
             out[i] = fun(mu)
             continue
-        lo_i = float(np.atleast_1d(lo)[0]) if np.ndim(lo) else float(lo)
-        up_i = float(np.atleast_1d(up)[0]) if np.ndim(up) else float(up)
+        lo_i = _bound(user_lo, lower, mu)
+        up_i = _bound(user_up, upper, mu)
+        lo_i = -np.inf if lo_i is None else lo_i
+        up_i = np.inf if up_i is None else up_i
         norm = density(mu, tau) if density is not None else 1.0
 
         def _integrand(z, mu=mu, tau=tau, norm=norm):
@@ -316,7 +333,10 @@ def transf_ilogit_mode(xi, targs=None):
     xs = np.linspace(0.0, 1.0, 100000)
 
     def modefun(x, mu, tau):
-        return tau ** 2 * (2.0 * x - 1.0) + mu - float(special.logit(x))
+        # logit without special.logit so that the array version used for the
+        # sign scan and the scalar version used by brentq are both valid.
+        with np.errstate(divide="ignore"):
+            return tau ** 2 * (2.0 * x - 1.0) + mu - np.log(x / (1.0 - x))
 
     for i, mu in enumerate(xi_arr):
         if tau2 == 0.0:
