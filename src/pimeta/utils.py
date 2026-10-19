@@ -446,7 +446,7 @@ class RcalcResult:
 
 
 def rcalc(x, ni, data=None, rtoz=False, nfun="min", upper=False,
-          simplify=True, rowid=None, vnames=None, noid=False):
+          simplify=True, rowid=None, vnames=None, noid=False, dnames=None):
     """``metafor::rcalc`` — turn correlation matrices into effect sizes + V.
 
     Args:
@@ -472,8 +472,14 @@ def rcalc(x, ni, data=None, rtoz=False, nfun="min", upper=False,
                 "elements in 'x'."
             )
         ni_v = np.asarray(ni, dtype=float).ravel()
-        res = [rcalc(xi, ni_v[i], rtoz=rtoz, nfun=nfun, upper=upper,
-                     simplify=True) for i, xi in enumerate(x)]
+        res = []
+        for i, xi in enumerate(x):
+            dn = None
+            if dnames is not None:
+                dn = dnames[i] if isinstance(dnames, (list, tuple)) and \
+                    dnames and isinstance(dnames[0], (list, tuple)) else dnames
+            res.append(rcalc(xi, ni_v[i], rtoz=rtoz, nfun=nfun, upper=upper,
+                             simplify=True, dnames=dn))
         if not simplify:
             return res
         dat = {"id": [], "var1": [], "var2": [], "var1.var2": [],
@@ -507,7 +513,7 @@ def rcalc(x, ni, data=None, rtoz=False, nfun="min", upper=False,
         ids = [str(v) for v in x["id"]] if "id" in x else None
         ni_v = np.asarray(ni, dtype=float).ravel()
         groups = list(dict.fromkeys(ids)) if ids else ["1"]
-        mats, sizes = [], []
+        mats, sizes, per_dnames = [], [], []
         for g in groups:
             sel = [i for i in range(len(ri)) if ids is None or ids[i] == g]
             vars_ = sorted({v1[i] for i in sel} | {v2[i] for i in sel})
@@ -521,13 +527,22 @@ def rcalc(x, ni, data=None, rtoz=False, nfun="min", upper=False,
                 m[pi[v2[i]], pi[v1[i]]] = ri[i]
             mats.append(m)
             sizes.append(float(np.min(ni_v[sel])))
-        return rcalc(mats, sizes, rtoz=rtoz, simplify=simplify)
+            per_dnames.append(vars_)
+        out = rcalc(mats, sizes, rtoz=rtoz, simplify=simplify,
+                    dnames=per_dnames)
+        return out
 
     a = np.asarray(x, dtype=float)
     if a.ndim != 2 or a.shape[0] != a.shape[1]:
         raise ValueError("Argument 'x' must be a square matrix.")
     dims = a.shape[0]
-    dnames = [f"x{i + 1}" for i in range(dims)]
+    if upper not in (True, False) or rtoz not in (True, False):
+        raise ValueError("Arguments 'rtoz' and 'upper' must be TRUE or FALSE.")
+    dnames = ([str(v) for v in dnames] if dnames is not None
+              else [f"x{i + 1}" for i in range(dims)])
+    if len(dnames) != dims:
+        raise ValueError(
+            f"length of 'dnames' ({len(dnames)}) does not match 'x' ({dims})")
     if dims <= 1:
         return RcalcResult(None, None)
 

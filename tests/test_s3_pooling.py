@@ -1,0 +1,162 @@
+"""``s3.plot`` dispatch, ``predict(newmods=)``, ``confint`` and the
+``pooling`` helpers (``confint_tau2`` bounds, ``predict_rma``, ``hc_rma``)."""
+
+from __future__ import annotations
+
+import math
+
+import matplotlib
+
+matplotlib.use("Agg")
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
+
+import pimeta as ma
+
+YI = [0.10, 0.25, -0.05, 0.40, 0.15, 0.30, 0.05, 0.20, 0.35, -0.10]
+VI = [0.010, 0.020, 0.015, 0.030, 0.012, 0.025, 0.018, 0.022, 0.028, 0.016]
+
+
+@pytest.fixture(scope="module")
+def fit():
+    return ma.rma(YI, vi=VI, method="REML")
+
+
+@pytest.fixture(scope="module")
+def reg():
+    x = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0])
+    return ma.rma(YI, vi=VI, mods=x)
+
+
+@pytest.fixture(autouse=True)
+def _close_figures():
+    yield
+    plt.close("all")
+
+
+# ---------------------------------------------------------------------------
+# s3.plot dispatch
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("which", ["forest", "funnel", "radial", "qqnorm"])
+def test_plot_dispatch_needs_only_yi(fit, which):
+    out = ma.plot(fit, which=which)
+    assert out is not None
+
+
+@pytest.mark.parametrize("which", ["baujat", "gosh", "profile"])
+def test_plot_dispatch_for_diagnostic_figures(fit, which):
+    out = ma.plot(fit, which=which)
+    assert out is not None
+
+
+@pytest.mark.parametrize("which", ["bubble", "drapery", "regplot"])
+def test_plot_dispatch_for_moderator_figures(reg, which):
+    out = ma.plot(reg, which=which)
+    assert out is not None
+
+
+def test_plot_dispatch_is_case_insensitive(fit):
+    assert ma.plot(fit, which="Forest") is not None
+
+
+def test_plot_dispatch_rejects_an_unknown_which(fit):
+    with pytest.raises(ValueError, match="unknown 'which'"):
+        ma.plot(fit, which="nope")
+
+
+def test_plot_dispatch_needs_study_level_data():
+    class _Empty:
+        b = [0.1]
+        se = [0.05]
+
+    with pytest.raises(TypeError, match="needs study-level"):
+        ma.plot(_Empty(), which="forest")
+    with pytest.raises(TypeError, match="needs study-level"):
+        ma.plot(_Empty(), which="funnel")
+    with pytest.raises(TypeError, match="needs study-level"):
+        ma.plot(_Empty(), which="radial")
+    with pytest.raises(TypeError, match="binary event counts"):
+        ma.plot(_Empty(), which="labbe")
+
+
+# ---------------------------------------------------------------------------
+# predict with explicit newmods / confint
+# ---------------------------------------------------------------------------
+def test_predict_with_explicit_newmods(reg):
+    pred = ma.predict(reg, newmods=np.array([[5.0], [11.0]]))
+    assert len(pred) == 2
+    b = np.asarray(reg.b, dtype=float)
+    assert pred[0]["pred"] == pytest.approx(b[0] + b[1] * 5.0, abs=1e-10)
+    assert pred[1]["pred"] == pytest.approx(b[0] + b[1] * 11.0, abs=1e-10)
+
+
+def test_predict_newmods_ci_matches_the_formula(reg):
+    pred = ma.predict(reg, newmods=np.array([[5.0]]))
+    vb = np.asarray(reg.vb, dtype=float)
+    se_fit = float(np.sqrt(np.array([1.0, 5.0]) @ vb @ np.array([1.0, 5.0])))
+    assert pred[0]["se"] == pytest.approx(se_fit, abs=1e-8)
+    crit = 1.959963984540054
+    assert pred[0]["ci.lb"] == pytest.approx(
+        pred[0]["pred"] - crit * se_fit, abs=1e-6)
+
+
+def test_confint_on_a_tau2_object(fit):
+    ci = ma.confint(fit, level=0.90)
+    assert ci["level"] == pytest.approx(0.90)
+    assert ci["tau2"] == pytest.approx(fit.tau2, abs=1e-10)
+    assert 0.0 <= ci["ci_lb"] < ci["ci_ub"]
+
+
+def test_confint_level_widens_the_interval(fit):
+    narrow = ma.confint(fit, level=0.90)
+    wide = ma.confint(fit, level=0.99)
+    assert (wide["ci_ub"] - wide["ci_lb"]) > (narrow["ci_ub"] - narrow["ci_lb"])
+
+
+# ---------------------------------------------------------------------------
+# pooling helpers
+# ---------------------------------------------------------------------------
+def test_confint_tau2_upper_bound_hits_tau2_max():
+    """A very homogeneous data set drives the profile to the lower bound."""
+    yi = [0.100, 0.101, 0.099, 0.100]
+    vi = [0.01, 0.01, 0.01, 0.01]
+    ci = ma.confint_tau2(yi, vi, 0.0)
+    assert ci.tau2_lb >= 0.0
+    assert ci.tau2_ub < 0.05
+    assert ci.tau2 == pytest.approx(0.0)
+
+
+def test_confint_tau2_brackets_the_reml_estimate():
+    yi = [0.1, 0.4, 0.2, 0.55, 0.05]
+    vi = [0.01, 0.02, 0.015, 0.03, 0.012]
+    r = ma.rma(yi, vi=vi, method="REML")
+    ci = ma.confint_tau2(yi, vi, r.tau2)
+    assert ci.tau2_lb < r.tau2 < ci.tau2_ub
+    assert ci.tau_lb == pytest.approx(math.sqrt(ci.tau2_lb), abs=1e-12)
+    assert ci.tau_ub == pytest.approx(math.sqrt(ci.tau2_ub), abs=1e-12)
+    assert ci.i2_lb <= ci.i2 <= ci.i2_ub
+    assert ci.h2_lb <= ci.h2 <= ci.h2_ub
+
+
+def test_hc_rma_returns_robust_intervals():
+    res = ma.hc_rma(YI, VI)
+    assert np.isfinite(res.beta) and np.isfinite(res.se)
+    assert res.ci_lb < res.beta < res.ci_ub
+
+
+def test_hc_rma_rejects_a_single_study():
+    with pytest.raises(ValueError, match="k = 1"):
+        ma.hc_rma([0.1], [0.01])
+
+
+def test_hc_rma_rejects_non_positive_variances():
+    with pytest.raises(ValueError, match="non-positive"):
+        ma.hc_rma([0.1, 0.2], [0.01, 0.0])
+
+
+def test_predict_rma_covers_both_interval_types():
+    pred = ma.predict_rma(0.2, 0.05, 0.01, 10)
+    assert np.isfinite(pred.pred)
+    assert pred.pi_lb < pred.ci_lb < pred.pred < pred.ci_ub < pred.pi_ub

@@ -515,9 +515,23 @@ def plot(x, which="forest", **kwargs):
     if name == "qqnorm":
         return plotting.qqnorm_rma(x, **kwargs)
     if name == "baujat":
-        return plotting.plot_baujat(x, **kwargs)
+        # plot_baujat() consumes a BaujatResult, not the fitted model, so the
+        # diagnostic has to be computed first (metafor's plot(baujat(x)) idiom).
+        if yi is None or vi is None:
+            raise TypeError("plot(x, which='baujat') needs study-level yi/vi")
+        from .plotting import plot_baujat
+        from .sensitivity import baujat
+        return plot_baujat(
+            baujat(np.asarray(yi, dtype=float), np.asarray(vi, dtype=float)),
+            **kwargs)
     if name == "gosh":
-        return plotting.plot_gosh(x, **kwargs)
+        if yi is None or vi is None:
+            raise TypeError("plot(x, which='gosh') needs study-level yi/vi")
+        from .gosh import gosh
+        from .plotting import plot_gosh
+        return plot_gosh(
+            gosh(np.asarray(yi, dtype=float), np.asarray(vi, dtype=float)),
+            **kwargs)
     if name == "profile":
         return plotting.llplot(x, **kwargs)
     if name == "bubble":
