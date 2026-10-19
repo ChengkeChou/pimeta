@@ -168,6 +168,7 @@ from pimeta import (  # noqa: F401
     metamerge,
     netheat,
     netcomplex,
+    netcomplexity,
     netmetareg,
     netmeasures,
     netimpact,
@@ -2704,15 +2705,13 @@ def test_profile_rma():
     assert p.maxll > max(p.ll[:2])
 
 
-def test_netcomplex():
-    from pimeta import NetmetaResult  # noqa: F401
-
+def test_netcomplexity_is_the_cycle_count():
     class _Fake:
         m = 28
         n = 10
         n_subnets = 1
 
-    assert netcomplex(_Fake()) == 28 - 10 + 1
+    assert netcomplexity(_Fake()) == 28 - 10 + 1
 
 
 # ---------------------------------------------------------------------------

@@ -394,6 +394,10 @@ def _fx(n):
     """
     poss_k = n * (n - 1) // 2
     x = np.zeros((poss_k, n - 1), dtype=float)
+    if n <= 2:
+        # a single contrast A:B is just -theta_1
+        x[0, 0] = -1.0
+        return x
     x[0:(n - 1), 0:(n - 1)] = np.diag(np.full(n - 1, -1.0))
     x[poss_k - 1, (n - 3):(n - 1)] = [1.0, -1.0]
     if poss_k - (n - 1) > 1:
@@ -3566,19 +3570,46 @@ def pairwise(
     if data is not None:
         raise NotImplementedError("data-frame input not supported; pass vectors")
 
+    def _vec(v):
+        """Accept a scalar or a sequence; R vectors are per-arm."""
+        if v is None:
+            return None
+        arr = np.atleast_1d(np.asarray(v, dtype=float)).ravel()
+        if arr.size == 1 and k_arms > 1:
+            arr = np.repeat(arr, k_arms)      # R recycles length-1 vectors
+        return [float(x) for x in arr]
+
     treat = list(treat)
     k_arms = len(treat)
 
+    n = _vec(n)
+    event = _vec(event)
+    mean = _vec(mean)
+    sd = _vec(sd)
+    time = _vec(time)
+
+    for nm, v in (("n", n), ("event", event), ("mean", mean), ("sd", sd),
+                  ("time", time)):
+        if v is not None and len(v) != k_arms:
+            raise ValueError(
+                f"length of '{nm}' ({len(v)}) does not match 'treat' "
+                f"({k_arms})")
+
     if event is not None:
-        event = [float(e) for e in event]
-        n = [float(nv) for nv in n]
+        if n is None:
+            raise ValueError("'n' is required for binary data")
         if sm == "":
             sm = "OR"
         out = _pairwise_binary(treat, event, n, studlab, sm, incr, allincr, addincr)
     else:
-        n = [float(nv) for nv in n]
-        mean = [float(mv) for mv in mean]
-        sd = [float(sv) for sv in sd]
+        if n is not None and mean is None and sd is None:
+            raise ValueError(
+                "no outcome data supplied: pass 'event' (binary) or "
+                "'mean'/'sd' (continuous) alongside 'n'")
+        if n is None or mean is None or sd is None:
+            raise ValueError(
+                "either 'event'/'n' (binary) or 'mean'/'sd'/'n' (continuous) "
+                "must be supplied")
         if sm == "":
             sm = "MD"
         out = _pairwise_continuous(treat, n, mean, sd, studlab, sm)
@@ -5262,13 +5293,18 @@ def netmetabin(
 # netcomplex
 # --------------------------------------------------------------------------- #
 
-def netcomplex(result) -> int:
-    """``netmeta::netcomplex`` — complexity of a treatment network.
+def netcomplexity(result) -> int:
+    """Independent cycles of a comparison graph (a pimeta extra).
 
-    The complexity is the number of independent cycles in the comparison graph,
-    ``m - n + n_subnets`` (with ``m`` comparisons, ``n`` treatments and
-    ``n_subnets`` connected components). A network without cycles has
-    complexity 0.
+    The number of independent cycles is ``m - n + n_subnets`` (with ``m``
+    comparisons, ``n`` treatments and ``n_subnets`` connected components).  A
+    network without cycles has complexity 0.
+
+    ``netmeta`` itself does not export such a function; the equivalent
+    quantity in R is ``netconnection(...)$d``.  This helper is provided
+    because it was historically (and misleadingly) called ``netcomplex`` here —
+    that name now matches R's ``netmeta::netcomplex``, which computes
+    combination effects of a component network meta-analysis.
 
     Args:
         result: a :class:`NetmetaResult` (or any object exposing ``m``, ``n``
@@ -5283,6 +5319,142 @@ def netcomplex(result) -> int:
     if ns is None:
         ns = getattr(result, "nsubnets", 1)
     return m - n + int(ns)
+
+
+@dataclass
+class NetcomplexResult:
+    """Result of :func:`netcomplex` (``netmeta::netcomplex``)."""
+
+    complex: list[str]
+    comps: list[str]
+    C_matrix: np.ndarray
+    Comb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    seComb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    lower_Comb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    upper_Comb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    statistic_Comb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    pval_Comb_common: np.ndarray = field(default_factory=lambda: np.empty(0))
+    Comb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    seComb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    lower_Comb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    upper_Comb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    statistic_Comb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    pval_Comb_random: np.ndarray = field(default_factory=lambda: np.empty(0))
+    inactive: str | None = None
+    level: float = 0.95
+    common: bool = True
+    random: bool = True
+
+    def __repr__(self):
+        return f"NetcomplexResult(complex={self.complex})"
+
+    def _m(self, x):
+        return x.tolist() if isinstance(x, np.ndarray) else x
+
+    def to_dict(self) -> dict:
+        return {
+            "complex": self.complex,
+            "comps": self.comps,
+            "C_matrix": self._m(self.C_matrix),
+            "Comb_common": self._m(self.Comb_common),
+            "seComb_common": self._m(self.seComb_common),
+            "lower_Comb_common": self._m(self.lower_Comb_common),
+            "upper_Comb_common": self._m(self.upper_Comb_common),
+            "statistic_Comb_common": self._m(self.statistic_Comb_common),
+            "pval_Comb_common": self._m(self.pval_Comb_common),
+            "Comb_random": self._m(self.Comb_random),
+            "seComb_random": self._m(self.seComb_random),
+            "lower_Comb_random": self._m(self.lower_Comb_random),
+            "upper_Comb_random": self._m(self.upper_Comb_random),
+            "statistic_Comb_random": self._m(self.statistic_Comb_random),
+            "pval_Comb_random": self._m(self.pval_Comb_random),
+            "inactive": self.inactive,
+            "level": self.level,
+            "common": self.common,
+            "random": self.random,
+        }
+
+
+def netcomplex(result, complex=None, common=True, random=True, level=None):
+    """``netmeta::netcomplex`` — combination effects of a component NMA.
+
+    Estimates the effect of arbitrary treatment *complexes* (combinations of
+    components) from a fitted :func:`netcomb` model::
+
+        Comb = C %*% Comp
+        seComb = sqrt(diag(C %*% Lplus %*% t(C)))
+
+    Args:
+        result: a :class:`NetcombResult`.
+        complex: which complexes to evaluate.  ``None`` (the default) uses every
+            treatment of the network; otherwise a sequence of complex labels
+            such as ``["A+B", "A+C+B"]`` (a 2-D array is read rowwise).
+        common, random: which models to fill in.
+        level: confidence level (defaults to the model's).
+
+    Returns:
+        :class:`NetcomplexResult`.
+    """
+    if not isinstance(result, NetcombResult):
+        raise TypeError("argument 'result' must be a NetcombResult")
+
+    comps = list(result.comps)
+    sep = result.sep_comps or "+"
+    if level is None:
+        level = result.level
+
+    if complex is None:
+        labels = list(result.trts)
+        c_mat = np.asarray(result.C_matrix, dtype=float)
+        if c_mat.shape[0] != len(labels):
+            c_mat = _create_c_matrix(labels, result.inactive, sep)[0]
+    else:
+        arr = np.asarray(complex, dtype=object)
+        if arr.ndim == 2:
+            c_mat = np.asarray(arr, dtype=float)
+            if c_mat.shape[1] == len(comps):
+                labels = [str(i + 1) for i in range(c_mat.shape[0])]
+            elif c_mat.shape[0] == len(comps):
+                c_mat = c_mat.T
+                labels = [str(i + 1) for i in range(c_mat.shape[0])]
+            else:
+                raise ValueError(
+                    f"the complex matrix must have {len(comps)} columns "
+                    f"(components), got {c_mat.shape[1]}")
+        else:
+            labels = [str(v) for v in arr.ravel()]
+            c_mat = np.zeros((len(labels), len(comps)), dtype=float)
+            for i, lab in enumerate(labels):
+                for part in _compsplit(lab, sep):
+                    if part not in comps:
+                        raise ValueError(
+                            f"unknown component {part!r} in complex {lab!r}; "
+                            f"known components are {comps}")
+                    c_mat[i, comps.index(part)] = 1.0
+
+    out = NetcomplexResult(complex=labels, comps=comps, C_matrix=c_mat,
+                           inactive=result.inactive, level=float(level),
+                           common=bool(common), random=bool(random))
+
+    for model in ("common", "random"):
+        if not (common if model == "common" else random):
+            continue
+        comp = np.asarray(getattr(result, f"Comp_{model}"), dtype=float)
+        lplus = np.asarray(getattr(result, f"Lplus_matrix_{model}"), dtype=float)
+        if comp.size == 0:
+            continue
+        comb = c_mat @ comp
+        var = np.einsum("ij,jk,ik->i", c_mat, lplus, c_mat)
+        se = np.sqrt(np.clip(var, 0.0, None))
+        lower, upper, stat, pval = _ci(comb, se, level)
+        setattr(out, f"Comb_{model}", comb)
+        setattr(out, f"seComb_{model}", se)
+        setattr(out, f"lower_Comb_{model}", lower)
+        setattr(out, f"upper_Comb_{model}", upper)
+        setattr(out, f"statistic_Comb_{model}", stat)
+        setattr(out, f"pval_Comb_{model}", pval)
+
+    return out
 
 
 # --------------------------------------------------------------------------- #
@@ -6049,7 +6221,8 @@ def netpath(result, node1, node2, random=True):
 
     # --- drop linearly dependent paths (reduce_to_full_rank) --------------- #
     if abs(np.linalg.det(A)) < 1e-6:
-        _, _, piv = scipy.linalg.qr(A, pivoting=True)
+        from scipy.linalg import qr as _qr
+        _, _, piv = _qr(A, pivoting=True)
         rank = int(np.linalg.matrix_rank(A, tol=1e-8))
         kept = sorted(int(p) for p in piv[:rank])
     else:
@@ -6681,6 +6854,130 @@ def gemtc2netmeta(x, sm="", method_tau="DL", reference_group="",
 # netmeta::treats / vikor / subgroup / nettable  + public helpers
 # --------------------------------------------------------------------------- #
 
+def _isspace(ch):
+    return ch in " \t\n\v\f\r"
+
+
+def _first_char(s, i):
+    """``#define FIRSTCHAR(i)`` — the preceding character is a space."""
+    return _isspace(s[i - 1])
+
+
+def _last_char(s, i):
+    """``#define LASTCHAR(i)`` — end of a word."""
+    return not _isspace(s[i - 1]) and (i + 1 >= len(s) or _isspace(s[i + 1]))
+
+
+_VOWELS = frozenset("aeiou")
+
+
+def _stripchars(name, minlen, usecl=True):
+    """R's ``stripchars()`` (``src/main/character.c``) — one abbreviation.
+
+    Characters are dropped from the end of words, at least one character of
+    each word is kept: spaces first, then lower-case vowels, then lower-case
+    consonants, then anything (index 0 is never touched).
+    """
+    s = name
+    if len(s) < minlen:
+        return s
+    nspace = 0
+    finished = False
+
+    # pass 0: drop trailing spaces, remember the internal ones
+    j = 1
+    i = len(s) - 1
+    while i > 0:
+        if _isspace(s[i]):
+            if j:
+                s = s[:i]
+            else:
+                nspace += 1
+        else:
+            j = 0
+        if len(s) - nspace <= minlen:
+            finished = True
+            break
+        i -= 1
+
+    passes = []
+    if usecl:
+        passes += [
+            lambda t, k: t[k] in _VOWELS and _last_char(t, k),
+            lambda t, k: t[k] in _VOWELS and not _first_char(t, k),
+            lambda t, k: t[k].islower() and _last_char(t, k),
+            lambda t, k: t[k].islower() and not _first_char(t, k),
+        ]
+    # brute force: anything that is not the first character of a word
+    passes.append(lambda t, k: not _first_char(t, k) and not _isspace(t[k]))
+
+    for pred in passes:
+        if finished:
+            break
+        i = len(s) - 1
+        while i > 0:
+            if pred(s, i):
+                s = s[:i] + s[i + 1:]
+            if len(s) - nspace <= minlen:
+                finished = True
+                break
+            i -= 1
+
+    # finally drop the remaining internal spaces if still too long
+    if len(s) > minlen:
+        i = len(s) - 1
+        while i > 0:
+            if _isspace(s[i]):
+                s = s[:i] + s[i + 1:]
+            i -= 1
+    return s
+
+
+def _duplicated(x):
+    """R's ``duplicated()`` — TRUE for elements seen earlier in the vector."""
+    out = []
+    seen = set()
+    for v in x:
+        out.append(v in seen)
+        seen.add(v)
+    return out
+
+
+def _abbreviate(names, minlength=4, use_classes=True):
+    """R's ``base::abbreviate`` (``method = "left.kept"``)."""
+    minlength = int(minlength)
+    if minlength <= 0:
+        return ["" for _ in names]
+
+    old = [str(v).strip(" \t\n\v\f\r") for v in names]
+
+    uniq = []
+    seen = set()
+    for v in old:
+        if v not in seen:
+            seen.add(v)
+            uniq.append(v)
+
+    x = list(uniq)                 # current abbreviations (parallel to uniq)
+    dup2 = [True] * len(uniq)
+    these = list(uniq)             # names still being abbreviated
+    while True:
+        pos = [k for k, d in enumerate(dup2) if d]
+        for k, v in zip(pos, these):
+            x[k] = _stripchars(v, minlength, use_classes)
+        dup2 = _duplicated(x)
+        if not any(dup2):
+            break
+        minlength += 1
+        sub = [x[k] for k, d in enumerate(dup2) if d]
+        dup2 = [d or (v in sub) for v, d in zip(x, dup2)]
+        these = [uniq[k] for k, d in enumerate(dup2) if d]
+
+    if len(uniq) != len(old):
+        x = [x[uniq.index(v)] for v in old]
+    return x
+
+
 def treats(x, nchar_trts=8, row=True):
     """``netmeta::treats`` — abbreviate treatment labels to ``nchar_trts`` chars.
 
@@ -6692,30 +6989,25 @@ def treats(x, nchar_trts=8, row=True):
 
     Returns:
         list of abbreviations.  When truncation would create duplicates the
-        labels are abbreviated in R's ``abbreviate()`` style (``a1``, ``b1``,
-        ``a2``, ...).
+        labels are abbreviated with R's ``abbreviate()`` (drop spaces, then
+        lower-case vowels, then consonants, from the end of words), e.g.
+        ``["aa1", "aa2", "bb"]`` -> ``["a1", "a2", "bb"]``.
     """
     a = np.asarray(x, dtype=object)
     if a.ndim == 2:
-        names = list(x.index if row and hasattr(x, "index") else
-                     (x.columns if hasattr(x, "columns") else []))
+        names = None
+        if hasattr(x, "index") or hasattr(x, "columns"):
+            names = list(x.index) if row else list(x.columns)
+        elif hasattr(x, "rownames"):
+            names = list(x.rownames)
         if not names:
-            names = [str(v) for v in range(a.shape[0])]
+            names = [str(v) for v in range(a.shape[0 if row else 1])]
     else:
         names = [str(v) for v in a.ravel()]
+
     res = [s[:int(nchar_trts)] for s in names]
     if len(set(res)) != len(set(names)):
-        # R's abbreviate(): build a short prefix + digit suffix per group
-        seen = {}
-        out = []
-        for s in names:
-            key = s.lower()
-            prefix = key[:int(nchar_trts)]
-            if prefix not in seen:
-                seen[prefix] = 0
-            seen[prefix] += 1
-            out.append(f"{prefix}{seen[prefix]}")
-        res = out
+        res = _abbreviate(names, nchar_trts)
     return res
 
 
@@ -6877,13 +7169,27 @@ def subgroup(result, subgroup, only_connected=False, method_tau=None,
     stud = [str(v) for v in result.studlab_raw]
     sg = [str(v) for v in np.asarray(subgroup).ravel()]
 
-    # expand study-level subgroup to comparison-level
-    by_study = {}
-    for s, g in zip(stud, sg):
-        by_study.setdefault(s, g)
-    if len(by_study) != len(set(stud)):
-        pass
-    levels = sorted(set(sg))
+    # ``subgroup`` is a *study*-level variable, but the raw comparison rows
+    # repeat each study.  Accept either one label per study (in order of first
+    # appearance) or one label per comparison row.
+    studies = []
+    for s in stud:
+        if s not in studies:
+            studies.append(s)
+    if len(sg) == len(studies):
+        label_of = dict(zip(studies, sg))
+    elif len(sg) == len(stud) and len(studies) == len(stud):
+        label_of = dict(zip(studies, sg))
+    elif len(sg) == len(stud):
+        label_of = {}
+        for s, g in zip(stud, sg):
+            label_of.setdefault(s, g)
+    else:
+        raise ValueError(
+            f"length of 'subgroup' ({len(sg)}) must equal the number of "
+            f"studies ({len(studies)}) or comparisons ({len(stud)})")
+
+    levels = sorted(set(label_of.values()))
     if method_tau is None:
         method_tau = result.method_tau
     if level_ma is None:
@@ -6902,7 +7208,7 @@ def subgroup(result, subgroup, only_connected=False, method_tau=None,
     sev = list(result.seTE_raw)
 
     for k, lev in enumerate(levels):
-        idx = [i for i, s in enumerate(stud) if by_study.get(s) == lev]
+        idx = [i for i, s in enumerate(stud) if label_of.get(s) == lev]
         if not idx:
             continue
         try:
@@ -6979,7 +7285,7 @@ def nettable(result, level=0.95):
     pos = {t: i for i, t in enumerate(trts)}
     groups = {}
     for i in range(len(t1)):
-        key = tuple(sorted([t1[i], t2[i]]))
+        key = tuple(sorted([str(t1[i]), str(t2[i])]))
         groups.setdefault(key, []).append(i)
 
     net_c = np.asarray(result.TE_common, dtype=float)
@@ -6987,18 +7293,23 @@ def nettable(result, level=0.95):
     dir_c = np.asarray(result.TE_direct_common, dtype=float)
     dir_r = np.asarray(result.TE_direct_random, dtype=float)
 
+    # netmeta lists *all* n(n-1)/2 comparisons; those without direct evidence
+    # show "." in R and NA here.
     rows = []
-    for (a, b), idx in groups.items():
-        rows.append({
-            "treat1": a, "treat2": b,
-            "studies": len({stud[i] for i in idx}),
-            "n.2arm": int(sum(1 for i in idx if narms[i] == 2)),
-            "narms": int(max(narms[i] for i in idx)),
-            "TE.direct.common": float(dir_c[pos[a], pos[b]]),
-            "TE.direct.random": float(dir_r[pos[a], pos[b]]),
-            "TE.network.common": float(net_c[pos[a], pos[b]]),
-            "TE.network.random": float(net_r[pos[a], pos[b]]),
-        })
+    for i in range(len(trts)):
+        for j in range(i + 1, len(trts)):
+            a, b = trts[i], trts[j]
+            idx = groups.get(tuple(sorted([a, b])), [])
+            rows.append({
+                "treat1": a, "treat2": b,
+                "studies": len({stud[i] for i in idx}),
+                "n.2arm": int(sum(1 for i in idx if narms[i] == 2)),
+                "narms": int(max((narms[i] for i in idx), default=0)),
+                "TE.direct.common": float(dir_c[i, j]),
+                "TE.direct.random": float(dir_r[i, j]),
+                "TE.network.common": float(net_c[i, j]),
+                "TE.network.random": float(net_r[i, j]),
+            })
     return NettableResult(rows, trts)
 
 
@@ -7017,13 +7328,13 @@ def invmat(x):
     return _invmat(np.asarray(x, dtype=float))
 
 
-def hatmatrix(x, method="Davies", type="full", common=None, random=None):
+def hatmatrix(x, method="Ruecker", type="full", common=None, random=None):
     """``netmeta::hatmatrix`` — hat matrix of a network.
 
-    Supported: ``method="Davies"`` with ``type`` in ``short``/``long``/``full``
-    (via ``hatmatrix.aggr``), and ``method="Ruecker"`` (the hat matrix stored
-    on the fitted object).  ``method="Krahn"`` needs the design decomposition
-    and is available through :func:`decomp_design`.
+    Supported: ``method="Ruecker"`` (the default, as in netmeta 3.7-0 — the hat
+    matrix stored on the fitted object), ``method="Davies"`` with ``type`` in
+    ``short``/``long``/``full`` (via ``hatmatrix.aggr``), and
+    ``method="Krahn"`` (the design-based hat matrix from the decomposition).
     """
     if method == "Ruecker":
         return {"common": np.asarray(x.H_matrix_common, dtype=float),
