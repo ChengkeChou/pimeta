@@ -294,3 +294,52 @@ def test_metareg_on_publication_year_matches_r():
     assert float(res.I2) == pytest.approx(87.693598025673452, abs=1e-8)
     assert float(res.H2) == pytest.approx(8.1258519109499812, abs=1e-9)
     assert float(res.R2) == pytest.approx(14.904557916557481, abs=1e-8)
+
+
+# =========================================================================
+# netcontrib(method="randomwalk") — Davies' algorithm
+# (netmeta::contribution.matrix.davies)
+# =========================================================================
+NMA_TE = [0.10, -0.20, 0.05, -0.15, 0.30, 0.25]
+NMA_SE = [0.10, 0.12, 0.11, 0.13, 0.14, 0.15]
+NMA_T1 = ["Placebo", "Placebo", "DrugA", "DrugA", "DrugB", "DrugC"]
+NMA_T2 = ["DrugA", "DrugB", "DrugB", "DrugC", "DrugC", "Placebo"]
+
+# netcontrib(nm, method = "randomwalk")$random  (R 4.6.1 / netmeta 3.7-0)
+R_RANDOMWALK = [
+    [0.517030283, 0.111817479, 0.129210530, 0.112731178, 0.128296830, 0.000913699],
+    [0.124797401, 0.495253669, 0.126407214, 0.127134502, 0.002337102, 0.124070113],
+    [0.123082146, 0.107941540, 0.536832246, 0.001120382, 0.124202528, 0.106821158],
+    [0.133717741, 0.135112150, 0.001394409, 0.482982162, 0.124093973, 0.122699564],
+    [0.135432995, 0.002210499, 0.137643494, 0.110402206, 0.506119099, 0.108191707],
+    [0.001143503, 0.139125103, 0.140268606, 0.129411874, 0.128268371, 0.461782542],
+]
+
+
+def _nma():
+    return ma.netmeta(
+        TE=NMA_TE, seTE=NMA_SE, treat1=NMA_T1, treat2=NMA_T2,
+        studlab=[f"s{i}" for i in range(1, 7)], sm="MD",
+        reference_group="Placebo",
+    )
+
+
+def test_netcontrib_randomwalk_matches_r():
+    nc = ma.netcontrib(_nma(), method="randomwalk")
+    assert nc.method == "randomwalk"
+    assert nc.directs == [
+        "DrugA:DrugB", "DrugA:DrugC", "DrugA:Placebo",
+        "DrugB:DrugC", "DrugB:Placebo", "DrugC:Placebo",
+    ]
+    got = np.asarray(nc.random, dtype=float)
+    assert got.shape == (6, 6)
+    assert got == pytest.approx(np.asarray(R_RANDOMWALK), abs=1e-8)
+    # Every comparison's contributions form a full decomposition.
+    assert np.allclose(got.sum(axis=1), 1.0)
+
+
+def test_netcontrib_randomwalk_agrees_with_shortestpath_on_complete_network():
+    nm = _nma()
+    rw = np.asarray(ma.netcontrib(nm, method="randomwalk").random, dtype=float)
+    sp = np.asarray(ma.netcontrib(nm, method="shortestpath").random, dtype=float)
+    assert rw == pytest.approx(sp, abs=1e-8)

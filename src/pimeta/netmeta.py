@@ -2116,6 +2116,117 @@ def _contribution_matrix(treat1_pos, treat2_pos, b_full_m, se_adj, n):
     return weights, pairs
 
 
+def _simple_paths_randomwalk(adj: np.ndarray, source: int, target: int) -> list[list[int]]:
+    """Every simple directed path ``source -> target`` in ``adj`` (igraph equivalent)."""
+    n = adj.shape[0]
+    out: list[list[int]] = []
+    stack: list[tuple[int, list[int]]] = [(source, [source])]
+    while stack:
+        node, path = stack.pop()
+        if node == target:
+            out.append(path)
+            continue
+        for nxt in range(n):
+            if adj[node, nxt] != 0.0 and nxt not in path:
+                stack.append((nxt, path + [nxt]))
+    return out
+
+
+def _contribution_matrix_randomwalk(
+    result, model: str
+) -> tuple[np.ndarray, list[tuple[int, int]]]:
+    """Davies' random-walk contribution matrix (netmeta::contribution.matrix.davies).
+
+    For each treatment pair the aggregated hat matrix supplies a directed
+    "flow" matrix ``Q``; normalising its rows gives a transition matrix that is
+    made absorbing at the target. Every simple path from source to target then
+    contributes ``(1/L) * prod(P)`` where ``L`` is the path length.
+    """
+    n = int(result.n)
+    treat1_pos = [int(v) for v in result.treat1_pos]
+    treat2_pos = [int(v) for v in result.treat2_pos]
+    b_full_m = np.asarray(result.B_matrix, dtype=float)
+    se_adj = np.asarray(
+        result.seTE_adj_random if model == "random" else result.seTE_adj_common,
+        dtype=float,
+    )
+    # hatmatrix.aggr(type="full") equals the long form whenever every treatment
+    # pair has direct evidence, which is the only case R's randomwalk handles
+    # without first collapsing duplicate edges.
+    h_full, _hpairs = _hatmatrix_aggr_long(
+        treat1_pos, treat2_pos, b_full_m, se_adj, n
+    )
+    if h_full.shape[1] != n * (n - 1) // 2:
+        raise NotImplementedError(
+            "netcontrib(method='randomwalk') on an incomplete network is not "
+            "supported yet; every treatment pair must have direct evidence"
+        )
+    comps = n * (n - 1) // 2
+    ep = 2.220446049250313e-16 * 1000.0  # R's is_zero(x, n = 1000)
+
+    weights = np.zeros((comps, comps), dtype=float)
+    r = 0
+    for t1 in range(n - 1):
+        for t2 in range(t1 + 1, n):
+            q = np.zeros((n, n), dtype=float)
+            idx = 0
+            for i in range(n - 1):
+                for j in range(i + 1, n):
+                    q[i, j] = h_full[r, idx]
+                    idx += 1
+            for i in range(n):
+                for j in range(n):
+                    if i != j:
+                        q[j, i] = -q[i, j]
+            for i in range(n):
+                for j in range(n):
+                    if i != j and q[i, j] <= 0.0:
+                        q[i, j] = 0.0
+
+            # P = ginv(diag(rowSums(Q))) %*% Q, absorbing at t2
+            p = np.zeros((n, n), dtype=float)
+            row_sums = q.sum(axis=1)
+            for i in range(n):
+                if row_sums[i] != 0.0:
+                    p[i, :] = q[i, :] / row_sums[i]
+            p[t2, :] = 0.0
+            p[t2, t2] = 1.0
+            p[np.abs(p) < ep] = 0.0
+
+            rmat = np.zeros((n, n), dtype=float)
+            for path in _simple_paths_randomwalk(p, t1, t2):
+                length = len(path) - 1
+                if length <= 0:
+                    continue
+                prob = 1.0 / length
+                for i in range(length):
+                    prob *= p[path[i], path[i + 1]]
+                for i in range(length):
+                    rmat[path[i], path[i + 1]] += prob
+                for i in range(n - 1):
+                    for j in range(i + 1, n):
+                        v = max(rmat[i, j], rmat[j, i])
+                        rmat[i, j] = v
+                        rmat[j, i] = v
+
+            # R fills uppertri() in column-major order but labels the columns
+            # with hatmatrix.aggr's ascending pair order, so write the entries
+            # straight into ascending order here.
+            for lex_pos, (i, j) in enumerate(
+                (a, b) for a in range(n) for b in range(a + 1, n)
+            ):
+                weights[r, lex_pos] = rmat[i, j]
+            r += 1
+
+    weights[np.abs(weights) < ep] = 0.0
+    keep = weights.sum(axis=0) > 0.0
+    # R labels the columns with hatmatrix.aggr's row names (ascending pair
+    # order) while the values were filled in upper-triangle column-major order.
+    pairs_all = [(i, j) for i in range(n) for j in range(i + 1, n)]
+    kept_pairs = [pair for pair, k in zip(pairs_all, keep) if k]
+    return weights[:, keep], kept_pairs
+
+
 def netcontrib(x: NetmetaResult, method: str = "shortestpath") -> NetcontribResult:
     """Contribution matrix of a network meta-analysis.
 
@@ -2125,10 +2236,6 @@ def netcontrib(x: NetmetaResult, method: str = "shortestpath") -> NetcontribResu
     """
     if method not in ("shortestpath", "randomwalk"):
         raise ValueError("method must be 'shortestpath' or 'randomwalk'")
-    if method == "randomwalk":
-        raise NotImplementedError(
-            "randomwalk contribution method is not yet implemented; "
-            "use method='shortestpath' (the netmeta default)")
 
     n = x.n
     trts = list(x.trts)
@@ -2138,10 +2245,14 @@ def netcontrib(x: NetmetaResult, method: str = "shortestpath") -> NetcontribResu
     se_common = np.asarray(x.seTE_adj_common, dtype=float)
     se_random = np.asarray(x.seTE_adj_random, dtype=float)
 
-    common, pairs = _contribution_matrix(
-        treat1_pos, treat2_pos, b_full_m, se_common, n)
-    random, _ = _contribution_matrix(
-        treat1_pos, treat2_pos, b_full_m, se_random, n)
+    if method == "randomwalk":
+        common, pairs = _contribution_matrix_randomwalk(x, "common")
+        random, _ = _contribution_matrix_randomwalk(x, "random")
+    else:
+        common, pairs = _contribution_matrix(
+            treat1_pos, treat2_pos, b_full_m, se_common, n)
+        random, _ = _contribution_matrix(
+            treat1_pos, treat2_pos, b_full_m, se_random, n)
 
     sep = ":"
     comparisons = [f"{trts[i]}{sep}{trts[j]}" for i in range(n) for j in range(i + 1, n)]
