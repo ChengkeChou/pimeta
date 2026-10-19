@@ -46,16 +46,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `pooling.py` declared `list[float]` while being handed `np.ndarray`; and
   `RmaMvResult` advertised `np.ndarray` for fields it defaulted to `None`.
 
-### Known gaps
+### Fixed
 
-Three τ² estimators still disagree with metafor 5.2-1 and are pinned as strict
-`xfail`s so the suite fails loudly if they are silently "fixed" without matching:
+- **`method="HS"`, `method="PM"` and `method="EB"` returned values that did
+  not match metafor.** All three are now transcribed from `rma.uni`'s source and
+  reproduce R to machine precision:
 
-| method | pimeta | R | note |
-|---|---|---|---|
-| `HS` | 0.1903017785 | 0.2283628637 | needs metafor's `ni` convention |
-| `PM` | 0.3180684522 | 0.3180937119 | metafor stops its iteration early |
-| `EB` | 0.3180684522 | 0.3180685158 | needs the exact EB iteration |
+  | method | before | R 4.6.1 / metafor 5.2-1 | now |
+  |---|---|---|---|
+  | `HS` | 0.19030177854977914 | 0.22836286367690678 | 2.8e-17 |
+  | `PM` | 0.31806845220502394 | 0.31809371186301511 | exact |
+  | `EB` | 0.31806845220502394 | 0.31806851577130513 | exact |
+
+  The HS bug was a wrong formula (`(Q-(k-1))/trP` instead of metafor's
+  `(RSS-k)/sum(wi)`). The PM bug was a tolerance mismatch: metafor hands the
+  problem to R's `uniroot` with `con$tol = .Machine$double.eps^0.25` (1.22e-4),
+  so it stops ~2.5e-5 short of the true root — a tight Brent solve is *more*
+  accurate but disagrees with R. EB needed metafor's actual Fisher-scoring
+  iteration starting from the HE value, whose `adj` step is now reproduced
+  exactly.
+- **`method="HE"` returned the DerSimonian-Laird estimate.** The HE slot in the
+  τ² dispatch table was literally an alias for `_dl`, on the assumption that
+  Hedges' estimator equals DL for intercept-only models. It does not:
+  metafor's HE is `var(y, ddof=1) - mean(v)`. On the 13 BCG trials R gives
+  0.32856385799576876 while `pimeta` returned 0.30876026286237612. `_he()` is
+  now a real implementation and matches R to 6e-17.
+- **`MetaregResult.R2` was a fraction instead of a percentage.** `I2` and `H2`
+  on the same object are percentages (matching R), so `R2` was reporting 0.1490
+  where metafor reports 14.9046. Now a percentage.
+
+All six moment estimators (`DL`, `HE`, `HS`, `SJ`, `PM`, `EB`) now agree with
+`rma(yi, vi, method=…)$tau2` to at worst 5.6e-17.
 
 ### Removed
 

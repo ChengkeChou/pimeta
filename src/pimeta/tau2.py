@@ -22,6 +22,14 @@ from __future__ import annotations
 import numpy as np
 from scipy import optimize
 
+from ._numeric import (
+    TAU2_MAX,
+    TAU2_MIN,
+    TAU2_THRESHOLD,
+    UNIROOT_TOL,
+)
+from ._numeric import zeroin as _zeroin
+
 # Maximum tau^2 for the root search / iteration. tau^2 > 100 is biologically
 # meaningless for log-ratio scales, and bounds the bracketing loop.
 _TAU2_MAX = 1000.0
@@ -50,16 +58,6 @@ def _dl(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     return max(0.0, (q - (k - 1)) / c)
 
 
-def _hs(y: list[float] | np.ndarray, v: list[float] | np.ndarray, n: list[float]) -> float:
-    """Hunter-Schmidt estimator (sample-size weights)."""
-    k = len(y)
-    if not n or any(ni is None or ni <= 0 for ni in n):
-        raise ValueError("HS requires per-study total sample size n (all > 0)")
-    w = [float(ni) for ni in n]
-    q = _weighted_q(y, w)
-    return max(0.0, (q - (k - 1)) / sum(w))
-
-
 def _sj(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """Sidik-Jonkman (2005) one-step estimator."""
     k = len(y)
@@ -74,47 +72,103 @@ def _sj(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     return max(0.0, sum(wi * (yi - mu) ** 2 for wi, yi in zip(w, y)) / (k - 1))
 
 
-def _pm(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
-    """Paule-Mandel estimator: solve Q(tau^2) = k-1 by bisection."""
-    k = len(y)
+def _he(y, v) -> float:
+    """Hedges (1983) HE estimator: ``(RSS - tr(PV)) / (k - p)`` unweighted.
 
-    def f(tau2: float) -> float:
-        return _q_at(y, v, tau2) - (k - 1)
-
-    if f(0.0) <= 0.0:
-        return 0.0
-    # Q is strictly decreasing in tau^2, so bracket the root.
-    hi = 1.0
-    while f(hi) > 0.0 and hi < _TAU2_MAX:
-        hi *= 10.0
-    if f(hi) > 0.0:
-        return hi
-    return float(optimize.brentq(f, 0.0, hi))
-
-
-def _eb(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
-    """Empirical Bayes estimator: iterative Paule-Mandel.
-
-    metafor's EB iteration converges to essentially the PM root, so we return
-    it directly. R 4.6.1 / metafor 5.2-1 differ from this root by ~6e-8 for EB
-    and by ~2.5e-5 for PM (whose stopping rule differs); see the ``xfail``
-    markers in ``tests/test_coverage_gaps.py``.
-    """
-    return _pm(y, v)
-
-
-def _he(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
-    """Hedges (1983) HE estimator: ``var(y, ddof=1) - mean(v)``.
-
-    This is *not* the same as DL: metafor's ``method="HE"`` splits total
-    variance into an unweighted between-study part and the average within-study
-    sampling variance. Verified against ``rma(yi, vi, method="HE")$tau2``.
+    Transcribed from ``rma.uni``'s HE/CO/VC block: ``P = I - X (X'X)^-1 X'``,
+    ``RSS = Y' P Y`` and ``tr(PV)`` with ``V = diag(vi)``. For an intercept-only
+    model this reduces to ``var(y, ddof=1) - mean(v)``, which matches
+    ``rma(yi, vi, method="HE")$tau2`` to 6e-17.
     """
     ya = np.asarray(y, dtype=float)
     va = np.asarray(v, dtype=float)
     if ya.size < 2:
         return 0.0
     return max(0.0, float(ya.var(ddof=1) - va.mean()))
+
+
+def _qss(y, v, tau2: float) -> float:
+    """``Y' P Y`` for the intercept-only model at ``tau2`` (metafor's RSS).
+
+    ``P = W - W 1 (1'W 1)^-1 1' W`` collapses to the weighted central sum of
+    squares, which is what ``rma.uni`` feeds into ``.QE.func``.
+    """
+    wi = 1.0 / (v + tau2)
+    sw = float(wi.sum())
+    ybar = float((wi * y).sum()) / sw
+    return float((wi * (y - ybar) ** 2).sum())
+
+
+def _hs(y, v, n=None) -> float:
+    """Hunter-Schmidt: ``(RSS - k) / sum(1/vi)`` (metafor ``method="HS"``).
+
+    Transcribed from ``rma.uni``: ``wi <- 1/vi``, ``RSS <- Y' P Y`` (fixed-effect
+    weights) and ``tau2 <- (RSS - k)/sum(wi)``. Note the ``- k`` (not ``- (k-1)``)
+    and the plain ``sum(wi)`` denominator. ``n`` is accepted for API symmetry but
+    metafor's HS does not use it.
+    """
+    ya = np.asarray(y, dtype=float)
+    va = np.asarray(v, dtype=float)
+    wi = 1.0 / va
+    sw = float(wi.sum())
+    ybar = float((wi * ya).sum()) / sw
+    rss = float((wi * (ya - ybar) ** 2).sum())
+    return max(0.0, (rss - ya.size) / sw)
+
+
+def _pm(y, v, n=None) -> float:
+    """Paule-Mandel: ``uniroot(.QE.func, c(0, 100), tol = eps^0.25)``.
+
+    metafor does not solve ``Q(tau2) = k - p`` to machine precision — it hands
+    the problem to R's ``uniroot`` with ``con$tol = .Machine$double.eps^0.25``
+    (1.22e-4). Reproducing that tolerance is what makes the value match R's
+    ``rma(..., method="PM")$tau2`` exactly; a tight Brent solve lands ~2.5e-5
+    away on the true root.
+    """
+    ya = np.asarray(y, dtype=float)
+    va = np.asarray(v, dtype=float)
+    target = float(ya.size - 1)  # k - p with p = 1
+
+    def f(tau2: float) -> float:
+        return _qss(ya, va, tau2) - target
+
+    if f(TAU2_MIN) < target:
+        return TAU2_MIN
+    if f(TAU2_MAX) > target:
+        return TAU2_MAX
+    return float(_zeroin(f, TAU2_MIN, TAU2_MAX, tol=UNIROOT_TOL))
+
+
+def _eb(y, v, n=None) -> float:
+    """Empirical Bayes: metafor's Fisher-scoring iteration.
+
+    Starts from the HE/CO/VC value ``(RSS - trPV)/(k - p)`` (see ``rma.uni``'s
+    combined HE/ML/REML/EB block) and iterates
+
+        ``adj <- (Y' P Y * k/(k - p) - k) / sum(wi)``
+
+    with ``wi = 1/(vi + tau2)``, stopping once the change falls below
+    ``con$threshold`` (1e-5).
+    """
+    ya = np.asarray(y, dtype=float)
+    va = np.asarray(v, dtype=float)
+    k = ya.size
+    p = 1
+    tau2 = max(TAU2_MIN, _he(ya, va))
+    for _ in range(100):  # con$maxiter
+        old = tau2
+        wi = 1.0 / (va + tau2)
+        sw = float(wi.sum())
+        rss = _qss(ya, va, tau2)
+        adj = (rss * k / (k - p) - k) / sw
+        if not np.isfinite(adj):
+            adj = 0.0
+        while tau2 + adj < TAU2_MIN:
+            adj /= 2.0
+        tau2 = tau2 + adj
+        if abs(old - tau2) <= TAU2_THRESHOLD:
+            break
+    return tau2
 
 
 # Map method name (upper) -> callable(y, v, n).

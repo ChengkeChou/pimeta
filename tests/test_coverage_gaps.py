@@ -38,23 +38,14 @@ YEAR = [1948, 1949, 1960, 1977, 1973, 1953, 1973, 1980, 1968, 1961, 1974,
 @pytest.mark.parametrize("method,expected", [
     ("DL", 0.30876026286237612),
     ("HE", 0.32856385799576876),
-    pytest.param("HS", 0.22836286367690678, marks=pytest.mark.xfail(
-        strict=True,
-        reason="HS uses metafor's ni convention; ours differs by ~0.038. "
-               "Tracked in CHANGELOG as a known tau2 gap.")),
+    ("HS", 0.22836286367690678),
     ("SJ", 0.34551570159859507),
-    pytest.param("PM", 0.31809371186301511, marks=pytest.mark.xfail(
-        strict=True,
-        reason="metafor's PM stopping rule leaves the root ~2.5e-5 above the "
-               "exact Q(tau2)=k-1 solution that brentq finds.")),
-    pytest.param("EB", 0.31806851577130513, marks=pytest.mark.xfail(
-        strict=True,
-        reason="EB is ~6e-8 from metafor's iterative EB; needs the exact "
-               "metafor iteration rather than the PM root.")),
+    ("PM", 0.31809371186301511),
+    ("EB", 0.31806851577130513),
 ])
 def test_tau2_estimator_matches_r(method, expected):
     got = ma.estimate_tau2(YI, VI, method, NI if method == "HS" else None)
-    assert got == pytest.approx(expected, abs=1e-12)
+    assert got == pytest.approx(expected, abs=1e-14)
 
 
 @pytest.mark.parametrize("method,expected", [
