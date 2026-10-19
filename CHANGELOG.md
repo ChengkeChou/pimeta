@@ -17,9 +17,60 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`MetaregResult.R2` was a fraction instead of a percentage.** `I2` and `H2`
   on the same object are percentages (matching R), so `R2` was reporting 0.1490
   where metafor reports 14.9046. Now a percentage.
+- **`permutest()` produced a degenerate test for intercept-only models.** It
+  permuted the outcomes, but with no moderators the design matrix is a column of
+  ones, so every permutation left the fit unchanged and every data set came back
+  with p = 1. metafor flips the *signs* of the outcomes there (and enumerates
+  all 2^k sign patterns when `exact = TRUE`); it permutes the rows of `X` only
+  when moderators are present. Both schemes are now reproduced. It also returned
+  one omnibus p-value repeated for every coefficient — each coefficient now gets
+  its own p-value from its own permutation distribution, the omnibus `QM` gets a
+  permutation p-value, and the `comptol = .Machine$double.eps^0.5` slack that
+  metafor applies to the comparisons is included.
+- **`netmeta()` accepted `method_tau` values it could not compute.** It raised
+  `ValueError` for everything but `"DL"` even though `netmeta` documents `"ML"`
+  and `"REML"`; both are implemented now (see below).
+- **`rma_mv()` stalled ~4e-7 short of the maximum with a single variance
+  component.** The profile likelihood is flat enough that L-BFGS-B stopped early;
+  a 1-D golden-section polish now runs after it, which also tightened the
+  existing `rma.mv` fits.
+- **`netmetabin(method="NCH")` and `netmetareg(consistency=FALSE)` were
+  advertised in the docstrings but raised `NotImplementedError`.** Both are
+  implemented.
 
 ### Added
 
+- **`netmeta(method_tau="ML"/"REML")`.** netmeta does not use its own moments
+  estimator here: it collapses the network into per-study stars, builds
+  `contrmat` dummies and calls `metafor::rma.mv` with
+  `mods = ~ V1 + ... + V(n-1) - 1`, `random = ~ factor(comparison) | studlab`
+  and a *fixed* `rho = 0.5`, returning `sqrt(tau2)`. Reproduced, including the
+  blocked `calcV` sampling covariance when `n1`/`n2`/`event*`/`mean*`/`sd*`/
+  `time*` are supplied. Agrees with R to 2.6e-15 (DL), 6e-8 (ML), 8e-9 (REML).
+- **`netcontrib(method="randomwalk")`** — Davies' random-walk contribution
+  matrix, transcribed from `netmeta:::contribution.matrix.davies`. Matches R to
+  5e-10 (limited by the printed reference).
+- **`netmetabin(method="NCH")`** — the conditional (non-central hypergeometric)
+  likelihood, maximised over the identifiable treatment contrasts with the
+  covariance taken from the analytic observed information rather than `optim`'s
+  finite differences.
+- **`netmetareg(consistency=False)`** — the inconsistency model: one covariate
+  interaction per comparison (`assumption="independent"`) or a single common one
+  (`"common"`), with `direction1`/`direction2`, netmeta's `mkIval()` fallback,
+  `max.ia`, and `check_Ival`-style validation of the direction assignment.
+- **`RmaResult.confint()` now works with moderators**, and
+  **`RmaResult.predict(newmods=...)`** is implemented. `_qe_func()` and
+  `confint_tau2()` take an optional design matrix, so the Q-profile uses the
+  general `P = W - W X (X'WX)^-1 X'W` and `vt = (k - p)/tr(P)`.
+  `type="HT"` now raises the same error metafor does for moderator models
+  instead of silently returning a wrong interval.
+- **`permutest(permci=True)`** is computed instead of merely accepted: each
+  bound is a root search on the permutation p-value of the shifted null model
+  `yi - val * X[, j]`. The permutation set is drawn once and reused for the whole
+  search (metafor redraws at every step, which leaves `uniroot` chasing a noisy
+  step function).
+- **`netcontrib` / `netmetabin` / `netmetareg` gained 25 R-pinned tests**, plus
+  12 for `confint`/`predict` and 9 for `permutest`.
 - `.github/workflows/ci.yml` — every push and pull request now runs the full
   suite on a 4-way matrix (Python 3.10/3.11 with `numpy<2`, Python 3.12/3.13 with
   `numpy` 2.x), reports coverage, and separately builds the sdist/wheel, runs
@@ -37,6 +88,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- `rma_mv()` gained `intercept=False` (R's `mods = ~ x1 + x2 - 1`) and `rho=`
+  (a *fixed* correlation, which is how `rma.mv` treats a supplied `rho`), both
+  needed by the network `ML`/`REML` estimator. Both default to the previous
+  behaviour.
+- `confint_tau2()` and `_qe_func()` in `pooling.py` accept an optional design
+  matrix. Passing `X=None` keeps the intercept-only formulation exactly as
+  before.
 - Coverage of the six previously thinnest modules: `fsn` 24 %→72 %,
   `publication_bias` 28 %→76 %, `sensitivity` 43 %→92 %, `cumul` 44 %→96 %,
   `metareg` 44 %→79 %, `tau2` 46 %→89 %.
@@ -45,6 +103,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   values; the τ² helpers in `tau2.py` and the array-taking helpers in
   `pooling.py` declared `list[float]` while being handed `np.ndarray`; and
   `RmaMvResult` advertised `np.ndarray` for fields it defaulted to `None`.
+
+### Not implemented
+
+- `netmetabin(method="LRP")` still raises `NotImplementedError`. It needs
+  `brglm2`'s Firth-penalised logistic regression (`brglmFit`,
+  `type = "MPL_Jeffreys"`) plus the matching `metabin(method="LRP")` for the
+  per-comparison direct estimates, neither of which has a `pimeta` equivalent.
+  The error message now says so instead of lumping it in with `"NCH"`.
 
 ### Fixed
 
