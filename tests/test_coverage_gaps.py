@@ -10,6 +10,8 @@ leave1out/influence/cooks/hatvalues/rstudent/baujat, cumul, metareg.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
@@ -553,3 +555,103 @@ def test_netmetabin_lrp_raises_a_clear_error():
     with pytest.raises(NotImplementedError, match="brglm2"):
         ma.netmetabin(NCH_E1, NCH_N1, NCH_E2, NCH_N2, NCH_T1, NCH_T2,
                       studlab=NCH_ST, method="LRP")
+
+
+# =========================================================================
+# netmetareg(consistency = False) — the inconsistency model
+# =========================================================================
+IA_TE = [0.30, 0.42, 0.10, 0.25, 0.55, 0.40, -0.20, 0.05, 0.60, 0.35]
+IA_SE = [0.20, 0.18, 0.22, 0.19, 0.15, 0.17, 0.21, 0.20, 0.16, 0.18]
+IA_T1 = ["A", "A", "B", "B", "A", "C", "B", "C", "B", "C"]
+IA_T2 = ["B", "B", "A", "A", "C", "A", "C", "B", "D", "D"]
+IA_ST = [f"S{i}" for i in range(1, 11)]
+IA_YR = [1, 4, 7, 10, 3, 9, 5, 11, 8, 12]
+
+
+def _ia_net():
+    return ma.netmeta(IA_TE, IA_SE, IA_T1, IA_T2, studlab=IA_ST, sm="MD",
+                      reference_group="A", common=False, random=True,
+                      method_tau="DL")
+
+
+def _ia(**kw):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return ma.netmetareg(_ia_net(), IA_YR, covar_name="yr", **kw)
+
+
+def test_netmetareg_inconsistency_independent_matches_r():
+    """netmetareg(net, covar = yr, consistency = FALSE) with REML."""
+    res = _ia(consistency=False, assumption="independent", method_tau="REML")
+    assert res.names == ["B", "C", "D", ".comp_A_vs_B:Ival:yr",
+                         ".comp_A_vs_C:Ival:yr", ".comp_B_vs_C:Ival:yr"]
+    assert (res.k, res.p, res.QEdf) == (10, 6, 4)
+    assert res.beta == pytest.approx(
+        [-0.61275158672643248, -0.84588613071909324, -1.2051925708104192,
+         0.087025104938048284, 0.13360094901262604, 0.035415076612411452],
+        abs=1e-6)
+    assert res.se == pytest.approx(
+        [0.16994858726021705, 0.19501964638165148, 0.20235205292662722,
+         0.027621500193503148, 0.032863789165912365, 0.026387755105463186],
+        abs=1e-6)
+    assert res.tau2 == pytest.approx(0.0038154727598880079, abs=1e-7)
+    assert res.QE == pytest.approx(4.5695348829235733, abs=1e-6)
+    assert res.QM == pytest.approx(37.437438357545993, abs=1e-4)
+
+
+def test_netmetareg_inconsistency_common_matches_r():
+    res = _ia(consistency=False, assumption="common", method_tau="REML")
+    assert res.names == ["B", "C", "D", "Ival:yr"]
+    assert (res.k, res.p, res.QEdf) == (10, 4, 6)
+    assert res.beta == pytest.approx(
+        [-0.32037610699638241, -0.46530334097080261, -1.3557592873880298,
+         0.048988048870297771], abs=1e-6)
+    assert res.tau2 == pytest.approx(0.049786800389355838, abs=1e-7)
+    assert res.QM == pytest.approx(11.199479648310387, abs=1e-4)
+
+
+def test_netmetareg_inconsistency_max_ia_keeps_single_study_comparisons():
+    """max.ia = TRUE keeps B:D and C:D, which only one study contributes."""
+    res = _ia(consistency=False, assumption="independent", method_tau="ML",
+              max_ia=True)
+    assert res.p == 7
+    assert res.names[-1] == ".comp_B_vs_D:Ival:yr"
+    assert res.beta == pytest.approx(
+        [-0.62149412202980281, -0.84478377402432581, -1.1947837740243257,
+         0.088036639078333603, 0.13330762866054971, 0.034284613655444884,
+         -0.0033387935006845976], abs=1e-6)
+
+
+def test_netmetareg_consistency_true_names_unchanged():
+    res = _ia(consistency=True, assumption="independent", method_tau="REML")
+    assert res.names == ["B", "C", "D", "B:yr", "C:yr", "D:yr"]
+    assert res.tau2 == pytest.approx(0.0073541661837948176, abs=1e-7)
+    assert res.beta == pytest.approx(
+        [-0.62309697500151895, -0.81251913911986284, -2.1596399823918682,
+         0.091247053084778942, 0.12522152540257267, 0.20831492900857329],
+        abs=1e-6)
+
+
+def test_netmetareg_inconsistency_default_directions_warn():
+    """Without direction1/direction2 netmeta falls back to treatment order."""
+    with pytest.warns(UserWarning, match="treatment order"):
+        ma.netmetareg(_ia_net(), IA_YR, consistency=False,
+                      assumption="independent", method_tau="REML",
+                      covar_name="yr")
+
+
+def test_netmetareg_direction_columns_reproduce_the_default():
+    """direction1/direction2 = treatment order must equal the mkIval fallback."""
+    default = _ia(consistency=False, assumption="independent")
+    # mkIval(): 0 for the alphabetically first arm of each study, 1 otherwise.
+    d1 = [0.0 if a < b else 1.0 for a, b in zip(IA_T1, IA_T2)]
+    d2 = [0.0 if b < a else 1.0 for a, b in zip(IA_T1, IA_T2)]
+    explicit = _ia(consistency=False, assumption="independent",
+                   direction1=d1, direction2=d2)
+    assert explicit.beta == pytest.approx(default.beta, abs=1e-10)
+
+
+def test_netmetareg_inconsistency_rejects_out_of_range_directions():
+    with pytest.raises(ValueError, match="-1, 0, or 1"):
+        ma.netmetareg(_ia_net(), IA_YR, consistency=False,
+                      direction1=[0] * 10, direction2=[2] * 10)

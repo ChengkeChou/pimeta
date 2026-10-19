@@ -5250,7 +5250,8 @@ def _nmr_fit(X, y, se, study_idx, n_study, tau2, rho=0.5):
 
 def netmetareg(result, covar, method_tau="REML", reference_group=None,
                level=0.95, rho=0.5, assumption="independent",
-               consistency=True, covar_name="covar"):
+               consistency=True, covar_name="covar",
+               direction1=None, direction2=None, max_ia=False):
     """``netmeta::netmetareg`` — network meta-regression.
 
     Fits the treatment-by-covariate interaction model that netmeta uses::
@@ -5278,10 +5279,19 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
             0.5).
         assumption: ``"independent"`` (treatment-specific interactions,
             the default) or ``"common"`` (a single common interaction).
-        consistency: when ``False`` an inconsistency model is requested, which
-            needs direction-of-effect information and is not supported here.
+        consistency: ``True`` (default) fits the consistency model; ``False``
+            fits the inconsistency model, which adds one covariate interaction
+            per comparison (``assumption="independent"``) or a single common
+            one (``assumption="common"``).
         covar_name: label used for the interaction terms (R derives it from the
             deparsed ``covar`` expression).
+        direction1, direction2: per-comparison direction-of-effect values
+            (-1/0/1) for the two arms, only used with ``consistency=False``.
+            Without them netmeta falls back to treatment order
+            (``mkIval``: the alphabetically first treatment of each study is
+            the direction-0 arm).
+        max_ia: keep every comparison-level interaction column, including those
+            contributed by a single study (R's ``max.ia``).
 
     Returns:
         :class:`NetmetaregResult`.
@@ -5301,11 +5311,6 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
     assumption = str(assumption)
     if assumption not in ("independent", "common"):
         raise ValueError("assumption must be 'independent' or 'common'")
-    if not consistency:
-        raise NotImplementedError(
-            "inconsistency models (consistency=False) require direction-of-effect "
-            "columns and are not supported"
-        )
 
     trts = list(result.trts)
     n_trts = len(trts)
@@ -5333,24 +5338,87 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
     study_idx = np.array([studies.index(s) for s in st])
     n_study = len(studies)
 
+    # --- direction-of-effect values (ival1/ival2) --------------------------- #
+    # consistency model: 0 for the study's reference arm, 1 otherwise, so a
+    # comparison is kept when exactly one arm is the reference.
+    # inconsistency model: straight from direction1/direction2, or netmeta's
+    # mkIval() default (the alphabetically first treatment of the study).
+    n_all = te.size
+    ival1 = np.zeros(n_all)
+    ival2 = np.zeros(n_all)
+    if consistency:
+        for s in studies:
+            idx = [i for i, v in enumerate(st) if v == s]
+            trts_i = sorted({t1[i] for i in idx} | {t2[i] for i in idx})
+            ref_i = ref if ref in trts_i else trts_i[-1]
+            for i in idx:
+                ival1[i] = 0.0 if t1[i] == ref_i else 1.0
+                ival2[i] = 0.0 if t2[i] == ref_i else 1.0
+    else:
+        if (direction1 is None) != (direction2 is None):
+            raise ValueError(
+                "'direction1' and 'direction2' must be supplied together"
+            )
+        if direction1 is not None:
+            d1 = np.asarray(direction1, dtype=float).ravel()
+            d2 = np.asarray(direction2, dtype=float).ravel()
+            if d1.size != n_all or d2.size != n_all:
+                raise ValueError(
+                    "'direction1'/'direction2' must have one value per comparison"
+                )
+            t1_norm = list(getattr(result, "treat1", t1))
+            flipped = [t1[i] != t1_norm[i] for i in range(n_all)]
+            for i in range(n_all):
+                if flipped[i]:
+                    ival1[i], ival2[i] = d2[i], d1[i]
+                else:
+                    ival1[i], ival2[i] = d1[i], d2[i]
+        else:
+            for s in studies:
+                idx = [i for i, v in enumerate(st) if v == s]
+                ref_i = sorted({t1[i] for i in idx} | {t2[i] for i in idx})[0]
+                for i in idx:
+                    ival1[i] = 0.0 if t1[i] == ref_i else 1.0
+                    ival2[i] = 0.0 if t2[i] == ref_i else 1.0
+            warnings.warn(
+                "No directionality parameters specified. "
+                "Defaulting to treatment order.",
+                stacklevel=2,
+            )
+        for name, arr in (("Ival1", ival1), ("Ival2", ival2)):
+            bad = [v for v in arr if v not in (-1.0, 0.0, 1.0)]
+            if bad:
+                raise ValueError(
+                    f"Error in directionality assignment. {name} only accepts "
+                    "values of -1, 0, or 1."
+                )
+        seen: dict[tuple[str, str], set] = {}
+        for i in range(n_all):
+            seen.setdefault((st[i], t1[i]), set()).add(ival1[i])
+            seen.setdefault((st[i], t2[i]), set()).add(ival2[i])
+        clash = sorted({s for (s, _t), v in seen.items() if len(v) > 1})
+        if clash:
+            raise ValueError(
+                "Error in directionality assignment. Multiple directions "
+                "defined for identical treatments in the following studies: "
+                + ", ".join(clash)
+            )
+
     # --- re-orient each study's comparisons against its own reference ------- #
     rows = []
-    for s in studies:
-        idx = [i for i, v in enumerate(st) if v == s]
-        trts_i = sorted({t1[i] for i in idx} | {t2[i] for i in idx})
-        ref_i = ref if ref in trts_i else sorted(trts_i)[-1]
-        for i in idx:
-            if t1[i] != ref_i and t2[i] != ref_i:
-                continue
-            if t1[i] == ref_i:
-                rows.append((i, t2[i], t1[i], -te[i]))
-            else:
-                rows.append((i, t1[i], t2[i], te[i]))
+    for i in range(n_all):
+        if ival1[i] == ival2[i]:
+            continue
+        if ival1[i] == 0.0:
+            rows.append((i, t2[i], t1[i], -te[i], ival2[i] - ival1[i]))
+        else:
+            rows.append((i, t1[i], t2[i], te[i], ival1[i] - ival2[i]))
 
     row_idx = np.array([r[0] for r in rows])
     a_trt = [r[1] for r in rows]
     b_trt = [r[2] for r in rows]
     y = np.array([r[3] for r in rows], dtype=float)
+    ival_r = np.array([r[4] for r in rows], dtype=float)
     se_r = se[row_idx]
     cov_r = cov[row_idx]
     study_r = study_idx[row_idx]
@@ -5367,7 +5435,26 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
             X_main[r_i, non_ref.index(b_trt[r_i])] -= 1.0
         if a_trt[r_i] in non_ref:
             X_main[r_i, non_ref.index(a_trt[r_i])] += 1.0
-    if assumption == "common":
+    if not consistency:
+        # Inconsistency model: ~ 0 + trts + <comparison>:Ival:covar
+        if assumption == "common":
+            X_full = np.hstack([X_main, (ival_r * cov_r)[:, None]])
+            names_full = list(non_ref) + [f"Ival:{covar_name}"]
+        else:
+            comps = [f"{min(a, b)}_vs_{max(a, b)}" for a, b in zip(a_trt, b_trt)]
+            counts: dict[str, int] = {}
+            for c in comps:
+                counts[c] = counts.get(c, 0) + 1
+            used = [c for c in sorted(counts) if max_ia or counts[c] >= 2]
+            X_int = np.zeros((n_row, len(used)))
+            for r_i, c in enumerate(comps):
+                if c in used:
+                    X_int[r_i, used.index(c)] = ival_r[r_i] * cov_r[r_i]
+            X_full = np.hstack([X_main, X_int])
+            names_full = list(non_ref) + [
+                f".comp_{c}:Ival:{covar_name}" for c in used
+            ]
+    elif assumption == "common":
         # ~ 0 + trts + nonref:covar, where nonref marks the rows that contain
         # the network reference treatment (the reference-group contrast column
         # of contrmat() is non-zero exactly there).
