@@ -10,7 +10,7 @@ and ``v`` (sampling variance), i.e. the log scale for RR/OR/HR/PETO/IRR.
 
 Estimators implemented (matching ``meta::metagen(method.tau=)``):
 - ``DL``  DerSimonian-Laird
-- ``HE``  Hedges                     == DL when there are no moderators
+- ``HE``  Hedges                     (unweighted between/within split)
 - ``HS``  Hunter-Schmidt             (requires per-study total sample size n)
 - ``SJ``  Sidik-Jonkman              (one-step moment estimator)
 - ``PM``  Paule-Mandel               (solve Q(tau^2) = k-1)
@@ -95,15 +95,32 @@ def _pm(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
 def _eb(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
     """Empirical Bayes estimator: iterative Paule-Mandel.
 
-    metafor's EB converges to the same tau^2 as PM, so we return the PM root.
+    metafor's EB iteration converges to essentially the PM root, so we return
+    it directly. R 4.6.1 / metafor 5.2-1 differ from this root by ~6e-8 for EB
+    and by ~2.5e-5 for PM (whose stopping rule differs); see the ``xfail``
+    markers in ``tests/test_coverage_gaps.py``.
     """
     return _pm(y, v)
+
+
+def _he(y: list[float] | np.ndarray, v: list[float] | np.ndarray) -> float:
+    """Hedges (1983) HE estimator: ``var(y, ddof=1) - mean(v)``.
+
+    This is *not* the same as DL: metafor's ``method="HE"`` splits total
+    variance into an unweighted between-study part and the average within-study
+    sampling variance. Verified against ``rma(yi, vi, method="HE")$tau2``.
+    """
+    ya = np.asarray(y, dtype=float)
+    va = np.asarray(v, dtype=float)
+    if ya.size < 2:
+        return 0.0
+    return max(0.0, float(ya.var(ddof=1) - va.mean()))
 
 
 # Map method name (upper) -> callable(y, v, n).
 _METHODS = {
     "DL": lambda y, v, n: _dl(y, v),
-    "HE": lambda y, v, n: _dl(y, v),  # HE == DL without moderators
+    "HE": lambda y, v, n: _he(y, v),
     "HS": _hs,
     "SJ": lambda y, v, n: _sj(y, v),
     "PM": lambda y, v, n: _pm(y, v),

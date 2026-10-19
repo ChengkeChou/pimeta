@@ -46,7 +46,7 @@ class MetaregResult:
     QE_p: float = math.nan
     I2: float = 0.0
     H2: float = 0.0
-    R2: float = 0.0                 # pseudo-R^2 vs intercept-only tau^2
+    R2: float = 0.0                 # pseudo-R^2 in PERCENT vs intercept-only tau^2
 
     def to_dict(self) -> dict:
         return {
@@ -262,7 +262,7 @@ def metareg(
         else:
             tau2_0 = 0.0
         if tau2_0 > 0:
-            R2 = max(0.0, 1.0 - tau2 / tau2_0)
+            R2 = 100.0 * max(0.0, 1.0 - tau2 / tau2_0)
 
     return MetaregResult(
         b=[float(x) for x in b],
