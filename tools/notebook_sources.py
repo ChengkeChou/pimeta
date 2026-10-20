@@ -154,7 +154,7 @@ _NB03 = [
     ("markdown", """# 3 · 网络 meta 分析（NMA）
 
 !!! note "示例数据"
-    这里用一个小型的**教学用网络**（4 个干预、6 个直接比较），目的是演示 API，
+    这里用一个小型网络（4 个干预、5 个直接比较、两个环），目的是演示 API，
     不是真实临床结论。把 `TE/seTE` 换成你自己的数据即可。
 
 NMA 要回答的是：**A、B、C、D 两两之间谁更好**，即使某些对子从来没有被直接比较过。
@@ -163,12 +163,12 @@ NMA 要回答的是：**A、B、C、D 两两之间谁更好**，即使某些对�
 
 import pimeta as ma
 
-# 6 个直接比较。比值类指标要先取对数，再作为 TE 传进去。
-TE = [0.30, -0.20, 0.50, 0.10, -0.15, 0.25]
-seTE = [0.12, 0.15, 0.18, 0.14, 0.11, 0.13]
-treat1 = ["A", "B", "A", "C", "B", "C"]
-treat2 = ["B", "A", "C", "A", "C", "B"]
-studlab = ["S1", "S2", "S3", "S4", "S5", "S6"]
+# 5 个直接比较。比值类指标要先取对数，再作为 TE 传进去。
+TE = [0.30, -0.20, 0.90, 0.40, 0.10]
+seTE = [0.12, 0.15, 0.18, 0.14, 0.13]
+treat1 = ["A", "B", "A", "A", "B"]
+treat2 = ["B", "C", "C", "D", "D"]
+studlab = ["S1", "S2", "S3", "S4", "S5"]
 
 print(f"{len(TE)} 个比较，涉及 {len(set(treat1) | set(treat2))} 个干预")"""),
     ("markdown", "## 拟合网络\n\n`netmeta()` 默认同时给 frequentist 的固定效应与随机效应结果。"),
@@ -203,19 +203,29 @@ print()
 print(lg.details)"""),
     ("markdown", "## 一致性：直接证据 vs 间接证据\n\n每个比较拆成直接部分和间接部分，两者不一致说明网络内部有矛盾。"),
     ("code", """sp = ma.netsplit(nm)
-print(pd.DataFrame({
+table = pd.DataFrame({
     "比较": sp.comparison,
     "k": sp.k,
-    "直接": np.round(sp.direct_random["TE"], 4),
-    "间接": np.round(sp.indirect_random["TE"], 4),
-}).to_string(index=False))"""),
-    ("markdown", """## 排名图：P-score
-
-（`netheat()` 需要 design-by-treatment 分解，`netmeta()` 目前还没算这个矩阵，
-所以这里换成更直接的排名图；不一致性请看上面的 `netsplit()`。）"""),
+    "直接": pd.to_numeric(pd.Series(sp.direct_random["TE"]), errors="coerce"),
+    "间接": pd.to_numeric(pd.Series(sp.indirect_random["TE"]), errors="coerce"),
+})
+print(table.round(4).to_string(index=False))
+print()
+print("（C:D 的'直接'是 NaN：这一对从来没有被直接比较过，"
+      "它的估计完全来自网络 —— 这正是 NMA 的价值。）")"""),
+    ("markdown", """## 排名：P-score 图"""),
     ("code", """ax = score.sort_values().plot.barh(color="#4c78a8")
 ax.set_xlabel("P-score (higher is better)")
 _ = ax.set_title("Treatment ranking — P-score")"""),
+    ("markdown", """## 热图：不一致性到底出在哪里
+
+`netheat()` 的每一格是「把第 *j* 个设计拿掉之后，第 *i* 个设计对剩下不一致性的贡献」。
+行里特别突出（或特别负）的设计，就是把这个环的矛盾担得最多的那个。
+
+（不是凭空算的：`pimeta.netmeta.netheat_matrix()` 直接转录 R `netheat()` 的内部公式，
+数值已和 R 逐格对拍。）"""),
+    ("code", """plot = ma.netheat(nm)
+_ = plot.ax.set_title("netheat — design contribution to inconsistency")"""),
     ("markdown", """## 小结
 
 | 想知道 | 用 |

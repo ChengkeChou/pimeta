@@ -395,19 +395,33 @@ rankogram(result, cumulative: 'bool' = False, filename: 'str | None' = None, fig
 ## `netheat`
 
 ```python
-netheat(result, filename: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, title: 'str' = 'Heat plot', ax: 'plt.Axes | None' = None)
+netheat(result, random: 'bool' = False, tau_preset: 'float | None' = None, filename: 'str | None' = None, figsize: 'tuple[float, float] | None' = None, title: 'str' = 'Heat plot', ax: 'plt.Axes | None' = None)
 ```
 
 *Mirrors R's `netheat`.*
 
 ``netmeta::netheat`` — heat plot of the contribution to inconsistency.
 
-Renders the ``(design x comparison)`` matrix of the influence on the
-network's inconsistency as a colour map.
+Each cell ``[i, j]`` is how much design *i* contributes to the
+inconsistency that remains once design *j* is detached, so a row that
+stands out marks a design involved in the network's contradictions.
+Blue cells (negative) mean the design removes inconsistency, red ones
+(positive) mean it adds some.
+
+**Args**
+
+- `result` — a :class:`~pimeta.netmeta.NetmetaResult`, or any object exposing a precomputed ``heat_matrix``.
+- `random` — use the within-design tau (R's ``netheat(x, random = TRUE)``).
+- `tau_preset` — fix the heterogeneity variance instead of using 0 (common effect) or the within-design estimate.
+- `filename` — write the figure here as well.
+- `figsize` — matplotlib figure size.
+- `title` — plot title; pass ``""`` to leave it blank.
+- `ax` — draw into an existing axes.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+- `:class` — `PlotResult`, or ``None`` when the network has no loop (R
+also warns and draws nothing in that case).
 
 ## `hasse`
 

@@ -647,6 +647,19 @@ All six moment estimators (`DL`, `HE`, `HS`, `SJ`, `PM`, `EB`) now agree with
   The test fixture that had `year = 1990 + 5 * (dose - 1)` — exactly collinear
   with `dose` — is fixed too.
 
+- **`netheat()` works now.** It used to raise `ValueError: result does not
+  expose an inconsistency contribution matrix` because `netmeta()` never
+  attached one. `pimeta.netmeta.netheat_matrix()` now transcribes the
+  computation R performs inside `netheat()` (netmeta 3.7-0) — Krahn's `V`, the
+  detach residuals and `Q.inc.design`, combined as
+  `qtyp[, j] = (V^-1 x_j) * x_j`, `heat = qtyp - Q.inc.design` — and
+  `netheat()` draws it with the design names on both axes. `random=` and
+  `tau_preset=` follow R's branch structure. Five parity tests in
+  `tests/test_netheat.py` pin the matrix cell by cell against R on networks
+  whose detach residuals are not all zero (the plain three-treatment loop is
+  degenerate and would not have caught a wrong formula). A network without a
+  loop now warns and returns `None`, exactly like R.
+
 ### Removed
 
 - The `py.typed` marker and the `Typing :: Typed` classifier. The package ships

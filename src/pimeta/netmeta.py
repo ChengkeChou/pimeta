@@ -1301,6 +1301,74 @@ def decomp_design(result: NetmetaResult, tau_preset=None) -> DecompDesignResult 
     )
 
 
+def netheat_matrix(result: NetmetaResult, random: bool = False,
+                   tau_preset: float | None = None
+                   ) -> tuple[np.ndarray, list[str]] | None:
+    """Design x design matrix drawn by ``netmeta::netheat`` (netmeta 3.7-0).
+
+    R computes it inside ``netheat()`` from the Krahn decomposition:
+
+    .. code-block:: r
+
+        Q.inc.design.typ <- apply(residuals, 2, function(x)
+                                  t(x) %*% solve(V) * x)
+        diff <- Q.inc.design - Q.inc.design.typ
+        t1   <- -diff
+
+    so entry ``[i, j]`` is how much design ``i`` contributes to the
+    inconsistency left over once design ``j`` is detached.
+
+    Args:
+        result: a :class:`NetmetaResult`.
+        random: use the within-design tau (``netheat(x, random = TRUE)``).
+        tau_preset: fix the heterogeneity variance instead of using 0
+            (common effect) or ``tau.within``.
+
+    Returns:
+        ``(matrix, design labels)``, or ``None`` when the network has no loop
+        (no between-design degrees of freedom), like R's warning.
+    """
+    if result.n == 2:
+        return None
+
+    args = (result.TE_raw, result.seTE_raw, result.treat1_raw,
+            result.treat2_raw, result.studlab_raw, result.narms_raw,
+            result.trts, result.reference_group)
+    tau_within = _tau_within(*args)
+    if tau_preset is not None:
+        tau = float(tau_preset)
+    elif random:
+        tau = tau_within
+    else:
+        tau = 0.0
+
+    nmak = _nma_krahn_full(*args, tau_preset=tau)
+    dct = _decomp_tau(*args, tau)
+    between_df = float(dct["Q_decomp"]["Between designs"][1])
+    if between_df == 0.0:
+        return None
+
+    v = np.asarray(nmak["V"], dtype=float)
+    residuals = np.asarray(dct["residuals_inc_detach"], dtype=float)
+    q_inc = np.asarray(dct["Q_inc_design"], dtype=float)
+    labels = list(dct["Q_inc_design_names"])
+
+    # solve(V, residuals) is V^-1 x_j for every column j at once; R then
+    # multiplies elementwise by x_j, keeping the row-vector orientation.
+    solved = np.linalg.solve(v, residuals)
+    q_typ = solved * residuals
+    heat = q_typ - q_inc[:, None]
+
+    # Drop designs whose whole column is NA (R: ``wi <- which(apply(t1, 2, ...))``).
+    keep = [j for j in range(heat.shape[1])
+            if not bool(np.all(np.isnan(heat[:, j])))]
+    heat = heat[np.ix_(keep, keep)]
+    labels = [labels[j] for j in keep]
+    if heat.size == 0 or bool(np.all(np.isnan(heat))) or heat.shape[0] < 2:
+        return None
+    return heat, labels
+
+
 # ---------------------------------------------------------------------------
 # Result dataclasses
 # ---------------------------------------------------------------------------

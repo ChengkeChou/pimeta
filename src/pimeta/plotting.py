@@ -17,6 +17,7 @@ headlessly, and every one accepts an optional ``filename`` to persist the figure
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -895,6 +896,8 @@ def rankogram(
 
 def netheat(
     result,
+    random: bool = False,
+    tau_preset: float | None = None,
     filename: str | None = None,
     figsize: tuple[float, float] | None = None,
     title: str = "Heat plot",
@@ -902,37 +905,60 @@ def netheat(
 ):
     """``netmeta::netheat`` — heat plot of the contribution to inconsistency.
 
-    Renders the ``(design x comparison)`` matrix of the influence on the
-    network's inconsistency as a colour map.
+    Each cell ``[i, j]`` is how much design *i* contributes to the
+    inconsistency that remains once design *j* is detached, so a row that
+    stands out marks a design involved in the network's contradictions.
+    Blue cells (negative) mean the design removes inconsistency, red ones
+    (positive) mean it adds some.
+
+    Args:
+        result: a :class:`~pimeta.netmeta.NetmetaResult`, or any object
+            exposing a precomputed ``heat_matrix``.
+        random: use the within-design tau (R's ``netheat(x, random = TRUE)``).
+        tau_preset: fix the heterogeneity variance instead of using 0
+            (common effect) or the within-design estimate.
+        filename: write the figure here as well.
+        figsize: matplotlib figure size.
+        title: plot title; pass ``""`` to leave it blank.
+        ax: draw into an existing axes.
 
     Returns:
-        :class:`PlotResult`.
+        :class:`PlotResult`, or ``None`` when the network has no loop (R
+        also warns and draws nothing in that case).
     """
     mat = getattr(result, "heat_matrix", None)
+    labels = getattr(result, "designs", None)
     if mat is None:
-        mat = getattr(result, "Q_inc_design", None)
-    if mat is None:
-        raise ValueError(
-            "netheat needs a design-by-treatment decomposition, which "
-            "netmeta() does not compute yet: the result carries no "
-            "`heat_matrix`/`Q_inc_design` field.  R's netheat derives it from "
-            "the inconsistency model; until that is implemented, use "
-            "`netsplit()` for direct-versus-indirect evidence or plot "
-            "`Q_decomp` (per-comparison Q) yourself."
-        )
+        from .netmeta import netheat_matrix  # local import: avoid a cycle
+
+        computed = netheat_matrix(result, random=random, tau_preset=tau_preset)
+        if computed is None:
+            warnings.warn(
+                "Net heat plot not available: the network needs at least one "
+                "loop, i.e. one degree of freedom between designs.",
+                stacklevel=2,
+            )
+            return None
+        mat, labels = computed
+
     mat = np.asarray(mat, dtype=float)
     if mat.ndim == 1:
         mat = mat.reshape(1, -1)
 
     fig, ax = _new_ax(ax, figsize)
-    im = ax.imshow(mat, aspect="auto", cmap="RdYlGn_r", interpolation="nearest")
+    finite = mat[np.isfinite(mat)]
+    limit = float(np.max(np.abs(finite))) if finite.size else 1.0
+    im = ax.imshow(mat, aspect="auto", cmap="RdBu_r",
+                   interpolation="nearest", vmin=-limit, vmax=limit)
     fig.colorbar(im, ax=ax, shrink=0.8)
-    labels = getattr(result, "designs", None)
-    if labels is not None and len(labels) == mat.shape[0]:
-        ax.set_yticks(range(mat.shape[0]))
+    if labels is not None and len(labels) == mat.shape[0] == mat.shape[1]:
+        ticks = range(mat.shape[0])
+        ax.set_xticks(ticks)
+        ax.set_yticks(ticks)
+        ax.set_xticklabels([str(v) for v in labels], fontsize=7, rotation=90)
         ax.set_yticklabels([str(v) for v in labels], fontsize=7)
-    ax.set_xlabel("Comparison")
-    ax.set_ylabel("Design")
+        ax.set_xlabel("detached design")
+        ax.set_ylabel("design")
     if title:
         ax.set_title(title)
     _save(fig, filename)
