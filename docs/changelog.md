@@ -342,7 +342,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   was supplied. Length-1 vectors are recycled like in R and the missing-data
   error names the alternatives.
 - **`selmodel()` crashed on a scalar `delta`, or on a scalar
-  `control={"delta.min"/"delta.max"}``** (`TypeError: len() of unsized object`
+  `control={"delta.min"/"delta.max"}`** (`TypeError: len() of unsized object`
   and `IndexError: too many indices`); both are broadcast now, and a wrong
   length raises a clear error.
 - **`selmodel()` stopped short of the maximum for the plateau models.** The

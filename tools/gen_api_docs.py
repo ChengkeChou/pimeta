@@ -142,6 +142,10 @@ _ITEM = re.compile(r"^(\S[^:]*?):\s*(.*)$")
 _SPAN = re.compile(r"``([^`]+)``")
 _R_IDENT = re.compile(r"^(?:[A-Za-z_][\w.]*|\[[^\]]*\]|\$[^ ]*)$")
 
+#: Sphinx cross-reference roles that must not reach the Markdown output.
+_RST_ROLE = re.compile(
+    r":(?:class|func|meth|mod|attr|data|exc|obj|ref|py:class|py:func):`([^`]+)`")
+
 
 # --------------------------------------------------------------------------- #
 # docstring -> Markdown
@@ -154,10 +158,20 @@ def _indent(text: str) -> int:
 
 
 def _clean(lines: list[str]) -> list[str]:
-    """Strip the common indentation and trailing blank lines."""
+    """Strip the common indentation and trailing blank lines.
+
+    A line is never cut by more than its own indentation: a dedented paragraph
+    that slipped into the block must keep its first word.
+    """
     body = "\n".join(lines)
     pad = _indent(body)
-    out = [ln[pad:] if ln.strip() else "" for ln in body.splitlines()]
+    out: list[str] = []
+    for line in body.splitlines():
+        if not line.strip():
+            out.append("")
+        else:
+            cut = min(pad, len(line) - len(line.lstrip()))
+            out.append(line[cut:])
     while out and not out[-1].strip():
         out.pop()
     return out
@@ -199,11 +213,30 @@ def _render_section(name: str, body: list[str]) -> list[str]:
     return out
 
 
+def _strip_rst_roles(text: str) -> str:
+    """Rewrite Sphinx roles as plain inline code: ``:func:`x``` -> ``` `x` ```.
+
+    Docstrings are written in Sphinx style (``:class:`~pimeta.RmaResult```),
+    which GitHub renders literally as a stray colon and backticks.  The ``~``
+    shorthand and the ``pimeta.`` prefix are dropped so the reader sees the
+    bare name.
+    """
+    def repl(match: re.Match[str]) -> str:
+        target = match.group(1).lstrip("~")
+        for prefix in ("pimeta.", "pimeta.interop.", "pimeta.nma."):
+            if target.startswith(prefix):
+                target = target[len(prefix):]
+                break
+        return f"`{target}`"
+
+    return _RST_ROLE.sub(repl, text)
+
+
 def doc_to_markdown(doc: str | None) -> str:
     """Convert a pimeta docstring (Google style) to Markdown."""
     if not doc:
         return ""
-    lines = inspect.cleandoc(doc).splitlines()
+    lines = _strip_rst_roles(inspect.cleandoc(doc)).splitlines()
     out: list[str] = []
     i = 0
     while i < len(lines):
@@ -212,9 +245,19 @@ def doc_to_markdown(doc: str | None) -> str:
         if match:
             section = match.group(1)
             body: list[str] = []
+            body_pad: int | None = None
             i += 1
-            while i < len(lines) and not _SECTION.match(lines[i].strip()):
-                body.append(lines[i])
+            while i < len(lines):
+                nxt = lines[i]
+                if _SECTION.match(nxt.strip()):
+                    break                       # the next field list
+                if nxt.strip():
+                    pad = len(nxt) - len(nxt.lstrip())
+                    if body_pad is None:
+                        body_pad = pad          # items line up with the first
+                    elif pad < body_pad:
+                        break                   # dedented: back to prose
+                body.append(nxt)
                 i += 1
             out.extend(_render_section(section, body))
             continue
@@ -263,8 +306,10 @@ def _r_name(obj) -> str | None:
     spans = [s.strip() for s in _SPAN.findall(first)]
 
     for raw in spans:                       # metafor::rma.mv is unambiguous
+        if ":::" in raw:                    # meta:::ci is R's internal form
+            return re.sub(r"\(\)$", "", raw.split(":::")[-1].lstrip(":"))
         if "::" in raw:
-            return re.sub(r"\(\)$", "", raw.split("::")[-1])
+            return re.sub(r"\(\)$", "", raw.split("::")[-1].lstrip(":"))
     for raw in spans:                       # dotted names are R functions
         candidate = re.sub(r"\(\)$", "", raw)
         if "." in candidate and _R_IDENT.match(candidate):

@@ -1,4 +1,4 @@
-"""Effect-measure conversions �?``meta`` package parity.
+"""Effect-measure conversions —?``meta`` package parity.
 
 Transcriptions of ``meta::asin2ir``, ``asin2p``, ``p2asin``, ``cor2z``,
 ``z2cor``, ``logit2p``, ``p2logit``, ``smd2or``, ``or2smd``, ``logVR2VE``,
@@ -34,7 +34,7 @@ def _ret(y, scalar):
 
 
 def asin2ir(x, time=None):
-    """``meta::asin2ir`` �?inverse Freeman-Tukey double arcsine to an incidence rate."""
+    """``meta::asin2ir`` —?inverse Freeman-Tukey double arcsine to an incidence rate."""
     a, s = _arr(x)
     if np.all(np.isnan(a)):
         return _ret(a, s)
@@ -52,7 +52,7 @@ def asin2ir(x, time=None):
 
 
 def asin2p(x, n=None):
-    """``meta::asin2p`` �?inverse Freeman-Tukey double arcsine to a proportion."""
+    """``meta::asin2p`` —?inverse Freeman-Tukey double arcsine to a proportion."""
     a, s = _arr(x)
     if np.all(np.isnan(a)):
         return _ret(a, s)
@@ -82,49 +82,49 @@ def asin2p(x, n=None):
 
 
 def p2asin(x):
-    """``meta::p2asin`` �?proportion to arcsine."""
+    """``meta::p2asin`` —?proportion to arcsine."""
     a, s = _arr(x)
     return _ret(np.arcsin(np.sqrt(a)), s)
 
 
 def cor2z(x):
-    """``meta::cor2z`` �?correlation to Fisher's z."""
+    """``meta::cor2z`` —?correlation to Fisher's z."""
     a, s = _arr(x)
     return _ret(0.5 * np.log((1.0 + a) / (1.0 - a)), s)
 
 
 def z2cor(x):
-    """``meta::z2cor`` �?Fisher's z to a correlation."""
+    """``meta::z2cor`` —?Fisher's z to a correlation."""
     a, s = _arr(x)
     return _ret(np.tanh(a), s)
 
 
 def logit2p(x):
-    """``meta::logit2p`` �?logit to a proportion."""
+    """``meta::logit2p`` —?logit to a proportion."""
     a, s = _arr(x)
     return _ret(special.expit(a), s)
 
 
 def p2logit(x):
-    """``meta::p2logit`` �?proportion to logit."""
+    """``meta::p2logit`` —?proportion to logit."""
     a, s = _arr(x)
     return _ret(special.logit(a), s)
 
 
 def logVR2VE(x):
-    """``meta::logVR2VE`` �?log variance ratio to a percentage reduction."""
+    """``meta::logVR2VE`` —?log variance ratio to a percentage reduction."""
     a, s = _arr(x)
     return _ret(100.0 * (1.0 - np.exp(a)), s)
 
 
 def VE2logVR(x):
-    """``meta::VE2logVR`` �?percentage reduction to a log variance ratio."""
+    """``meta::VE2logVR`` —?percentage reduction to a log variance ratio."""
     a, s = _arr(x)
     return _ret(np.log(1.0 - a / 100.0), s)
 
 
 def smd2or(smd, se_smd, method="HH"):
-    """``meta::smd2or`` �?SMD to log odds ratio, then pool with ``metagen``.
+    """``meta::smd2or`` —?SMD to log odds ratio, then pool with ``metagen``.
 
     Args:
         smd: standardized mean differences.
@@ -146,7 +146,7 @@ def smd2or(smd, se_smd, method="HH"):
 
 
 def or2smd(lnOR, selnOR, method="HH"):
-    """``meta::or2smd`` �?log odds ratio to SMD, then pool with ``metagen``.
+    """``meta::or2smd`` —?log odds ratio to SMD, then pool with ``metagen``.
 
     Args:
         lnOR: log odds ratios.
@@ -188,7 +188,7 @@ def _logHR2rd(te, pc, pscale=1.0):
 
 
 def rd(result, p_c=None, common=True, random=True, small_values="desirable"):
-    """``meta::rd`` �?risk difference / absolute risk reduction from a pooled result.
+    """``meta::rd`` —?risk difference / absolute risk reduction from a pooled result.
 
     Args:
         result: :class:`~.metagen.MetagenResult` with ``sm`` in
@@ -253,7 +253,7 @@ def rd(result, p_c=None, common=True, random=True, small_values="desirable"):
 
 
 def nnt(result, p_c=None, common=True, random=True, small_values="desirable"):
-    """``meta::nnt`` �?number needed to treat from a pooled result.
+    """``meta::nnt`` —?number needed to treat from a pooled result.
 
     See :func:`rd` for the arguments; ``NNT = 1 / RD`` with the sign convention
     from ``small_values``.

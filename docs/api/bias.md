@@ -205,9 +205,10 @@ Cumulative (sequential) meta-analysis (mirrors ``meta::cumul``).
 - `n` — per-study sample size (for the HS tau2 estimator).
 - `effect_type` — passed through to pooling (for back-transformation).
 - `method` — tau-squared estimator (default DL).
-`rma.mh`` / ``rma.peto`` result can be passed as ``yi``, in which case
-for's ``cumul.rma.mh`` / ``.peto`` is used (``order``, ``decreasing``
-``collapse`` then control the ordering).
+
+An ``rma.mh`` / ``rma.peto`` result can be passed as ``yi``, in which case
+metafor's ``cumul.rma.mh`` / ``.peto`` is used (``order``, ``decreasing``
+and ``collapse`` then control the ordering).
 
 ## `CumulResult`
 
@@ -384,7 +385,7 @@ All nine methods meta supports are available:
 - `x` — a result object (``metabin`` / ``metagen`` / ...) or, together with ``seTE``, the effect sizes themselves.
 - `seTE` — standard errors when ``x`` holds the effect sizes.
 - `method_bias` — one of the names above (prefix-matched; the pre-8.x aliases ``rank``/``linreg``/``mm``/``count``/``score`` also work). Defaults to ``"Harbord"`` for a binary odds-ratio analysis and ``"Egger"`` otherwise, matching meta.
-- `plotit` — accepted for interface parity — draw the radial plot yourself with :func:`pimeta.plotting.radial`.
+- `plotit` — accepted for interface parity — draw the radial plot yourself with `plotting.radial`.
 - `correct` — continuity correction for the rank tests.
 - `k_min` — meta requires ``k >= k_min`` and ``k >= 3``; otherwise only ``k`` and ``k_min`` are reported, exactly like R.
 - `n_e, n_c, event_e, event_c, sm` — override the values taken from ``x``.
@@ -393,7 +394,7 @@ All nine methods meta supports are available:
 
 **Returns**
 
-- `:class` — `MetabiasResult`.
+`MetabiasResult`.
 
 ## `MetabiasResult`
 
@@ -403,7 +404,7 @@ MetabiasResult(method_bias: 'str', method: 'str' = '', var_model: 'str' = '', st
 
 *Mirrors R's `metabias`.*
 
-Result of :func:`metabias` (``meta::metabias``).
+Result of `metabias` (``meta::metabias``).
 
 ``statistic`` is the z of the rank tests and the t of the regression
 tests; ``estimate`` holds ``[bias, se.bias]`` — the slope of the

@@ -46,7 +46,7 @@ RevMan 5 stores the review as XML (usually gzip-compressed)::
 
 **Returns**
 
-- `:class` — `ReviewDataResult`.
+`ReviewDataResult`.
 
 ## `read_cdir`
 
@@ -72,7 +72,7 @@ tabular with a header row whose column names follow the RevMan naming
 
 **Returns**
 
-- `:class` — `ReviewDataResult`.
+`ReviewDataResult`.
 
 ## `read_mtv`
 
@@ -96,7 +96,7 @@ contributes one row per arm; the arms are paired within a study.
 
 **Returns**
 
-- `:class` — `ReviewDataResult`.
+`ReviewDataResult`.
 
 ## `ReviewDataResult`
 
@@ -104,11 +104,11 @@ contributes one row per arm; the arms are paired within a study.
 ReviewDataResult(data, title='', label_e='', label_c='', comparisons=None, source='')
 ```
 
-Result of :func:`read_rm5` / :func:`read_cdir` / :func:`read_mtv`.
+Result of `read_rm5` / `read_cdir` / `read_mtv`.
 
 **Attributes**
 
-- `data` — list of dicts with the columns in :data:`REVIEW_COLUMNS`.
+- `data` — list of dicts with the columns in `REVIEW_COLUMNS`.
 - `title` — review title.
 - `label_e, label_c` — names of the experimental / control groups.
 - `comparisons` — list of comparison labels.
@@ -148,7 +148,7 @@ A plain ``dict`` mapping column names to one-dimensional arrays.
 column_names(data) -> 'list'
 ```
 
-The column names of any frame accepted by :func:`as_columns`.
+The column names of any frame accepted by `as_columns`.
 
 ## `lookup`
 
@@ -229,18 +229,18 @@ A parsed formula: ``response ~ term1 + term2``.
 parse_formula(formula) -> 'FormulaSpec'
 ```
 
-Parse a formula string into a :class:`FormulaSpec`.
+Parse a formula string into a `FormulaSpec`.
 
 Accepts ``"y ~ a + b"``, ``"~ a + b"``, ``"a + b"``, ``"~ a*b"``,
 ``"~ a:b"``, ``"~ 0 + a"``, ``"~ a - 1"`` and ``"~ ."``.
 
 **Args**
 
-- `formula` — the formula string (a :class:`FormulaSpec` is returned as-is).
+- `formula` — the formula string (a `FormulaSpec` is returned as-is).
 
 **Returns**
 
-- `The parsed` — class:`FormulaSpec`.
+The parsed `FormulaSpec`.
 
 **Raises**
 
@@ -256,8 +256,8 @@ Build a design matrix from a formula and a frame.
 
 **Args**
 
-- `formula` — formula string or :class:`FormulaSpec`.
-- `data` — any frame accepted by :func:`as_columns`.
+- `formula` — formula string or `FormulaSpec`.
+- `data` — any frame accepted by `as_columns`.
 - `intercept` — force the intercept on/off; ``None`` uses the formula's own ``0`` / ``1`` marker.
 
 **Returns**
@@ -279,7 +279,7 @@ Split a two-sided formula into ``(y, X, names)``.
 **Args**
 
 - `formula` — formula string such as ``"yi ~ dose + year"``.
-- `data` — any frame accepted by :func:`as_columns`.
+- `data` — any frame accepted by `as_columns`.
 
 **Returns**
 
@@ -335,7 +335,7 @@ install_repr_html(namespace) -> 'int'
 
 Attach ``_repr_html_`` to every public class in ``namespace`` with ``to_dict``.
 
-Called once from :mod:`pimeta.__init__` so that ``repr()`` in Jupyter shows
+Called once from `__init__` so that ``repr()`` in Jupyter shows
 a formatted table for every result type, without repeating the mixin in 40
 class definitions.
 

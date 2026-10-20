@@ -232,7 +232,7 @@ asin2ir(x, time=None)
 
 *Mirrors R's `asin2ir`.*
 
-``meta::asin2ir`` �?inverse Freeman-Tukey double arcsine to an incidence rate.
+``meta::asin2ir`` —?inverse Freeman-Tukey double arcsine to an incidence rate.
 
 ## `asin2p`
 
@@ -242,7 +242,7 @@ asin2p(x, n=None)
 
 *Mirrors R's `asin2p`.*
 
-``meta::asin2p`` �?inverse Freeman-Tukey double arcsine to a proportion.
+``meta::asin2p`` —?inverse Freeman-Tukey double arcsine to a proportion.
 
 ## `p2asin`
 
@@ -252,7 +252,7 @@ p2asin(x)
 
 *Mirrors R's `p2asin`.*
 
-``meta::p2asin`` �?proportion to arcsine.
+``meta::p2asin`` —?proportion to arcsine.
 
 ## `cor2z`
 
@@ -262,7 +262,7 @@ cor2z(x)
 
 *Mirrors R's `cor2z`.*
 
-``meta::cor2z`` �?correlation to Fisher's z.
+``meta::cor2z`` —?correlation to Fisher's z.
 
 ## `z2cor`
 
@@ -272,7 +272,7 @@ z2cor(x)
 
 *Mirrors R's `z2cor`.*
 
-``meta::z2cor`` �?Fisher's z to a correlation.
+``meta::z2cor`` —?Fisher's z to a correlation.
 
 ## `logit2p`
 
@@ -282,7 +282,7 @@ logit2p(x)
 
 *Mirrors R's `logit2p`.*
 
-``meta::logit2p`` �?logit to a proportion.
+``meta::logit2p`` —?logit to a proportion.
 
 ## `p2logit`
 
@@ -292,7 +292,7 @@ p2logit(x)
 
 *Mirrors R's `p2logit`.*
 
-``meta::p2logit`` �?proportion to logit.
+``meta::p2logit`` —?proportion to logit.
 
 ## `smd2or`
 
@@ -302,7 +302,7 @@ smd2or(smd, se_smd, method='HH')
 
 *Mirrors R's `smd2or`.*
 
-``meta::smd2or`` �?SMD to log odds ratio, then pool with ``metagen``.
+``meta::smd2or`` —?SMD to log odds ratio, then pool with ``metagen``.
 
 **Args**
 
@@ -312,7 +312,7 @@ smd2or(smd, se_smd, method='HH')
 
 **Returns**
 
-- `:class` — `~.metagen.MetagenResult` on the log-OR scale (``sm="OR"``).
+`.metagen.MetagenResult` on the log-OR scale (``sm="OR"``).
 
 ## `or2smd`
 
@@ -322,7 +322,7 @@ or2smd(lnOR, selnOR, method='HH')
 
 *Mirrors R's `or2smd`.*
 
-``meta::or2smd`` �?log odds ratio to SMD, then pool with ``metagen``.
+``meta::or2smd`` —?log odds ratio to SMD, then pool with ``metagen``.
 
 **Args**
 
@@ -332,7 +332,7 @@ or2smd(lnOR, selnOR, method='HH')
 
 **Returns**
 
-- `:class` — `~.metagen.MetagenResult` on the SMD scale (``sm="SMD"``).
+`.metagen.MetagenResult` on the SMD scale (``sm="SMD"``).
 
 ## `logVR2VE`
 
@@ -342,7 +342,7 @@ logVR2VE(x)
 
 *Mirrors R's `logVR2VE`.*
 
-``meta::logVR2VE`` �?log variance ratio to a percentage reduction.
+``meta::logVR2VE`` —?log variance ratio to a percentage reduction.
 
 ## `VE2logVR`
 
@@ -352,7 +352,7 @@ VE2logVR(x)
 
 *Mirrors R's `VE2logVR`.*
 
-``meta::VE2logVR`` �?percentage reduction to a log variance ratio.
+``meta::VE2logVR`` —?percentage reduction to a log variance ratio.
 
 ## `rd`
 
@@ -362,11 +362,11 @@ rd(result, p_c=None, common=True, random=True, small_values='desirable')
 
 *Mirrors R's `rd`.*
 
-``meta::rd`` �?risk difference / absolute risk reduction from a pooled result.
+``meta::rd`` —?risk difference / absolute risk reduction from a pooled result.
 
 **Args**
 
-- `result` — :class:`~.metagen.MetagenResult` with ``sm`` in ``{"RD", "RR", "OR", "HR"}``.
+- `result` — `.metagen.MetagenResult` with ``sm`` in ``{"RD", "RR", "OR", "HR"}``.
 - `p_c` — control-group risk(s). Defaults to ``0.1 .. 0.9`` by 0.1.
 - `common` — include the common-effect estimate.
 - `random` — include the random-effects estimate.
@@ -374,7 +374,7 @@ rd(result, p_c=None, common=True, random=True, small_values='desirable')
 
 **Returns**
 
-- `:class` — `RdResult` with ``common``/``random`` dicts of arrays.
+`RdResult` with ``common``/``random`` dicts of arrays.
 
 ## `nnt`
 
@@ -384,9 +384,9 @@ nnt(result, p_c=None, common=True, random=True, small_values='desirable')
 
 *Mirrors R's `nnt`.*
 
-``meta::nnt`` �?number needed to treat from a pooled result.
+``meta::nnt`` —?number needed to treat from a pooled result.
 
-See :func:`rd` for the arguments; ``NNT = 1 / RD`` with the sign convention
+See `rd` for the arguments; ``NNT = 1 / RD`` with the sign convention
 from ``small_values``.
 
 ## `RdResult`
@@ -395,7 +395,7 @@ from ``small_values``.
 RdResult(common, random, sm, small_values)
 ```
 
-Container returned by :func:`rd`.
+Container returned by `rd`.
 
 ## `NntResult`
 
@@ -403,7 +403,7 @@ Container returned by :func:`rd`.
 NntResult(sm, common, random, nnt_common, nnt_random)
 ```
 
-Container returned by :func:`nnt`.
+Container returned by `nnt`.
 
 ## `conv_delta`
 
@@ -426,7 +426,7 @@ delta method, i.e. ``vi_new = transf'(yi)^2 * vi``.
 
 **Returns**
 
-- `:class` — `ConvDeltaResult` with the transformed ``yi`` and ``vi``.
+`ConvDeltaResult` with the transformed ``yi`` and ``vi``.
 
 ## `conv_wald`
 
@@ -449,7 +449,7 @@ conv_wald(out, ci_lb, ci_ub, level=95.0, transf=None)
 
 **Returns**
 
-- `:class` — `ConvWaldResult`.
+`ConvWaldResult`.
 
 ## `conv_fivenum`
 
@@ -480,7 +480,7 @@ weighted mean of the range- and IQR-based estimates).
 
 **Returns**
 
-- `:class` — `ConvFivenumResult` with ``mean``, ``sd``, ``case`` and ``sig``.
+`ConvFivenumResult` with ``mean``, ``sd``, ``case`` and ``sig``.
 
 **Note**
 
@@ -516,7 +516,7 @@ sensitivity/specificity/PPV/NPV.  This is a faithful transcription of
 
 **Returns**
 
-- `:class` — `Conv2x2Result` with ``ai``, ``bi``, ``ci``, ``di``.
+`Conv2x2Result` with ``ai``, ``bi``, ``ci``, ``di``.
 
 ## `Conv2x2Result`
 
@@ -526,7 +526,7 @@ Conv2x2Result(ai, bi, ci, di, var_names)
 
 *Mirrors R's `conv.2x2`.*
 
-Result of :func:`conv_2x2` (``metafor::conv.2x2``).
+Result of `conv_2x2` (``metafor::conv.2x2``).
 
 ## `ConvDeltaResult`
 
@@ -536,7 +536,7 @@ ConvDeltaResult(yi, vi)
 
 *Mirrors R's `conv.delta`.*
 
-Result of :func:`conv_delta` (``metafor::conv.delta``).
+Result of `conv_delta` (``metafor::conv.delta``).
 
 ## `ConvWaldResult`
 
@@ -546,7 +546,7 @@ ConvWaldResult(yi, vi)
 
 *Mirrors R's `conv.wald`.*
 
-Result of :func:`conv_wald` (``metafor::conv.wald``).
+Result of `conv_wald` (``metafor::conv.wald``).
 
 ## `ConvFivenumResult`
 
@@ -556,7 +556,7 @@ ConvFivenumResult(mean, sd, case, sig)
 
 *Mirrors R's `conv.fivenum`.*
 
-Result of :func:`conv_fivenum` (``metafor::conv.fivenum``).
+Result of `conv_fivenum` (``metafor::conv.fivenum``).
 
 ## `to_long`
 
@@ -596,7 +596,7 @@ to_wide(data, study='study', group='group', event='event', n='n')
 
 **Args**
 
-- `data` — mapping of column name -> values (the output of :func:`to_long`).
+- `data` — mapping of column name -> values (the output of `to_long`).
 - `study, group, event, n` — column names to use.
 
 **Returns**

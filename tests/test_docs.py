@@ -6,7 +6,10 @@ These tests keep the docs honest without requiring a documentation build:
 * the generated API reference covers every name in ``pimeta.__all__``,
 * every relative Markdown link points at a file that exists,
 * every ``ma.<name>`` referenced in the docs resolves to a real attribute,
-* the front-door snippets in ``index.md`` / ``quickstart.md`` actually run.
+* the front-door snippets in ``index.md`` / ``quickstart.md`` actually run,
+* no file carries a U+FFFD replacement character, no Sphinx role syntax
+  (``:class:``, ``:func:``, ...) leaks into the API reference, and every
+  "Mirrors R's ..." name is a plain identifier.
 """
 
 from __future__ import annotations
@@ -177,3 +180,69 @@ def test_front_door_snippets_run(name, tmp_path, monkeypatch):
             exec(compile(block, f"{name}#block{index}", "exec"), namespace)
         except Exception as exc:                     # pragma: no cover - failure path
             pytest.fail(f"{name} block {index} failed: {type(exc).__name__}: {exc}\n\n{block}")
+
+# --------------------------------------------------------------------------- #
+# Symbol integrity: no mangled characters, no leaked Sphinx roles
+# --------------------------------------------------------------------------- #
+_TEXTLIKE = {".md", ".py", ".toml", ".yml", ".yaml", ".ipynb", ".txt", ".cfg"}
+_SKIP_DIRS = {".git", "build", "dist", "__pycache__", ".mypy_cache",
+              ".pytest_cache", ".ruff_cache"}
+
+
+def _text_files() -> list[Path]:
+    """Every text file a reader can end up looking at."""
+    roots = [ROOT / "src", ROOT / "docs", ROOT / "tests", ROOT / "tools",
+             ROOT / "examples"]
+    files = [ROOT / "README.md", ROOT / "CHANGELOG.md"]
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if (path.is_file() and path.suffix in _TEXTLIKE
+                    and not _SKIP_DIRS & set(path.parts)):
+                files.append(path)
+    return sorted(set(files))
+
+
+def test_no_replacement_characters():
+    """U+FFFD means a file was decoded with the wrong encoding at some point.
+
+    It shows up as a stray question mark inside a sentence: one docstring in
+    ``measures.py`` had fourteen of them where an em dash belonged, and the API
+    reference faithfully copied every one.
+    """
+    bad = []
+    for path in _text_files():
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "\ufffd" in line:
+                bad.append(f"{path.relative_to(ROOT)}:{i}: {line.strip()[:80]}")
+    assert not bad, "replacement characters (U+FFFD) found:\n" + "\n".join(bad)
+
+
+def test_generated_pages_have_no_sphinx_roles():
+    """Docstrings use ``:class:`X```; the reader must see just ``X``."""
+    pattern = re.compile(r":(?:class|func|meth|mod|attr|data|exc|obj|ref):`")
+    bad = [
+        f"{path.relative_to(ROOT)}:{i}: {line.strip()[:80]}"
+        for path in sorted((DOCS / "api").glob("*.md"))
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert not bad, "Sphinx roles leaked into the API reference:\n" + "\n".join(bad)
+
+
+def test_mirror_names_are_plain_identifiers():
+    """``*Mirrors R's `...`.*`` must never start with a colon.
+
+    ``meta:::ci`` (R's internal accessor) used to be split on ``::`` and come
+    out as ``:ci``.
+    """
+    pattern = re.compile(r"Mirrors R's `([^`]*)`")
+    bad = []
+    for path in sorted((DOCS / "api").glob("*.md")):
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for match in pattern.finditer(line):
+                name = match.group(1)
+                if not name or not (name[0].isalpha() or name[0] in "[$._"):
+                    bad.append(f"{path.relative_to(ROOT)}:{i}: {name!r}")
+    assert not bad, "malformed mirror names:\n" + "\n".join(bad)

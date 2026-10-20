@@ -53,7 +53,7 @@
 | [`inches2units`](#inches2units) | inches2units |
 | [`units2inches`](#units2inches) | units2inches |
 | [`jama_labels`](#jama_labels) | JAMAlabels |
-| [`ci`](#ci) | :ci |
+| [`ci`](#ci) | ci |
 | [`getmfopt`](#getmfopt) | getmfopt |
 | [`setmfopt`](#setmfopt) | setmfopt |
 | [`estimates`](#estimates) | estimates |
@@ -71,7 +71,7 @@ MvProfileResult(component, index, sigma2, ll, maxll, beta, ci_lb, ci_ub, vc, met
 
 *Mirrors R's `profile.rma`.*
 
-Result of :func:`profile_rmamv` (mirrors ``profile.rma`` objects).
+Result of `profile_rmamv` (mirrors ``profile.rma`` objects).
 
 ``sigma2`` holds the profiling grid, ``ll`` the maximised log-likelihood
 at each grid point and ``beta`` / ``ci_lb`` / ``ci_ub`` the fixed effects
@@ -98,16 +98,16 @@ intervals at each grid point.
 
 **Args**
 
-- `x` — an :class:`~pimeta.RmaMvResult`.
+- `x` — an `RmaMvResult`.
 - `sigma2` — 1-based index of the variance component to profile (metafor's ``sigma2=`` argument).  Defaults to the first component.
 - `steps` — number of grid points, or an explicit sequence of values (metafor's ``steps`` argument — a vector of length ``>= 2`` is used as the grid itself).
 - `xlim` — profiling range; by default ``[max(0, vc/4), max(0.1, vc*4)]`` around the fitted value ``vc``, like metafor.
 - `plot` — draw the profile plot immediately.
-- `**kw` — forwarded to :func:`pimeta.plotting.plot_mv_profile`.
+- `**kw` — forwarded to `plotting.plot_mv_profile`.
 
 **Returns**
 
-- `:class` — `MvProfileResult`.
+`MvProfileResult`.
 
 ## `deltamethod`
 
@@ -128,7 +128,7 @@ Delta-method standard errors for a transformation of the coefficients.
 
 **Returns**
 
-- `:class` — `DeltaMethodResult`.
+`DeltaMethodResult`.
 
 **Note**
 
@@ -142,7 +142,7 @@ DeltaMethodResult(coef: 'list[float]', se: 'list[float]', zval: 'list[float]', p
 
 *Mirrors R's `deltamethod`.*
 
-Result of :func:`deltamethod` (``metafor::deltamethod``).
+Result of `deltamethod` (``metafor::deltamethod``).
 
 ## `tes`
 
@@ -175,7 +175,7 @@ Test of excess significance (``metafor::tes``).
 
 **Returns**
 
-- `:class` — `TesResult`.
+`TesResult`.
 
 ## `TesResult`
 
@@ -185,7 +185,7 @@ TesResult(k: 'int', O: 'int', E: 'float', OEratio: 'float', test: 'str', X2: 'fl
 
 *Mirrors R's `tes`.*
 
-Result of :func:`tes` (``metafor::tes``).
+Result of `tes` (``metafor::tes``).
 
 ## `vif`
 
@@ -197,13 +197,13 @@ Generalized variance-inflation factors (Fox & Monette).
 
 **Args**
 
-- `result` — a fitted :class:`RmaResult`.
+- `result` — a fitted `RmaResult`.
 - `btt` — indices (1-based, like metafor) or names of the coefficients to assess. Defaults to all non-intercept coefficients, or to all coefficients when the model has no intercept.
 - `intercept` — keep the intercept when computing the VIFs.
 
 **Returns**
 
-- `:class` — `VifResult`.
+`VifResult`.
 
 **Raises**
 
@@ -217,7 +217,7 @@ VifResult(vifs: 'list[float]', sifs: 'list[float]', m: 'list[int]', specs: 'list
 
 *Mirrors R's `vif`.*
 
-Result of :func:`vif` (``metafor::vif``).
+Result of `vif` (``metafor::vif``).
 
 ## `permutest`
 
@@ -237,7 +237,7 @@ its own permuted z-distribution, and the omnibus ``QM`` gets one too.
 
 **Args**
 
-- `result` — fitted :class:`RmaResult`.
+- `result` — fitted `RmaResult`.
 - `exact` — enumerate the whole permutation set (2^k sign patterns without moderators, k!/prod(c!) row permutations with them).  Ignored (and silently switched on/off) exactly as metafor does: if the exact count is no larger than ``iter`` the exact test is used anyway.
 - `iter` — number of random permutations when the exact set is too large.
 - `btt` — 1-based indices of the coefficients to test (metafor's ``btt``). Defaults to the moderator coefficients (or 1 when there are none).
@@ -249,7 +249,7 @@ its own permuted z-distribution, and the omnibus ``QM`` gets one too.
 
 **Returns**
 
-- `:class` — `PermutestResult`.
+`PermutestResult`.
 
 ## `PermutestResult`
 
@@ -259,7 +259,7 @@ PermutestResult(pval: 'list[float]', QM: 'float', QMp: 'float', QMp_perm: 'float
 
 *Mirrors R's `permutest`.*
 
-Result of :func:`permutest` (``metafor::permutest``).
+Result of `permutest` (``metafor::permutest``).
 
 ``pval`` holds one permutation p-value per model coefficient (``p``
 entries), ``QMp_perm`` the permutation p-value of the omnibus statistic.
@@ -281,7 +281,7 @@ heterogeneity.
 
 **Args**
 
-- `result` — fitted :class:`RmaResult`.
+- `result` — fitted `RmaResult`.
 - `nsim` — number of simulated datasets.
 - `seed` — optional RNG seed.
 
@@ -335,14 +335,14 @@ Implements metafor's ``.hettest.score`` (Rao's score test evaluated with the
 
 **Args**
 
-- `result` — fitted :class:`RmaResult` (intercept-only models only).
+- `result` — fitted `RmaResult` (intercept-only models only).
 - `method` — ``"REML"`` (default) or ``"ML"`` — selects the score variant.
 - `test` — ``"score"`` (metafor default) or ``"QE"`` (classical Cochran test, provided as a convenience).
 - `seed, iter` — accepted for API compatibility (no bootstrap is run).
 
 **Returns**
 
-- `:class` — `HettestResult`.
+`HettestResult`.
 
 ## `HettestResult`
 
@@ -383,7 +383,7 @@ a sampling covariance matrix ``V`` over the unique elements of ``R``.
 
 **Returns**
 
-- `:class` — `MatregResult`.
+`MatregResult`.
 
 ## `MatregResult`
 
@@ -393,7 +393,7 @@ MatregResult(beta: 'list[float]', se: 'list[float]', pval: 'list[float]', ci_lb:
 
 *Mirrors R's `matreg`.*
 
-Result of :func:`matreg` (``metafor::matreg``).
+Result of `matreg` (``metafor::matreg``).
 
 ``test`` is ``"t"`` when the model was fitted from ``n`` (the standard
 error of the standardised path coefficients comes from the residual mean
@@ -411,7 +411,7 @@ profile_rma(result, n_points=20, level=0.05)
 
 ``metafor::profile.rma.uni`` — profile log-likelihood of ``tau^2``.
 
-A :class:`~.selmodel.SelModelResult` is handled too (R's
+A `.selmodel.SelModelResult` is handled too (R's
 ``profile.rma.uni.selmodel``), in which case the profile is over the
 selection parameter ``delta``.
 
@@ -423,13 +423,13 @@ At each grid point ``beta`` is re-estimated, so the curve is the profile
 
 **Args**
 
-- `result` — fitted :class:`RmaResult` or :class:`SelModelResult`.
+- `result` — fitted `RmaResult` or `SelModelResult`.
 - `n_points` — number of grid points.
 - `level` — alpha for the QP bounds (0.05 → 95% bounds).
 
 **Returns**
 
-- `:class` — `ProfileResult` (or ``SelProfileResult`` for a selection model).
+`ProfileResult` (or ``SelProfileResult`` for a selection model).
 
 ## `ProfileResult`
 
@@ -439,7 +439,7 @@ ProfileResult(tau2: 'list[float]', ll: 'list[float]', beta: 'list[float]', ci_lb
 
 *Mirrors R's `profile.rma.uni`.*
 
-Result of :func:`profile_rma` (``metafor::profile.rma.uni``).
+Result of `profile_rma` (``metafor::profile.rma.uni``).
 
 ## `bldiag`
 
@@ -564,7 +564,7 @@ pairmat(result, btt=None, fixed=False)
 
 **Args**
 
-- `result` — a :class:`~.rma_uni.RmaResult`.
+- `result` — a `.rma_uni.RmaResult`.
 - `btt` — coefficients to compare (1-based like R).
 - `fixed` — include the coefficient names as stored.
 
@@ -596,7 +596,7 @@ rcalc(x, ni, data=None, rtoz=False, nfun='min', upper=False, simplify=True, rowi
 
 **Returns**
 
-- `:class` — `RcalcResult` (or a list of them when ``simplify=False``).
+`RcalcResult` (or a list of them when ``simplify=False``).
 
 ## `RcalcResult`
 
@@ -604,7 +604,7 @@ rcalc(x, ni, data=None, rtoz=False, nfun='min', upper=False, simplify=True, rowi
 RcalcResult(dat, V)
 ```
 
-Result of :func:`rcalc` — ``dat`` (long table) and ``V`` (covariance).
+Result of `rcalc` — ``dat`` (long table) and ``V`` (covariance).
 
 ## `fitstats`
 
@@ -718,7 +718,7 @@ update_rma(result, mods=None, **kwargs)
 ``metafor::update.rma`` — refit with modified arguments.
 
 Only re-specification of the moderators (``mods``) and the simple scalar
-arguments supported by :func:`~.rma_uni.rma` can be changed.
+arguments supported by `.rma_uni.rma` can be changed.
 
 ## `blup`
 
@@ -741,7 +741,7 @@ BlupResult(pred, se, pi_lb, pi_ub, slab)
 
 *Mirrors R's `blup.rma.uni`.*
 
-Result of :func:`blup` (``metafor::blup.rma.uni``).
+Result of `blup` (``metafor::blup.rma.uni``).
 
 ## `as_data_frame_confint`
 
@@ -753,7 +753,7 @@ as_data_frame_confint(result, include_na=False)
 
 ``metafor::as.data.frame.confint.rma`` — CIs as a data frame.
 
-Accepts a :class:`~.pooling.Tau2Confint`, a :class:`VifResult`, a
+Accepts a `.pooling.Tau2Confint`, a `VifResult`, a
 ``matreg`` fit, an ``anova``-style result or a plain dict of columns;
 returns a list of dicts with the columns ``estimate``/``ci.lb``/``ci.ub``
 (metafor's names) when available.
@@ -798,7 +798,7 @@ as_data_frame_confint(result, include_na=False)
 
 ``metafor::as.data.frame.confint.rma`` — CIs as a data frame.
 
-Accepts a :class:`~.pooling.Tau2Confint`, a :class:`VifResult`, a
+Accepts a `.pooling.Tau2Confint`, a `VifResult`, a
 ``matreg`` fit, an ``anova``-style result or a plain dict of columns;
 returns a list of dicts with the columns ``estimate``/``ci.lb``/``ci.ub``
 (metafor's names) when available.
@@ -831,7 +831,7 @@ units2inches(x, units='in', dpi=300)
 
 *Mirrors R's `units2inches`.*
 
-``meta::units2inches`` — inverse of :func:`inches2units`.
+``meta::units2inches`` — inverse of `inches2units`.
 
 ## `jama_labels`
 
@@ -849,7 +849,7 @@ jama_labels(author, year, citation)
 ci(te, seTE, level=0.95, df=None, null_effect=0.0)
 ```
 
-*Mirrors R's `:ci`.*
+*Mirrors R's `ci`.*
 
 ``meta:::ci`` — confidence interval and test for an effect estimate.
 
@@ -897,14 +897,14 @@ estimates(result, study_results=True, common=True, random=True, prediction=True,
 
 **Args**
 
-- `result` — a :class:`~.metagen.MetagenResult`.
+- `result` — a `.metagen.MetagenResult`.
 - `study_results` — include the per-study rows.
 - `common, random, prediction` — include the corresponding pooled rows.
 - `backtransf` — report on the back-transformed scale.
 
 **Returns**
 
-- `:class` — `EstimatesResult`.
+`EstimatesResult`.
 
 ## `EstimatesResult`
 
@@ -914,7 +914,7 @@ EstimatesResult(rows, sm, backtransf)
 
 *Mirrors R's `estimates`.*
 
-Result of :func:`estimates` (``meta::estimates``).
+Result of `estimates` (``meta::estimates``).
 
 A study-level table with the pooled rows appended.  ``rows`` is a list of
 dicts with the columns ``studlab``, ``TE``, ``seTE``, ``lower``, ``upper``,
@@ -950,7 +950,7 @@ Row mask that keeps only complete cases, plus the dropped indices.
 
 - `columns` — ``{name: sequence}`` — every column must have the same length.
 - `context` — noun used in the warning message ("studies", "rows", ...).
-- `warn` — emit :class:`MissingDataWarning` when anything is dropped.
+- `warn` — emit `MissingDataWarning` when anything is dropped.
 
 **Returns**
 

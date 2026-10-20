@@ -292,7 +292,7 @@ All 393 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`inches2units`](diagnostics.md#inches2units) | Diagnostics and utilities | inches2units |
 | [`units2inches`](diagnostics.md#units2inches) | Diagnostics and utilities | units2inches |
 | [`jama_labels`](diagnostics.md#jama_labels) | Diagnostics and utilities | JAMAlabels |
-| [`ci`](diagnostics.md#ci) | Diagnostics and utilities | :ci |
+| [`ci`](diagnostics.md#ci) | Diagnostics and utilities | ci |
 | [`getmfopt`](diagnostics.md#getmfopt) | Diagnostics and utilities | getmfopt |
 | [`setmfopt`](diagnostics.md#setmfopt) | Diagnostics and utilities | setmfopt |
 | [`estimates`](diagnostics.md#estimates) | Diagnostics and utilities | estimates |

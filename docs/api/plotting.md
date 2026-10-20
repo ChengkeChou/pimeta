@@ -39,8 +39,8 @@ plot_mv_profile(profile, filename=None, figsize=None, title=None, xlab=None, yla
 ``metafor::plot.profile.rma`` for a profiled parameter.
 
 Used for the variance components of an ``rma.mv`` fit
-(:func:`~.mv_diagnostics.profile_rmamv`) and for the scale coefficients of
-a location-scale model (:func:`~.rma_ls.profile_rma_ls`); the x grid is
+(`.mv_diagnostics.profile_rmamv`) and for the scale coefficients of
+a location-scale model (`.rma_ls.profile_rma_ls`); the x grid is
 read from ``profile.sigma2`` or, failing that, ``profile.alpha``.
 
 **Args**
@@ -49,7 +49,7 @@ read from ``profile.sigma2`` or, failing that, ``profile.alpha``.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `forest`
 
@@ -61,7 +61,7 @@ Draw a forest plot.
 
 ``yi`` / ``vi`` are per-study effect sizes and sampling variances on the
 *analysis* scale (log scale for ratio types). ``pooled`` is an optional
-:class:`~pimeta.pooling.PooledResult` (or any object
+`pooling.PooledResult` (or any object
 exposing ``pooled_est``, ``pooled_se`` / ``pooled_ci_lower``,
 ``pooled_ci_upper`` and ``weights``) used to draw the summary diamond and
 size the study boxes by weight.
@@ -87,7 +87,7 @@ netgraph(result=None, trts=None, treat1=None, treat2=None, studlab=None, filenam
 
 Draw a network evidence graph.
 
-Accepts either a :class:`NetmetaResult` (reads ``trts``, ``treat1_raw``,
+Accepts either a `NetmetaResult` (reads ``trts``, ``treat1_raw``,
 ``treat2_raw``, ``studlab_raw``) or explicit ``trts`` / ``treat1`` /
 ``treat2`` lists. Edge width encodes the number of studies comparing the
 pair. Layout is netmeta's default circular arrangement (treatments placed
@@ -101,7 +101,7 @@ plot_baujat(result, studlab=None, filename: 'str | None' = None, figsize: 'tuple
 
 Draw a Baujat plot (heterogeneity contribution vs. influence).
 
-``result`` is a :class:`BaujatResult` (fields ``x`` and ``y``).
+``result`` is a `BaujatResult` (fields ``x`` and ``y``).
 
 ## `plot_gosh`
 
@@ -111,7 +111,7 @@ plot_gosh(result, x: 'str' = 'tau2', y: 'str' = 'estimate', filename: 'str | Non
 
 Draw a GOSH plot (Goodman-Schulz-Hastie heterogeneity).
 
-``result`` is a :class:`GoshResult`; ``x``/``y`` select two of the stored
+``result`` is a `GoshResult`; ``x``/``y`` select two of the stored
 per-subset vectors: ``estimate``, ``tau2``, ``QE``, ``I2``, ``H2``.
 
 ## `plot_influence`
@@ -135,7 +135,7 @@ weights).  Studies metafor flags as influential are drawn in red.
 
 **Args**
 
-- `x` — an :class:`~pimeta.sensitivity.InfluenceResult`.
+- `x` — an `sensitivity.InfluenceResult`.
 - `plotinf` — ``True`` for all eight panels, or a list of 1-based panel indices (1 rstudent, 2 dffits, 3 cook.d, 4 cov.r, 5 tau2.del, 6 QE.del, 7 hat, 8 weight).
 - `plotdfbs` — also draw one panel per coefficient holding its DFBETAS.
 - `logcov` — put the covariance-ratio panel on a log scale (R's default).
@@ -144,7 +144,7 @@ weights).  Studies metafor flags as influential are drawn in red.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `plot_permutest`
 
@@ -162,13 +162,13 @@ R draws for ``plot(permutest(res))``.
 
 **Args**
 
-- `x` — a :class:`~pimeta.diagnostics.PermutestResult`.
+- `x` — a `diagnostics.PermutestResult`.
 - `btt` — 1-based indices of the coefficients to draw (default all).
 - `nbin` — number of histogram bins (default ``ceiling(sqrt(nperm))``).
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `plot_selprofile`
 
@@ -185,11 +185,11 @@ Draws the profiled log-likelihood against the selection parameter
 
 **Args**
 
-- `profile` — a :class:`~.selmodel.SelProfileResult` (or anything with ``delta``/``ll``/``maxll``/``ci_lb``/``ci_ub``).
+- `profile` — a `.selmodel.SelProfileResult` (or anything with ``delta``/``ll``/``maxll``/``ci_lb``/``ci_ub``).
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `PlotResult`
 
@@ -209,7 +209,7 @@ heatplot(path_result, xlab='Randomized comparison', ylab='', cex_lab=1.0, col=No
 
 ``netmeta::heatplot.netpath`` — standardised heat map of path evidence.
 
-Takes the dict returned by :func:`~.netmeta.netpath` and draws a 1-row heat
+Takes the dict returned by `.netmeta.netpath` and draws a 1-row heat
 map of ``theta_p`` standardised by its standard error
 (``theta_p / sqrt(diag(Sigma))``), i.e. the evidence flow of every simple
 path between the two nodes.
@@ -223,7 +223,7 @@ path between the two nodes.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `regplot`
 
@@ -243,7 +243,7 @@ shaded.
 
 **Args**
 
-- `result` — a :class:`~.rma_uni.RmaResult` with exactly one moderator.
+- `result` — a `.rma_uni.RmaResult` with exactly one moderator.
 - `mod` — the moderator values (defaults to the second column of ``X``).
 - `labels` — optional study labels.
 - `ci, pi` — draw the confidence / prediction band.
@@ -256,7 +256,7 @@ shaded.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `radial`
 
@@ -274,7 +274,7 @@ the same horizontal line carry the same precision.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `labbe`
 
@@ -295,7 +295,7 @@ labbe(event_e, n_e, event_c, n_c, studlab=None, pooled=None, filename: 'str | No
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `llplot`
 
@@ -312,7 +312,7 @@ around the estimate and plots it, rescaled so that the maximum is 0.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `bubble`
 
@@ -326,13 +326,13 @@ bubble(result, mod=None, xlab: 'str | None' = None, filename: 'str | None' = Non
 
 **Args**
 
-- `result` — fitted :class:`RmaResult` with exactly one moderator.
+- `result` — fitted `RmaResult` with exactly one moderator.
 - `mod` — moderator values (defaults to the single column of ``result.X``).
 - `xlab` — x-axis label.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `drapery`
 
@@ -348,7 +348,7 @@ prediction interval bounds.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `qqnorm_rma`
 
@@ -366,12 +366,12 @@ first.
 
 **Args**
 
-- `result` — fitted :class:`RmaResult` (or an ``rma.mh``/``rma.peto`` fit).
+- `result` — fitted `RmaResult` (or an ``rma.mh``/``rma.peto`` fit).
 - `type` — ``"resid"`` (raw residuals), ``"rstandard"`` (standardized) or ``"rstudent"`` (studentized).
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `rankogram`
 
@@ -385,12 +385,12 @@ rankogram(result, cumulative: 'bool' = False, filename: 'str | None' = None, fig
 
 **Args**
 
-- `result` — a :class:`NetrankResult` (or any object exposing ``ranking``/``rank_matrix``).
+- `result` — a `NetrankResult` (or any object exposing ``ranking``/``rank_matrix``).
 - `cumulative` — plot cumulative probabilities instead of pointwise ones.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `netheat`
 
@@ -410,7 +410,7 @@ Blue cells (negative) mean the design removes inconsistency, red ones
 
 **Args**
 
-- `result` — a :class:`~pimeta.netmeta.NetmetaResult`, or any object exposing a precomputed ``heat_matrix``.
+- `result` — a `netmeta.NetmetaResult`, or any object exposing a precomputed ``heat_matrix``.
 - `random` — use the within-design tau (R's ``netheat(x, random = TRUE)``).
 - `tau_preset` — fix the heterogeneity variance instead of using 0 (common effect) or the within-design estimate.
 - `filename` — write the figure here as well.
@@ -420,8 +420,7 @@ Blue cells (negative) mean the design removes inconsistency, red ones
 
 **Returns**
 
-- `:class` — `PlotResult`, or ``None`` when the network has no loop (R
-also warns and draws nothing in that case).
+`PlotResult`, or ``None`` when the network has no loop (R also warns and draws nothing in that case).
 
 ## `hasse`
 
@@ -441,7 +440,7 @@ hasse(treatments=None, edges=None, filename: 'str | None' = None, figsize: 'tupl
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `netposet`
 
@@ -453,7 +452,7 @@ netposet(treatments=None, edges=None, filename: 'str | None' = None, figsize: 't
 
 ``netmeta::netposet`` — partial-order (poset) diagram of treatments.
 
-Draws the same covering-relation graph as :func:`hasse` but is exposed under
+Draws the same covering-relation graph as `hasse` but is exposed under
 netmeta's name; ``netposet`` additionally accepts pre-computed coordinates
 through ``edges``.
 
@@ -465,7 +464,7 @@ through ``edges``.
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.
 
 ## `traffic_light`
 
@@ -486,4 +485,4 @@ traffic_light(labels=None, judgements=None, domains=None, filename: 'str | None'
 
 **Returns**
 
-- `:class` — `PlotResult`.
+`PlotResult`.

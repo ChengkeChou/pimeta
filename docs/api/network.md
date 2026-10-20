@@ -110,7 +110,7 @@ netcomb(x, inactive: 'str | None' = None, sep_comps: 'str' = '+', common: 'bool 
 
 Additive component network meta-analysis (netmeta::netcomb).
 
-``x`` is a :class:`NetmetaResult` from :func:`netmeta` whose treatment
+``x`` is a `NetmetaResult` from `netmeta` whose treatment
 labels encode combination treatments (e.g. ``"A+B"``). The additive CNMA
 model assumes a combination's effect is the sum of its components'
 effects: ``delta = B theta`` with ``theta = C beta`` (Rücker et al. 2020),
@@ -132,7 +132,7 @@ NetcomplexResult(complex: 'list[str]', comps: 'list[str]', C_matrix: 'np.ndarray
 
 *Mirrors R's `netcomplex`.*
 
-Result of :func:`netcomplex` (``netmeta::netcomplex``).
+Result of `netcomplex` (``netmeta::netcomplex``).
 
 ## `discomb`
 
@@ -142,13 +142,13 @@ discomb(TE, seTE, treat1, treat2, studlab=None, inactive: 'str | None' = None, s
 
 Additive CNMA for possibly disconnected networks (netmeta::discomb).
 
-Unlike :func:`netcomb` (which starts from a :class:`NetmetaResult` and
+Unlike `netcomb` (which starts from a `NetmetaResult` and
 therefore requires a connected network), ``discomb`` takes raw
 per-comparison data and works even when the network is disconnected.  The
 additive degrees of freedom are ``df.Q.additive = n.a - k - rank(X)`` with
 ``n.a`` the total number of study arms and ``k`` the number of studies.
 When the network is connected the standard heterogeneity Q is taken from an
-internal :func:`netmeta` fit; otherwise it is undefined (NaN).
+internal `netmeta` fit; otherwise it is undefined (NaN).
 
 ## `netmetabin`
 
@@ -165,12 +165,13 @@ Binary network meta-analysis (netmeta::netmetabin).
 - `treat1, treat2` — treatment labels for each comparison.
 - `studlab` — study labels. If None, each comparison is its own study.
 - `sm` — summary measure ("OR" for MH; "OR"/"RR" for Inverse).
-- `method` — "MH" (Mantel-Haenszel, default), "NCH" (conditional non-central hypergeometric likelihood), "LRP" (Jeffreys-penalised logistic regression, Firth -- the only method with a random-effects counterpart, obtained by inflating the SEs by ``phi``), or "Inverse" (classic NMA via :func:`netmeta`).
+- `method` — "MH" (Mantel-Haenszel, default), "NCH" (conditional non-central hypergeometric likelihood), "LRP" (Jeffreys-penalised logistic regression, Firth -- the only method with a random-effects counterpart, obtained by inflating the SEs by ``phi``), or "Inverse" (classic NMA via `netmeta`).
 - `level, level_ma` — confidence levels.
 - `common, random` — fit common / random effects (Inverse method only).
 - `cc_pooled` — pool zero cells across studies (MH method).
-"MH" method reproduces Stijnen et al. (2010); "Inverse" delegates to
-- `c` — `netmeta` after computing per-comparison log-OR estimates.
+
+The "MH" method reproduces Stijnen et al. (2010); "Inverse" delegates to
+`netmeta` after computing per-comparison log-OR estimates.
 
 ## `NetmetabinResult`
 
@@ -195,8 +196,8 @@ netpairwise(x, separate_trts: 'bool' = True, reference_group: 'str | None' = Non
 
 Pairwise (meta-analysis) view of a network meta-analysis.
 
-Transcribes ``netmeta::netpairwise``. ``x`` is a :class:`NetmetaResult`
-(from :func:`netmeta`). The result is a metagen-style object whose overall
+Transcribes ``netmeta::netpairwise``. ``x`` is a `NetmetaResult`
+(from `netmeta`). The result is a metagen-style object whose overall
 pooled estimates come from a DerSimonian-Laird random-effects pairwise
 meta-analysis of all direct comparisons, plus a ``pairs`` table giving the
 per-comparison direct evidence (common/random effect, Q, I^2, tau^2).
@@ -240,7 +241,7 @@ straight through instead of deriving it from the arms.
 PairwiseData(sm: 'str', TE: 'list', seTE: 'list', treat1: 'list', treat2: 'list', studlab: 'list', narms: 'list') -> None
 ```
 
-Comparison-level data produced by :func:`pairwise`.
+Comparison-level data produced by `pairwise`.
 
 ## `netrank`
 
@@ -285,11 +286,11 @@ Split direct and indirect evidence in a network meta-analysis.
 Replicates ``netmeta::netsplit`` with ``method = "Back-calculation"``
 (the default for non-binary ``netmeta`` objects). The indirect estimate is
 back-calculated from the network and direct estimates using the direct
-evidence proportion, already stored in ``x`` by :func:`netmeta`.
+evidence proportion, already stored in ``x`` by `netmeta`.
 
 **Args**
 
-- `x` — a :class:`NetmetaResult` from :func:`netmeta`.
+- `x` — a `NetmetaResult` from `netmeta`.
 - `method` — splitting method (only ``"Back-calculation"``).
 - `common` — include common-effects results.
 - `random` — include random-effects results.
@@ -352,7 +353,7 @@ triangle the direct estimates (row vs column).
 
 **Args**
 
-- `x` — a :class:`NetmetaResult` from :func:`netmeta`.
+- `x` — a `NetmetaResult` from `netmeta`.
 - `common` — include the common-effects table.
 - `random` — include the random-effects table.
 - `seq` — optional row/column treatment order (default: ``x.trts``).
@@ -384,7 +385,7 @@ decomp_design(result: 'NetmetaResult', tau_preset=None) -> 'DecompDesignResult |
 
 Decomposition of the Q statistic (netmeta::decomp.design, Krahn 2013).
 
-``result`` must be a :class:`NetmetaResult` produced with the *raw*
+``result`` must be a `NetmetaResult` produced with the *raw*
 (un-normalized) comparison directions retained.
 
 ## `DecompDesignResult`
@@ -438,7 +439,7 @@ netdistance(x, sort: 'bool' = True) -> 'NetdistanceResult'
 Graph distance matrix (netmeta::netdistance).
 
 Accepts either a weighted/0-1 adjacency ``ndarray``, a
-:class:`NetmetaResult`, or a :class:`NetconnectionResult`. For a
+`NetmetaResult`, or a `NetconnectionResult`. For a
 ``NetmetaResult`` the adjacency is sorted by the ``netconnection`` order
 when ``sort`` is true, matching ``netmeta::netdistance.netmeta``.
 
@@ -466,21 +467,21 @@ netcomplex(result, complex=None, common=True, random=True, level=None)
 ``netmeta::netcomplex`` — combination effects of a component NMA.
 
 Estimates the effect of arbitrary treatment *complexes* (combinations of
-components) from a fitted :func:`netcomb` model::
+components) from a fitted `netcomb` model::
 
     Comb = C %*% Comp
     seComb = sqrt(diag(C %*% Lplus %*% t(C)))
 
 **Args**
 
-- `result` — a :class:`NetcombResult`.
+- `result` — a `NetcombResult`.
 - `complex` — which complexes to evaluate.  ``None`` (the default) uses every treatment of the network; otherwise a sequence of complex labels such as ``["A+B", "A+C+B"]`` (a 2-D array is read rowwise).
 - `common, random` — which models to fill in.
 - `level` — confidence level (defaults to the model's).
 
 **Returns**
 
-- `:class` — `NetcomplexResult`.
+`NetcomplexResult`.
 
 ## `netcomplexity`
 
@@ -502,7 +503,7 @@ combination effects of a component network meta-analysis.
 
 **Args**
 
-- `result` — a :class:`NetmetaResult` (or any object exposing ``m``, ``n`` and ``n_subnets``).
+- `result` — a `NetmetaResult` (or any object exposing ``m``, ``n`` and ``n_subnets``).
 
 **Returns**
 
@@ -533,7 +534,7 @@ with a block-equicorrelated within-study covariance
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `covar` — study-level covariate (one value per raw comparison row, like ``netmetareg(net, covar = vector)`` in R).
 - `method_tau` — ``"REML"`` (default), ``"ML"`` or ``"FE"``.
 - `reference_group` — reference treatment; defaults to the network's reference (or the first treatment).
@@ -547,7 +548,7 @@ with a block-equicorrelated within-study covariance
 
 **Returns**
 
-- `:class` — `NetmetaregResult`.
+`NetmetaregResult`.
 
 **Note**
 
@@ -561,7 +562,7 @@ NetmetaregResult(beta: 'list[float]', se: 'list[float]', zval: 'list[float]', pv
 
 *Mirrors R's `netmetareg`.*
 
-Result of :func:`netmetareg` (``netmeta::netmetareg``).
+Result of `netmetareg` (``netmeta::netmetareg``).
 
 ## `netmeasures`
 
@@ -575,15 +576,13 @@ netmeasures(result, random=None, tau_preset=None)
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `random` — use the random-effects model.  Defaults to ``True``; forced to ``True`` when ``tau_preset`` is given.
 - `tau_preset` — fixed heterogeneity variance.
 
 **Returns**
 
-- `:class` — `NetmeasuresResult` with ``proportion`` (share of the network
-estimate's variance that is direct evidence), ``meanpath``, ``minpar``
-and ``minpar_study``.
+`NetmeasuresResult` with ``proportion`` (share of the network estimate's variance that is direct evidence), ``meanpath``, ``minpar`` and ``minpar_study``.
 
 ## `NetmeasuresResult`
 
@@ -593,7 +592,7 @@ NetmeasuresResult(proportion, meanpath, minpar, minpar_study, H_tilde, random, t
 
 *Mirrors R's `netmeasures`.*
 
-Result of :func:`netmeasures` (``netmeta::netmeasures``).
+Result of `netmeasures` (``netmeta::netmeasures``).
 
 ## `netmatrix`
 
@@ -612,7 +611,7 @@ the diagonal are ``NaN``.
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `var` — one value per study/comparison.
 - `levels, labels` — optional recoding of the summary values.
 - `func` — summary function name.
@@ -621,7 +620,7 @@ the diagonal are ``NaN``.
 
 **Returns**
 
-- `:class` — `NetmatrixResult`.
+`NetmatrixResult`.
 
 ## `NetmatrixResult`
 
@@ -629,7 +628,7 @@ the diagonal are ``NaN``.
 NetmatrixResult(matrix, trts, func, levels, labels)
 ```
 
-Result of :func:`netmatrix` — a treatment x treatment summary matrix.
+Result of `netmatrix` — a treatment x treatment summary matrix.
 
 ## `netcomparison`
 
@@ -641,13 +640,13 @@ netcomparison(result, treat1=None, treat2=None, common=True, random=True, level=
 
 ``netmeta::netcomparison`` — estimate comparisons between combinations.
 
-Works on a :class:`NetcombResult`: the requested ``treat1`` vs ``treat2``
+Works on a `NetcombResult`: the requested ``treat1`` vs ``treat2``
 combinations (e.g. ``"A+B"`` vs ``"plac"``) are expressed as contrasts of
 the estimated component effects.
 
 **Args**
 
-- `result` — a :class:`NetcombResult`.
+- `result` — a `NetcombResult`.
 - `treat1, treat2` — combinations to compare.  Defaults mirror R: all treatments vs the reference group.
 - `common, random` — which models to report.
 - `level` — confidence level.
@@ -656,7 +655,7 @@ the estimated component effects.
 
 **Returns**
 
-- `:class` — `NetcomparisonResult`.
+`NetcomparisonResult`.
 
 ## `NetcomparisonResult`
 
@@ -666,7 +665,7 @@ NetcomparisonResult(**kw)
 
 *Mirrors R's `netcomparison`.*
 
-Result of :func:`netcomparison` (``netmeta::netcomparison``).
+Result of `netcomparison` (``netmeta::netcomparison``).
 
 ## `netbind`
 
@@ -685,7 +684,7 @@ a single forest plot).
 
 **Args**
 
-- `*results` — :class:`NetmetaResult` objects.
+- `*results` — `NetmetaResult` objects.
 - `name` — labels for the networks (default ``"Network 1"``, ...).
 - `common, random` — restrict the output to one model.
 - `reference_group` — reference treatment (default: the first network's).
@@ -693,7 +692,7 @@ a single forest plot).
 
 **Returns**
 
-- `:class` — `NetbindResult`.
+`NetbindResult`.
 
 ## `NetbindResult`
 
@@ -703,7 +702,7 @@ NetbindResult(common, random, sm, reference_group, baseline_reference, names, ne
 
 *Mirrors R's `netbind`.*
 
-Result of :func:`netbind` (``netmeta::netbind``).
+Result of `netbind` (``netmeta::netbind``).
 
 ## `crossnma2netmeta`
 
@@ -730,7 +729,7 @@ level table with the columns ``studlab``, ``treat1``, ``treat2``, ``TE`` and
 
 **Returns**
 
-- `:class` — `NetmetaResult`.
+`NetmetaResult`.
 
 ## `gemtc2netmeta`
 
@@ -755,7 +754,7 @@ converted into consecutive within-study contrasts.
 
 **Returns**
 
-- `:class` — `NetmetaResult`.
+`NetmetaResult`.
 
 ## `treats`
 
@@ -804,7 +803,7 @@ better).  Equations (transcribed from ``netmeta:::vikor_internal``)::
 
 **Returns**
 
-- `:class` — `VikorResult` sorted by increasing ``Q`` (best first).
+`VikorResult` sorted by increasing ``Q`` (best first).
 
 ## `VikorResult`
 
@@ -812,7 +811,7 @@ better).  Equations (transcribed from ``netmeta:::vikor_internal``)::
 VikorResult(Q, S, R, trts, weights, v, dropped)
 ```
 
-Result of :func:`vikor` — VIKOR ranking statistics.
+Result of `vikor` — VIKOR ranking statistics.
 
 ## `subgroup`
 
@@ -826,7 +825,7 @@ subgroup(result, subgroup, only_connected=False, method_tau=None, level_ma=None,
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `subgroup` — one subgroup label per **study**.
 - `only_connected` — error out when a subgroup network is disconnected.
 - `method_tau` — heterogeneity estimator (defaults to the model's).
@@ -835,9 +834,7 @@ subgroup(result, subgroup, only_connected=False, method_tau=None, level_ma=None,
 
 **Returns**
 
-- `:class` — `NetsubgroupResult` with per-level 3-D arrays
-``TE_common``/``seTE_common``/``TE_random``/``seTE_random`` of shape
-``(n, n, n_levels)`` and the fitted networks.
+`NetsubgroupResult` with per-level 3-D arrays ``TE_common``/``seTE_common``/``TE_random``/``seTE_random`` of shape ``(n, n, n_levels)`` and the fitted networks.
 
 ## `NetsubgroupResult`
 
@@ -845,7 +842,7 @@ subgroup(result, subgroup, only_connected=False, method_tau=None, level_ma=None,
 NetsubgroupResult(**kw)
 ```
 
-Result of :func:`subgroup` for a netmeta object.
+Result of `subgroup` for a netmeta object.
 
 ## `nettable`
 
@@ -862,12 +859,12 @@ number of two-arm studies, the direct estimate and the network estimate.
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `level` — confidence level (kept for API parity).
 
 **Returns**
 
-- `:class` — `NettableResult`.
+`NettableResult`.
 
 ## `NettableResult`
 
@@ -875,7 +872,7 @@ number of two-arm studies, the direct estimate and the network estimate.
 NettableResult(rows, trts)
 ```
 
-Result of :func:`nettable` — per-comparison summary of the network.
+Result of `nettable` — per-comparison summary of the network.
 
 ## `createC`
 
@@ -958,7 +955,7 @@ as ``tau_preset``; the reported impact is ``1 - (seTE / seTE_removed)^2``.
 
 **Returns**
 
-- `:class` — `NetimpactResult` — ``impact_common``/``impact_random`` map
+`NetimpactResult` — ``impact_common``/``impact_random`` map
 - `study labels to ``{comparison` — impact}`` dictionaries.
 
 ## `NetimpactResult`
@@ -969,7 +966,7 @@ NetimpactResult(impact_common, impact_random, comparisons, studies, ignored_comp
 
 *Mirrors R's `netimpact`.*
 
-Result of :func:`netimpact` (``netmeta::netimpact``).
+Result of `netimpact` (``netmeta::netimpact``).
 
 ## `netpath`
 
@@ -988,7 +985,7 @@ consistent with the network estimate.
 
 **Args**
 
-- `result` — a :class:`NetmetaResult`.
+- `result` — a `NetmetaResult`.
 - `node1, node2` — the treatment contrast of interest.
 - `random` — use the random-effects model.
 

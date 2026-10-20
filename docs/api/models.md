@@ -81,7 +81,7 @@ pool_yv(y: 'list[float]', v: 'list[float]', n: 'list[float] | None', effect_type
 
 Pool analysis-scale ``(y, v)`` arrays directly.
 
-This is the shared numeric core behind :func:`run_meta` and the
+This is the shared numeric core behind `run_meta` and the
 binary-data wrappers (metabin). ``y`` must already be on the analysis
 scale (log scale for ratio types).
 
@@ -395,8 +395,8 @@ Fit a univariate meta-analysis model (``metafor::rma``).
 - `level` — confidence level (0.95 -> 95% CI).  alpha = 1 - level.
 - `btt` — 1-based coefficient indices to include in the QM omnibus test (default: the intercept for intercept-only models, otherwise all moderator coefficients).
 - `digits` — printing precision (recorded only).
-- `scale, scale_intercept, link, optbeta, alpha` — when ``scale`` is given a location-scale model is fitted instead (``rma(yi, vi, mods=~x, scale=~z)`` in R, class ``rma.ls``); the fit is delegated to :func:`pimeta.rma_ls` and an :class:`~pimeta.RmaLsResult` is returned.
-- `warn_missing` — emit a :class:`~pimeta.missing.MissingDataWarning` naming the studies dropped because ``yi``, ``vi`` or a moderator is missing.  R drops them silently through ``na.action``; pass ``False`` to drop them silently here too.
+- `scale, scale_intercept, link, optbeta, alpha` — when ``scale`` is given a location-scale model is fitted instead (``rma(yi, vi, mods=~x, scale=~z)`` in R, class ``rma.ls``); the fit is delegated to `rma_ls` and an `RmaLsResult` is returned.
+- `warn_missing` — emit a `missing.MissingDataWarning` naming the studies dropped because ``yi``, ``vi`` or a moderator is missing.  R drops them silently through ``na.action``; pass ``False`` to drop them silently here too.
 
 ## `RmaResult`
 
@@ -418,7 +418,7 @@ Fit a publication-bias selection model on an existing ``rma`` fit.
 
 **Args**
 
-- `x` — fitted ``RmaResult`` (from :func:`rma`).
+- `x` — fitted ``RmaResult`` (from `rma`).
 - `type` — selection model type (one of ``TYPE_OPTIONS``, prefix-matched).
 - `alternative` — "greater" (default), "less" or "two.sided".
 - `prec` — optional precision weights ("sei"/"vi"/"ninv"/"sqrtninv").
@@ -432,7 +432,7 @@ Fit a publication-bias selection model on an existing ``rma`` fit.
 
 **Returns**
 
-- `:class` — `SelModelResult` with the full metafor ``$`` field set.
+`SelModelResult` with the full metafor ``$`` field set.
 
 ## `SelModelResult`
 
@@ -452,7 +452,7 @@ SelProfileResult(delta, ll, maxll, delta_hat, ci_lb, ci_ub, level, type_, k)
 
 *Mirrors R's `profile.rma.uni.selmodel`.*
 
-Result of :func:`profile_selmodel` (``profile.rma.uni.selmodel``).
+Result of `profile_selmodel` (``profile.rma.uni.selmodel``).
 
 ``delta`` holds the profiled selection parameters, ``ll`` the corresponding
 maximised log-likelihoods and ``ci_lb``/``ci_ub`` the profile-likelihood
@@ -475,7 +475,7 @@ differ in the third or fourth digit.
 
 **Args**
 
-- `result` — :class:`SelModelResult` from :func:`selmodel`.
+- `result` — `SelModelResult` from `selmodel`.
 - `delta` — explicit grid (default: ``n_points`` values spanning ``delta_hat +/- span * |delta_hat|``, or +/-2 when ``delta_hat == 0``).
 - `n_points` — grid size when ``delta`` is not given.
 - `span` — half-width of the default grid, as a multiple of ``|delta_hat|``.
@@ -483,7 +483,7 @@ differ in the third or fourth digit.
 
 **Returns**
 
-- `:class` — `SelProfileResult`.
+`SelProfileResult`.
 
 ## `rma_ls`
 
@@ -540,16 +540,16 @@ metafor's ``.profile.rma.ls`` does (``rma(..., scale=Z, alpha=c(NA, v))``).
 
 **Args**
 
-- `x` — a :class:`RmaLsResult`.
+- `x` — a `RmaLsResult`.
 - `alpha` — 1-based index of the scale coefficient to profile (metafor's ``alpha=``).  Defaults to the first non-fixed coefficient.
 - `steps` — number of grid points, or an explicit sequence of values.
 - `xlim` — profiling range; by default ``vc ± qnorm(0.995) * se.alpha`` around the estimate, like metafor.
 - `plot` — draw the profile plot immediately.
-- `**kw` — forwarded to :func:`pimeta.plotting.plot_mv_profile`.
+- `**kw` — forwarded to `plotting.plot_mv_profile`.
 
 **Returns**
 
-- `:class` — `RmaLsProfileResult`.
+`RmaLsProfileResult`.
 
 ## `RmaLsProfileResult`
 
@@ -559,7 +559,7 @@ RmaLsProfileResult(component, index, alpha, ll, maxll, beta, ci_lb, ci_ub, vc, m
 
 *Mirrors R's `profile.rma.ls`.*
 
-Result of :func:`profile_rma_ls` (mirrors ``profile.rma.ls`` objects).
+Result of `profile_rma_ls` (mirrors ``profile.rma.ls`` objects).
 
 ``alpha`` holds the profiling grid (the values of the chosen scale
 coefficient), ``ll`` the maximised log-likelihood at each grid point and
@@ -581,4 +581,4 @@ confint_rma_ls(x, parm=None, level=None, digits=4)
 ``estimate``, ``ci_lb``, ``ci_ub``, ``level`` and ``parm``.
 
 metafor additionally supports profile-likelihood intervals here; use
-:func:`profile_rma_ls` and invert the profile yourself for those.
+`profile_rma_ls` and invert the profile yourself for those.

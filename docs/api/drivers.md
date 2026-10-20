@@ -224,8 +224,9 @@ Generic inverse-variance meta-analysis (mirrors ``meta::metagen``).
 - `level` — confidence level for the pooled estimates.
 - `level_predict` — confidence level for the prediction interval.
 - `null_effect` — null hypothesis value on the analysis scale (default 0).
-- `rns a` — class:`MetagenResult` whose numeric fields are on the analysis
-e, exactly matching R's ``$TE.common``, ``$lower.random``, etc.
+
+Returns a `MetagenResult` whose numeric fields are on the analysis
+scale, exactly matching R's ``$TE.common``, ``$lower.random``, etc.
 
 ## `MetagenResult`
 
@@ -324,20 +325,20 @@ metabind(*results, method_tau='REML', sm=None, studlab=None, level=0.95)
 ``meta::metabind`` — combine several meta-analyses into a single one.
 
 The study-level estimates of all inputs are concatenated and re-pooled with
-:func:`~.metagen.metagen`, which is what ``meta::metabind`` does (it keeps
+`.metagen.metagen`, which is what ``meta::metabind`` does (it keeps
 the individual study rows rather than the summary estimates).
 
 **Args**
 
 - `*results` — meta-analysis result objects exposing ``TE``/``seTE``.
-- `method_tau` — ``tau^2`` estimator passed to :func:`metagen`.
+- `method_tau` — ``tau^2`` estimator passed to `metagen`.
 - `sm` — effect measure; defaults to the ``sm`` of the first input.
 - `studlab` — optional study labels (one per input study).
 - `level` — confidence level (0.95).
 
 **Returns**
 
-- `:class` — `MetabindResult`.
+`MetabindResult`.
 
 **Raises**
 
@@ -359,16 +360,16 @@ values directly through ``type``/``TE``/``lower``/``upper``/``se``.
 
 **Args**
 
-- `result` — a :class:`~.metagen.MetagenResult`.
+- `result` — a `.metagen.MetagenResult`.
 - `type` — ``"common"``, ``"random"``, ``"prediction"`` or ``"tau2"``.
 - `TE, lower, upper, statistic, pval, df, se` — the result to append.
 - `method, method_ci` — labels for the estimation method.
 - `text` — label used when printing.
-- `data` — alternatively a :class:`~.metagen.MetagenResult` whose pooled results are appended.
+- `data` — alternatively a `.metagen.MetagenResult` whose pooled results are appended.
 
 **Returns**
 
-- `:class` — `MetaaddResult`.
+`MetaaddResult`.
 
 ## `MetaaddResult`
 
@@ -378,7 +379,7 @@ MetaaddResult(base, added, common, random, prediction)
 
 *Mirrors R's `metaadd`.*
 
-Result of :func:`metaadd` (``meta::metaadd``).
+Result of `metaadd` (``meta::metaadd``).
 
 ``meta::metaadd`` appends additional *pooled* results (from another
 meta-analysis or supplied directly) to a ``meta`` object.  In R those
@@ -388,7 +389,7 @@ ones.
 
 **Attributes**
 
-- `base` — the original :class:`~.metagen.MetagenResult`.
+- `base` — the original `.metagen.MetagenResult`.
 - `added` — list of ``dict`` rows, one per appended result, with the keys ``type``, ``TE``, ``se``, ``lower``, ``upper``, ``statistic``, ``pval``, ``df``, ``method``, ``method_ci``, ``text``.
 - `common, random, prediction` — whether the corresponding model is present after the additions.
 - `is_metaadd` — always ``True`` (mirrors the ``"metaadd"`` class tag).
@@ -416,8 +417,7 @@ in the returned object.
 
 **Returns**
 
-- `:class` — `MetabindResult` whose ``meta`` is the pooled combination and
-which additionally carries ``x``/``y`` for the two inputs.
+`MetabindResult` whose ``meta`` is the pooled combination and which additionally carries ``x``/``y`` for the two inputs.
 
 ## `MetabindResult`
 
@@ -425,11 +425,11 @@ which additionally carries ``x``/``y`` for the two inputs.
 MetabindResult(meta, TE, seTE, studlab, sm, parts)
 ```
 
-Result of :func:`metabind` — a combined meta-analysis.
+Result of `metabind` — a combined meta-analysis.
 
 **Attributes**
 
-- `meta` — the pooled :class:`~.metagen.MetagenResult`.
+- `meta` — the pooled `.metagen.MetagenResult`.
 - `TE` — concatenated study effects.
 - `seTE` — concatenated standard errors.
 - `studlab` — concatenated study labels.
@@ -460,7 +460,7 @@ metacr(x, comp_no=1, outcome_no=1, method=None, sm=None, common=True, random=Tru
 
 **Returns**
 
-- `:class` — `MetacrResult`, or ``None`` when the selection is empty.
+`MetacrResult`, or ``None`` when the selection is empty.
 
 ## `MetacrResult`
 
@@ -470,7 +470,7 @@ MetacrResult(meta, comp_no, outcome_no, type, sm, method, swap_events, n_studies
 
 *Mirrors R's `metacr`.*
 
-Result of :func:`metacr` (``meta::metacr``).
+Result of `metacr` (``meta::metacr``).
 
 ``meta::metacr`` operates on a RevMan 5 (``.rm5``) or Cochrane data
 (``.cdir``) object, selects one comparison and outcome, and re-runs the
