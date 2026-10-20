@@ -320,11 +320,12 @@ def _nma_ruecker(te, se_adj, treat1_pos, treat2_pos, narms, studlab, n, level):
         statistic = te_pooled / se_pooled
     pval = 2.0 * stats.norm.sf(np.abs(statistic))
 
-    # Diagonal: netmeta leaves TE on the diagonal NA (the ``all`` matrix is
-    # never filled on its diagonal); seTE diagonal is sqrt(0) = 0.
-    np.fill_diagonal(te_pooled, np.nan)
-    np.fill_diagonal(lower, np.nan)
-    np.fill_diagonal(upper, np.nan)
+    # Diagonal, matching R: a treatment against itself has effect 0 and no
+    # uncertainty, so TE / lower / upper are 0.  The z statistic and p-value
+    # are 0/0 and stay NaN (netmeta prints NaN there too).
+    np.fill_diagonal(te_pooled, 0.0)
+    np.fill_diagonal(lower, 0.0)
+    np.fill_diagonal(upper, 0.0)
     np.fill_diagonal(statistic, np.nan)
     np.fill_diagonal(pval, np.nan)
 
@@ -5185,8 +5186,8 @@ def netmetabin(
         lo_r = te_r - zz * se_r
         up_r = te_r + zz * se_r
         np.fill_diagonal(se_r, 0.0)
-        np.fill_diagonal(lo_r, float("nan"))
-        np.fill_diagonal(up_r, float("nan"))
+        np.fill_diagonal(lo_r, 0.0)
+        np.fill_diagonal(up_r, 0.0)
 
     return NetmetabinResult(
         trts=res["trts"], k=res["k"], m=res["m"], n=res["n"], d=res["d"],

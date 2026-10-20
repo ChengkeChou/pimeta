@@ -287,7 +287,8 @@ def _gh_rule(n=200):
     return nodes, weights / math.sqrt(2.0 * math.pi)
 
 
-_GH_RULE_CACHE = {}
+#: Cache of Gauss-Hermite rules, keyed by the number of nodes.
+_GH_RULE_CACHE: dict[int, tuple[np.ndarray, np.ndarray]] = {}
 
 
 def _gh():

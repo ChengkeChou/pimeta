@@ -65,10 +65,12 @@ print(f"tau^2 的 95% CI : [{ci_tau2['ci_lb']:.4f}, {ci_tau2['ci_ub']:.4f}]")"""
     ("code", """tidy = ma.interop.tidy(res)
 glance = ma.interop.glance(res)
 
-print(tidy.to_string(index=False))
+# 装了 pandas 就是 DataFrame，没装就是按列的 dict —— 两种都能直接看。
+print(tidy.to_string(index=False) if hasattr(tidy, "to_string") else tidy)
 print()
-print(f"k = {int(glance['k'].iloc[0])}, AIC = {float(glance['AIC'].iloc[0]):.3f}, "
-      f"BIC = {float(glance['BIC'].iloc[0]):.3f}")"""),
+row = glance.iloc[0] if hasattr(glance, "iloc") else {k: v[0] for k, v in glance.items()}
+print(f"k = {int(row['k'])}, AIC = {float(row['AIC']):.3f}, "
+      f"BIC = {float(row['BIC']):.3f}")"""),
     ("markdown", """## 小结
 
 - `escalc()` 算效应量（比值类返回**对数尺度**）

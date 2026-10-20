@@ -594,8 +594,9 @@ class _GENComp:
         self.q = q
         self._k = Z_cols[0].shape[0]
         self._n_rho = q * (q - 1) // 2
-        self._outer = outer if outer is not None else np.argmax(Z_cols[0], axis=1)
-        n_lev = int(self._outer.max()) + 1
+        self._outer = np.asarray(
+            outer if outer is not None else np.argmax(Z_cols[0], axis=1))
+        n_lev = int(np.max(self._outer)) + 1
         self.outer_labels = outer_labels if outer_labels is not None else [str(i) for i in range(n_lev)]
         self.var_names = var_names if var_names is not None else ["intrcpt"] + [f"v{i}" for i in range(1, q)]
         self.name = name if name is not None else "gen"

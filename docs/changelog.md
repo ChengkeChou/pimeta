@@ -8,6 +8,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **An R parity fixture for the network side.**
+  `tools/r_reference/netmeta_senn2013.R` dumps every quantity that matters from
+  R (netmeta 3.7-0, metafor 5.2-1) on `Senn2013` into
+  `tests/data/_r_senn2013.tsv`: the fitted model (k, m, n, Q, tau^2, I^2), both
+  contrast matrices, the whole design-by-treatment decomposition
+  (`Q.decomp`, `Q.het.design`, `Q.inc.detach`, the element-wise `Q.inc.design`,
+  and `Q.inc.random` with its `tau.within`), the P-score ranking, `netmeasures`
+  and `netsplit`. `tests/test_r_parity_senn2013.py` recomputes all of it —
+  fixed-effect quantities must agree to 1e-12, random-effects ones to 1e-7
+  because R's REML stopping rule leaves `tau^2` about 1e-8 off in relative
+  terms and that propagates into every standard error.
 - **Command-line interface.** `pimeta` (and `python -m pimeta`) with three
   subcommands, so the common analyses need no Python at all:
   - `pimeta fit data.csv --yi TE --vi seTE2 [--mods "~ dose + year"]` —
@@ -227,6 +238,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **The diagonal of `netmeta()`'s `TE` matrices was `NaN` where R reports 0.**
+  `TE.common`, `TE.random` and the matching `lower`/`upper` matrices are now 0
+  on the diagonal, because a treatment against itself has effect 0 and no
+  uncertainty; `seTE` was already right, and the `statistic`/`pval` diagonals
+  stay `NaN` exactly as in R. Same correction for the random-effects bounds of
+  `netmetabin(method="LRP")`. Found by the new Senn2013 parity fixture, which
+  compares the full n x n matrices rather than a handful of contrasts.
 - **`matreg()` was not metafor's `matreg`.** It pooled the y–x correlations in
   an intercept-only fixed-effect model instead of solving the standardised
   path model, so every number it returned differed from R — and the object

@@ -86,7 +86,8 @@ def to_networkx(result, weight: str = "inverse_variance", directed: bool = False
         lambda: {"n": 0, "te": [], "se": [], "studies": []})
     for i, (a, b) in enumerate(zip(treat1, treat2)):
         a, b = str(a), str(b)
-        key = (a, b) if directed else tuple(sorted((a, b)))
+        # sorted() would be typed as an arbitrary-length tuple; a pair is exact.
+        key: tuple[str, str] = (a, b) if directed else (min(a, b), max(a, b))
         bucket = buckets[key]
         bucket["n"] += 1
         if i < len(te):
