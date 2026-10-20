@@ -1768,6 +1768,15 @@ def netmeta(
     treat1_raw = list(treat1)
     treat2_raw = list(treat2)
 
+    # R: "Treatments must be different (arguments 'treat1' and 'treat2')."
+    # Without this guard a self-comparison slips through the fit and later
+    # trips a bare StopIteration inside the Krahn decomposition.
+    same = [i for i in range(m) if treat1[i] == treat2[i]]
+    if same:
+        raise ValueError(
+            "Treatments must be different (arguments 'treat1' and 'treat2'). "
+            f"Comparison {same[0] + 1} has {treat1[same[0]]!r} on both sides.")
+
     if method_tau.upper() not in ("DL", "ML", "REML"):
         raise ValueError(
             f"method_tau={method_tau!r} not supported; use 'DL' (Jackson "

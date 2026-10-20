@@ -238,6 +238,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **A self-comparison is rejected instead of silently fitted.** `netmeta()` and
+  `netmetabin()` accepted a row whose two treatments were the same, which
+  produced a meaningless fit and later surfaced as a bare `StopIteration`
+  inside `decomp_design()`. Both now raise R's own message —
+  `Treatments must be different (arguments 'treat1' and 'treat2').` — naming
+  the offending comparison.
 - **The diagonal of `netmeta()`'s `TE` matrices was `NaN` where R reports 0.**
   `TE.common`, `TE.random` and the matching `lower`/`upper` matrices are now 0
   on the diagonal, because a treatment against itself has effect 0 and no

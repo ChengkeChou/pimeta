@@ -419,6 +419,44 @@ def test_decomp_design_warns_for_a_two_treatment_network():
         assert ma.decomp_design(m) is None
 
 
+def test_decomp_design_matches_r_on_a_triangle():
+    """A three-treatment triangle, the smallest design-by-treatment case.
+
+    R (netmeta 3.7-0)::
+
+        netmeta(TE = c(0.2, 0.3, -0.1), seTE = c(0.1, 0.12, 0.15),
+                treat1 = c("A", "B", "C"), treat2 = c("B", "C", "A"), sm = "MD")
+        decomp.design(net)$Q.decomp
+        #   Total           3.411513859  1  0.06474302636
+        #   Within designs  7.703719778e-32  0  NA
+        #   Between designs 3.411513859  1  0.06474302636
+    """
+    net = ma.netmeta([0.2, 0.3, -0.1], [0.1, 0.12, 0.15],
+                     ["A", "B", "C"], ["B", "C", "A"], sm="MD")
+    dd = ma.decomp_design(net)
+    total = dd.Q_decomp["Total"]
+    between = dd.Q_decomp["Between designs"]
+    within = dd.Q_decomp["Within designs"]
+    assert total[0] == pytest.approx(3.411513859, abs=1e-8)
+    assert total[1] == 1.0
+    assert total[2] == pytest.approx(0.06474302636, abs=1e-10)
+    assert within[0] == pytest.approx(0.0, abs=1e-20)
+    assert within[1] == 0.0
+    assert between[0] == pytest.approx(3.411513859, abs=1e-8)
+
+
+def test_netmeta_rejects_a_self_comparison():
+    """R errors instead of silently fitting a treatment against itself."""
+    with pytest.raises(ValueError, match="Treatments must be different"):
+        ma.netmeta([0.2, 0.3, -0.1], [0.1, 0.12, 0.15],
+                   ["A", "B", "C"], ["B", "C", "C"])
+
+
+def test_netmetabin_rejects_a_self_comparison():
+    with pytest.raises(ValueError, match="Treatments must be different"):
+        ma.netmetabin([1, 2], [10, 20], [2, 3], [12, 18], ["A", "B"], ["A", "B"])
+
+
 # ---------------------------------------------------------------------------
 # netdistance / netmatrix / netconnection / netcomplexity
 # ---------------------------------------------------------------------------

@@ -703,6 +703,13 @@ def netmetabin(
     if not (len(n1) == len(event2) == len(n2) == len(treat1) == len(treat2) == m):
         raise ValueError("event1, n1, event2, n2, treat1, treat2 must match")
 
+    # R: "Treatments must be different (arguments 'treat1' and 'treat2')."
+    same = [i for i in range(m) if treat1[i] == treat2[i]]
+    if same:
+        raise ValueError(
+            "Treatments must be different (arguments 'treat1' and 'treat2'). "
+            f"Comparison {same[0] + 1} has {treat1[same[0]]!r} on both sides.")
+
     if studlab is None:
         studlab = [f"{i + 1}" for i in range(m)]
     else:
