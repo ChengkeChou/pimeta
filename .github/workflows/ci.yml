@@ -47,7 +47,47 @@ jobs:
         run: python -c "import sys,numpy,scipy,matplotlib,pimeta; print(sys.version.split()[0], '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| matplotlib', matplotlib.__version__, '| pimeta', pimeta.__version__)"
 
       - name: Run the test suite with coverage
-        run: python -m pytest tests/ -q --cov=src/pimeta --cov-report=term-missing:skip-covered --cov-report=xml
+        # `pipefail` keeps pytest's exit code through the `tee`; the log is
+        # needed by the next step because the runner log itself is not
+        # readable without a token.
+        run: |
+          set -o pipefail
+          python -m pytest tests/ -q --cov=src/pimeta \
+            --cov-report=term-missing:skip-covered --cov-report=xml 2>&1 | tee pytest.log
+
+      - name: Surface the failure in the check annotations
+        # Turns the pytest log into `::error` annotations, which are readable
+        # from the public checks API — the only way to see why a run failed
+        # without downloading the (token-only) runner log.
+        if: failure()
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+
+          log = pathlib.Path("pytest.log")
+          text = log.read_text(errors="replace") if log.exists() else ""
+
+          failed = [l for l in text.splitlines() if l.startswith(("FAILED ", "ERROR "))]
+          for line in failed[:25]:
+              print(f"::error title=pytest::{line[:900]}")
+
+          match = re.search(
+              r"=+ FAILURES =+(.+?)(?=\n=+ (?:short test summary|warnings summary|slowest))",
+              text, re.S)
+          if match:
+              first = " ".join(match.group(1).split())
+              print(f"::error title=first failure::{first[:6000]}")
+          elif failed:
+              print("::error title=pytest::no FAILURES section captured")
+
+          tail = [l for l in text.splitlines() if re.search(r"\d+ (?:failed|passed)", l)]
+          if tail:
+              print(f"::error title=pytest summary::{tail[-1][:900]}")
+          warnings = re.search(r"=+ warnings summary =+(.+?)(?=\n=+ |\Z)", text, re.S)
+          if warnings:
+              text_warn = " ".join(warnings.group(1).split())
+              print(f"::error title=pytest warnings::{text_warn[:3000]}")
 
       - name: Upload coverage report
         if: matrix.python == '3.12'
