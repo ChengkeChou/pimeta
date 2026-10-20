@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from scipy import stats
@@ -545,7 +546,7 @@ class _StructComp:
             n_tau = self._n_free_tau2
         else:
             n_tau = 1
-        b = [(0.0, None)] * n_tau
+        b: list[tuple[float, float | None]] = [(0.0, None)] * n_tau
         if self.has_rho:
             if self.struct == "CAR":
                 b.append((1e-9, 1.0 - 1e-9))
@@ -699,7 +700,7 @@ class _UNComp:
                  outer_labels: list[str] | None = None,
                  name: str | None = None,
                  fixed_tau2: np.ndarray | None = None,
-                 fixed_rho: np.ndarray | None = None):
+                 fixed_rho: np.ndarray | bool | None = None):
         self.inner_idx = inner_idx
         self.outer_groups = outer_groups
         self.J = J
@@ -878,7 +879,7 @@ def _build_components(descs: list[dict], data, k: int,
     ``~ inner | outer`` terms, mirroring ``rma.mv`` where a supplied ``rho`` is
     a fixed value rather than a starting value.
     """
-    comps = []
+    comps: list[Any] = []
     rho_list = None
     if rho is not None:
         rho_list = list(rho) if isinstance(rho, (list, tuple, np.ndarray)) else [rho]
@@ -939,13 +940,13 @@ def _build_components(descs: list[dict], data, k: int,
             outer_groups, outer_levels = _encode_levels(outer_vals)
             J = int(inner_idx.max()) + 1
             fixed_tau2 = _levels_k(inner_idx, outer_groups, J) == 1
-            fixed_rho = _cooccur_comb_k(inner_idx, outer_groups, J) == 0
+            fixed_rho_un = _cooccur_comb_k(inner_idx, outer_groups, J) == 0
             comps.append(_UNComp(inner_idx, outer_groups, J,
                                  inner_labels=[str(x) for x in inner_levels],
                                  outer_labels=[str(x) for x in outer_levels],
                                  name=desc.get("name"),
                                  fixed_tau2=fixed_tau2,
-                                 fixed_rho=fixed_rho))
+                                 fixed_rho=fixed_rho_un))
         elif kind == "gen":
             vars_ = desc["vars"]
             no_intercept = any(v in ("0", "-1", "- 1") for v in vars_)
@@ -1008,7 +1009,7 @@ def rma_mv(
     method: str = "REML",
     level: float = 95.0,
     test: str = "z",
-    dfs: str = "residual",
+    dfs: str | np.ndarray = "residual",
     intercept: bool = True,
     sigma2=None,
     slab=None,
@@ -1220,22 +1221,22 @@ def rma_mv(
     ll_fitted = fit_stats[method]["ll"]
 
     # collect variance-component summaries
-    sigma2: list[float] = []
-    tau2: list[float] = []
-    rho: list[float] = []
+    sigma2_vals: list[float] = []
+    tau2_vals: list[float] = []
+    rho_vals: list[float] = []
     offset = 0
     for c in components:
         s2, t2, r = c.report(params[offset : offset + c.n_params])
         offset += c.n_params
-        sigma2.extend(s2)
-        tau2.extend(t2)
-        rho.extend(r)
+        sigma2_vals.extend(s2)
+        tau2_vals.extend(t2)
+        rho_vals.extend(r)
 
     return RmaMvResult(
         method=method,
         k=k,
         p=p,
-        sigma2=sigma2,
+        sigma2=sigma2_vals,
         beta=[float(b) for b in beta.ravel()],
         se=[float(s) for s in se],
         zval=[float(z) for z in zval],
@@ -1252,8 +1253,8 @@ def rma_mv(
         X=X,
         yi=Y.ravel(),
         level=level,
-        tau2=tau2 or None,
-        rho=rho or None,
+        tau2=tau2_vals or None,
+        rho=rho_vals or None,
         ll=ll_fitted,
         parms=parms,
         fit_stats=fit_stats,
@@ -1264,7 +1265,7 @@ def rma_mv(
         V=V,
         mods=mods,
         struct=str(struct),
-        dfs=(dfs if not isinstance(dfs, np.ndarray) else dfs.tolist()),
+        dfs=(dfs.tolist() if isinstance(dfs, np.ndarray) else dfs),
         intercept_incl=bool(intercept),
         slab=([str(v) for v in slab] if slab is not None
               else [f"Study {i + 1}" for i in range(k)]),
@@ -1500,6 +1501,7 @@ def robust(
 
     n = len(np.unique(cluster))
     dfs = n - p
+    dfs_out: list[float] | float
 
     if clubSandwich:
         vb_robust, E_list, X_list, Omega_list, B = _cr_vcov(result, cluster, vcov)
@@ -1588,21 +1590,23 @@ def anova_rma(full: RmaMvResult, reduced: RmaMvResult, df: int | None = None):
     if full.k != reduced.k:
         raise ValueError("models must be fitted to the same data")
 
-    parms_f = full.parms
-    parms_r = reduced.parms
+    parms_f = int(full.parms or 0)
+    parms_r = int(reduced.parms or 0)
     if parms_f < parms_r:  # ensure 'full' has more parameters
         full, reduced = reduced, full
         parms_f, parms_r = parms_r, parms_f
 
     method = full.method
-    dev_f = full.fit_stats[method]["dev"]
-    dev_r = reduced.fit_stats[method]["dev"]
+    stats_f = full.fit_stats or {}
+    stats_r = reduced.fit_stats or {}
+    dev_f = float(stats_f.get(method, {}).get("dev") or 0.0)
+    dev_r = float(stats_r.get(method, {}).get("dev") or 0.0)
     lrt = max(dev_r - dev_f, 0.0)
     parms_diff = (parms_f - parms_r) if df is None else df
     pval = float(stats.chi2.sf(lrt, parms_diff))
 
     def _row(r: RmaMvResult) -> dict:
-        fs = r.fit_stats[method]
+        fs = (r.fit_stats or {}).get(method, {})
         return {
             "df": r.parms,
             "AIC": fs["AIC"],
@@ -1665,12 +1669,12 @@ def ranef(result: RmaMvResult, level: float | None = None) -> dict:
         elif c.kind in ("cs", "struct", "un"):
             # deduplicate the per-observation predictions by unique inner|outer
             seen: dict = {}
-            keep: list[int] = []
+            keep_idx: list[int] = []
             for i, lab in enumerate(labels):
                 if lab not in seen:
                     seen[lab] = i
-                    keep.append(i)
-            keep = np.asarray(keep, dtype=int)
+                    keep_idx.append(i)
+            keep = np.asarray(keep_idx, dtype=int)
             pi_lb = b[keep] - crit * se[keep]
             pi_ub = b[keep] + crit * se[keep]
             out[c.name] = {

@@ -9,6 +9,7 @@ Replicates ``meta::metamean``:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -101,7 +102,9 @@ def metamean(
         else None
     )
 
-    bt = math.exp if sm == "MLN" else (lambda x: x)
+    bt: Callable[[float], float] = (
+        (lambda x: math.exp(x)) if sm == "MLN" else (lambda x: x)
+    )
 
     def _ci(res: PooledResult):
         lo = res.pooled_est - Z_975 * res.pooled_se

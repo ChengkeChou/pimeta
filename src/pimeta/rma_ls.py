@@ -575,6 +575,8 @@ def rma_ls(
     P = (np.diag(w0) - (np.diag(w0) @ X @ stXWX0
                         @ (X.T @ np.diag(w0))))
     vt = float((k - p) / np.trace(P)) if k > p else 0.0
+    I2: list[float] | None
+    H2: list[float] | None
     if k > p and vt > 0:
         I2 = [100.0 * t / (vt + t) for t in tau2]
         H2 = [t / vt + 1.0 for t in tau2]

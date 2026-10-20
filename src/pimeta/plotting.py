@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, cast
 
 import matplotlib
 
@@ -154,11 +154,8 @@ def forest(
         order = np.argsort(yi)
 
     # Reuse a provided axis or create a new figure.
-    if ax is None:
-        h = max(4.0, 0.45 * k + 2.0)
-        fig, ax = plt.subplots(figsize=figsize or (7.0, h))
-    else:
-        fig = ax.figure
+    h = max(4.0, 0.45 * k + 2.0)
+    fig, ax = _new_ax(ax, figsize or (7.0, h))
 
     ypos = np.arange(k)[::-1].astype(float)  # first study at the top
 
@@ -188,8 +185,8 @@ def forest(
             ci_l = getattr(pooled, "pooled_ci_lower", None)
             ci_u = getattr(pooled, "pooled_ci_upper", None)
             p_se = getattr(pooled, "pooled_se", None)
-            if ratio and ci_l is not None:
-                ci_l, ci_u = math.log(ci_l), math.log(ci_u)
+            if ratio and ci_l is not None and ci_u is not None:
+                ci_l, ci_u = math.log(float(ci_l)), math.log(float(ci_u))
             elif p_se is not None:
                 ci_l = p_est - 1.95996398454 * p_se
                 ci_u = p_est + 1.95996398454 * p_se
@@ -254,10 +251,7 @@ def funnel(
     ratio = _is_ratio(effect_type)
     labels = _studlab(studlab, k)
 
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.figure
+    fig, ax = _new_ax(ax, figsize)
 
     ax.scatter(yi, se, s=40, c="0.2", edgecolors="k", linewidths=0.5, zorder=3)
 
@@ -314,7 +308,8 @@ def netgraph(
 
     pair_count: dict[tuple[str, str], int] = {}
     for a, b in zip(treat1, treat2):
-        key = tuple(sorted((str(a), str(b))))
+        ta, tb = str(a), str(b)
+        key: tuple[str, str] = (ta, tb) if ta <= tb else (tb, ta)
         pair_count[key] = pair_count.get(key, 0) + 1
 
     edges = []
@@ -324,10 +319,7 @@ def netgraph(
             edges.append((a, b))
             widths.append(cnt)
 
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.figure
+    fig, ax = _new_ax(ax, figsize)
 
     # Circular layout: treatments evenly spaced, starting from the top.
     n = len(trts)
@@ -363,11 +355,19 @@ def netgraph(
 # Additional metafor / meta / netmeta figures
 # --------------------------------------------------------------------------- #
 
-def _new_ax(ax, figsize):
-    if ax is not None:
-        return ax.figure, ax
-    fig, ax = plt.subplots(figsize=figsize or (6.5, 5.0))
-    return fig, ax
+def _new_ax(ax: plt.Axes | None = None,
+            figsize=None) -> tuple[plt.Figure, plt.Axes]:
+    """Return ``(figure, axes)``, reusing ``ax`` when one was supplied.
+
+    ``Axes.figure`` is typed ``Figure | SubFigure | None`` because an axes can
+    live on a subfigure; a standalone axes always has a real figure, so the
+    cast is exact.  Keeping this in one place means the plotting functions do
+    not each repeat an untyped ``plt.subplots`` branch.
+    """
+    if ax is None:
+        fig, new_ax = plt.subplots(figsize=figsize or (6.5, 5.0))
+        return fig, new_ax
+    return cast(plt.Figure, ax.figure), ax
 
 
 def radial(
@@ -634,19 +634,19 @@ def drapery(
         b = float(np.sum(w * yi) / np.sum(w))
         betas.append(b)
         ses.append(math.sqrt(1.0 / float(np.sum(w))))
-    betas = np.array(betas)
-    ses = np.array(ses)
+    beta_arr = np.array(betas)
+    se_arr = np.array(ses)
     crit = _st.norm.isf((1.0 - level) / 2.0)
 
     fig, ax = _new_ax(ax, figsize)
-    ax.plot(grid, betas, color="C0", lw=1.5, label="pooled estimate")
-    ax.fill_between(grid, betas - crit * ses, betas + crit * ses,
+    ax.plot(grid, beta_arr, color="C0", lw=1.5, label="pooled estimate")
+    ax.fill_between(grid, beta_arr - crit * se_arr, beta_arr + crit * se_arr,
                     color="C0", alpha=0.15, label=f"{int(level*100)}% CI")
     if prediction:
-        pse = np.sqrt(ses ** 2 + grid)
-        ax.plot(grid, betas - crit * pse, color="C3", lw=1.0, ls="--",
+        pse = np.sqrt(se_arr ** 2 + grid)
+        ax.plot(grid, beta_arr - crit * pse, color="C3", lw=1.0, ls="--",
                 label="prediction interval")
-        ax.plot(grid, betas + crit * pse, color="C3", lw=1.0, ls="--")
+        ax.plot(grid, beta_arr + crit * pse, color="C3", lw=1.0, ls="--")
     ax.axvline(tau2_hat, color="0.4", lw=1.0, ls=":")
     ax.set_xlabel("tau^2")
     ax.set_ylabel("Effect size")
@@ -707,7 +707,7 @@ def qqnorm_rma(
             resid = np.asarray(mv_rstandard(result)["z"], dtype=float)
         else:
             resid = np.asarray(mv_rstandard(result)["resid"], dtype=float)
-        return _qq_panel(resid, list(result.slab), filename, figsize, title, ax)
+        return _qq_panel(resid, list(result.slab or []), filename, figsize, title, ax)
     if not isinstance(result, RmaResult):
         raise TypeError("argument 'result' must be an RmaResult")
     resid = np.asarray(result.residuals, dtype=float)
@@ -1096,10 +1096,7 @@ def plot_baujat(
     k = x.size
     labels = _studlab(studlab, k)
 
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.figure
+    fig, ax = _new_ax(ax, figsize)
 
     ax.scatter(x, y, s=50, c="0.2", edgecolors="k", linewidths=0.5, zorder=3)
     for xi, yi, lab in zip(x, y, labels):
@@ -1140,10 +1137,7 @@ def plot_gosh(
     xv = _col(x)
     yv = _col(y)
 
-    if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
-    else:
-        fig = ax.figure
+    fig, ax = _new_ax(ax, figsize)
 
     ax.scatter(xv, yv, s=25, c="0.3", edgecolors="k", linewidths=0.3, alpha=0.8)
     ax.set_xlabel(x)

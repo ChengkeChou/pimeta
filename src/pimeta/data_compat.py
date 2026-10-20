@@ -169,15 +169,15 @@ def resolve(spec, data=None, k=None, name: str = "value", dtype=float,
                 raise ValueError(
                     f"{name}={list(spec)!r} looks like column names but no "
                     "'data' was supplied")
-            out = [lookup(data, v) for v in spec]
+            parts = [lookup(data, v) for v in spec]
             if dtype is not None:
-                out = [np.asarray(a, dtype=dtype) for a in out]
+                parts = [np.asarray(a, dtype=dtype) for a in parts]
             if k is not None:
-                for a in out:
+                for a in parts:
                     if a.shape[0] != k:
                         raise ValueError(
                             f"{name} has {a.shape[0]} values but {k} were expected")
-            return out
+            return parts
 
     out = np.asarray(spec, dtype=dtype) if dtype is not None else np.asarray(spec)
     if k is not None and out.ndim >= 1 and out.shape[0] != k:
@@ -588,6 +588,6 @@ def install_repr_html(namespace) -> int:
             continue
         if "_repr_html_" in vars(obj):
             continue
-        obj._repr_html_ = _repr_html_
+        setattr(obj, "_repr_html_", _repr_html_)
         count += 1
     return count

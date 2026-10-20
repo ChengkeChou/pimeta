@@ -19,6 +19,8 @@ Estimators implemented (matching ``meta::metagen(method.tau=)``):
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import numpy as np
 from scipy import optimize
 
@@ -172,7 +174,7 @@ def _eb(y, v, n=None) -> float:
 
 
 # Map method name (upper) -> callable(y, v, n).
-_METHODS = {
+_METHODS: dict[str, Callable[[np.ndarray, np.ndarray, np.ndarray | None], float]] = {
     "DL": lambda y, v, n: _dl(y, v),
     "HE": lambda y, v, n: _he(y, v),
     "HS": _hs,
@@ -207,4 +209,7 @@ def estimate_tau2(
             f"unsupported tau2 method: {method!r} "
             f"(expected one of {sorted(_METHODS)})"
         )
-    return _METHODS[key](y, v, n)
+    y_arr = np.asarray(y, dtype=float)
+    v_arr = np.asarray(v, dtype=float)
+    n_arr = None if n is None else np.asarray(n, dtype=float)
+    return _METHODS[key](y_arr, v_arr, n_arr)

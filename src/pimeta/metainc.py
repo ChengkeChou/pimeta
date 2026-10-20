@@ -14,6 +14,7 @@ to the event counts of *all* studies.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 import numpy as np
@@ -213,7 +214,9 @@ def metainc(
         p_value=p,
     )
 
-    bt = math.exp if sm == "IRR" else (lambda x: x)
+    bt: Callable[[float], float] = (
+        (lambda x: math.exp(x)) if sm == "IRR" else (lambda x: x)
+    )
 
     fl = fixed.pooled_est - Z_975 * fixed.pooled_se
     fu = fixed.pooled_est + Z_975 * fixed.pooled_se

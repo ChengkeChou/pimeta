@@ -8,6 +8,24 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **`py.typed` — inline types for downstream users.** The package now ships the
+  PEP 561 marker, so `mypy`/`pyright`/IDE completion use the real annotations
+  instead of `Any`. `mypy src/pimeta` went from **167 errors to 0** across 54
+  modules with no behavioural change: the fixes were container annotations
+  (`dict[str, Any]`, `list[tuple[float, float | None]]`), a typed `_new_ax()`
+  helper replacing six duplicated untyped `plt.subplots` branches in
+  `plotting.py`, `setattr` for dynamically attached methods, and `None`-safe
+  guards in `rma_mv` / `netmeta` / `selmodel`.
+- **`pimeta.nma` package skeleton.** The 7,467-line `netmeta.py` is being carved
+  into reviewable sections without changing an import path.
+  `netmeta::pairwise` (arm-level to comparison-level conversion) now lives in
+  `pimeta/nma/pairwise.py`; `pimeta.netmeta.pairwise` and
+  `pimeta.nma.pairwise` are the same object, and the package docstring maps the
+  remaining fourteen banner-delimited sections.
+- **CI and tooling.** `ci.yml` gains a `typecheck` job (`mypy src/pimeta`) and a
+  `lint` job (`ruff check` + `ruff format --check` over `src`, `tests`,
+  `tools`). A `.pre-commit-config.yaml` runs trailing-whitespace,
+  end-of-file-fixer, `check-yaml`, `check-toml`, ruff and mypy.
 - **Documentation site (`docs/`).** A full guide set plus a **generated** API
   reference. `tools/gen_api_docs.py` walks `pimeta.__all__` (390 names), groups
   the names by topic and renders one Markdown page per topic from the live

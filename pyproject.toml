@@ -94,6 +94,10 @@ package-dir = { "" = "src" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# PEP 561: ship the marker so downstream mypy/pyright use the inline types.
+[tool.setuptools.package-data]
+pimeta = ["py.typed"]
+
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
@@ -107,11 +111,8 @@ target-version = "py310"
 select = ["E", "F", "W", "I", "UP", "B"]
 ignore = ["E501"]
 
-# The package does NOT ship a py.typed marker: the annotations are informative
-# and correct for the public result dataclasses, but the numeric kernel has
-# ~55 known inconsistencies that need a dedicated typing pass. Run
-# `mypy src/pimeta` to see them; the count is tracked in the CHANGELOG.
-# Re-adding py.typed is the goal once that reaches zero.
+# The package ships py.typed (PEP 561): `mypy src/pimeta` is clean, and CI
+# enforces that it stays that way.
 [tool.mypy]
 python_version = "3.10"
 files = ["src/pimeta"]
@@ -121,4 +122,5 @@ warn_redundant_casts = true
 warn_unreachable = false
 check_untyped_defs = false
 no_implicit_optional = true
+show_error_codes = true
 

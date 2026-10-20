@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from scipy import stats
@@ -375,11 +376,12 @@ def metabin(
 
     if k == 0:
         raise ValueError("no studies supplied")
-    counts = dict(
+    counts: dict[str, Any] = dict(
         event_e=[float(v) for v in a], n_e=[float(v) for v in n1],
         event_c=[float(v) for v in c], n_c=[float(v) for v in n2],
         method_tau=str(method_tau).upper(),
     )
+    random_result: PooledResult | None
 
     # Study-level effect sizes (inverse-variance estimates; also used for
     # the random-effects tau^2 and the Cochran Q).
@@ -412,12 +414,12 @@ def metabin(
             return MetabResult(sm, method, k, lrp_fixed, None, yi, vi, phi_lrp,
                                **counts)
         # "Random" for LRP is the common estimate with the SE inflated by phi.
-        random_result = _fixed_result(
+        lrp_random = _fixed_result(
             lrp_est, lrp_se * phi_lrp, sm, k, q, q_p, tau2=math.nan
         )
-        random_result.model = "random"
-        random_result.method = "LRP"
-        return MetabResult(sm, method, k, lrp_fixed, random_result, yi, vi,
+        lrp_random.model = "random"
+        lrp_random.method = "LRP"
+        return MetabResult(sm, method, k, lrp_fixed, lrp_random, yi, vi,
                            phi_lrp, **counts)
     else:  # Peto
         if sm != "OR":

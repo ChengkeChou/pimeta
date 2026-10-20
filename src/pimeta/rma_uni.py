@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy import optimize, stats
@@ -36,6 +37,9 @@ from .pooling import (
     predict_rma,
 )
 from .data_compat import resolve, resolve_mods
+
+if TYPE_CHECKING:                       # pragma: no cover - import cycle guard
+    from .rma_ls import RmaLsResult
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -378,7 +382,7 @@ def rma(
     link: str = "log",
     optbeta: bool = False,
     alpha=None,
-) -> RmaResult:
+) -> "RmaResult | RmaLsResult":
     """Fit a univariate meta-analysis model (``metafor::rma``).
 
     Args:

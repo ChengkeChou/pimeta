@@ -98,6 +98,6 @@ def install_methods(namespace, *, overwrite: bool = False) -> int:
                            ("augment", _m_augment), ("to_table", _m_to_table)):
             if overwrite or name not in vars(obj):
                 setattr(obj, name, func)
-        obj._interop_installed = True
+        setattr(obj, "_interop_installed", True)
         count += 1
     return count

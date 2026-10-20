@@ -1,0 +1,5 @@
+# Marker file (PEP 561): pimeta ships inline type annotations.
+#
+# `mypy src/pimeta` is clean as of the 1.2 typing pass, and the package exposes
+# the public surface through `__all__`, so downstream users get real completion
+# and type checking in editors and in their own mypy/ty runs.

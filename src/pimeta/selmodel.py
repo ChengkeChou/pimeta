@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass, field
+from typing import cast
 
 import numpy as np
 from scipy import integrate, optimize, special, stats
@@ -813,10 +814,10 @@ def selmodel(
 
     # --- refit by ML if the input was not an ML/FE model -------------------- #
     if x.method not in ("FE", "EE", "CE", "ML"):
-        x = rma(
+        x = cast(RmaResult, rma(
             np.asarray(x.yi), np.asarray(x.vi), mods=x.mods,
             method="ML", test="z", level=x.level,
-        )
+        ))
 
     yi = np.asarray(x.yi, dtype=float)
     vi = np.asarray(x.vi, dtype=float)
@@ -881,8 +882,8 @@ def selmodel(
         subset = np.asarray(subset, dtype=bool)
 
     # --- type configuration -------------------------------------------------- #
-    mapfun_arr = None
-    mapinvfun_arr = None
+    mapfun_arr: list[str | None] | None = None
+    mapinvfun_arr: list[str | None] | None = None
     if type_ == "beta":
         if not stepsspec:
             steps_arr = np.array([0.0, 1.0])
@@ -1060,7 +1061,7 @@ def selmodel(
         mapinvfun_arr = ["log"] * deltas
 
     if con["pval.min"] is not None:
-        pval_min = con["pval.min"]
+        pval_min = float(con["pval.min"])
 
     # clamp p-values
     pvals = np.where(pvals < pval_min, pval_min, pvals)
@@ -1098,17 +1099,19 @@ def selmodel(
     # --- starting values ----------------------------------------------------- #
     beta_init = np.asarray(x.b, dtype=float)
     if scaleX:
+        assert mX is not None
         imX = np.linalg.inv(mX)
         beta_init = imX @ beta_init
 
     tau2_init = math.log(x.tau2 + 0.001)
     if con["tau2.init"] is not None:
-        tau2_init = math.log(con["tau2.init"])
+        tau2_init = math.log(float(con["tau2.init"]))
     if con["beta.init"] is not None:
         beta_init = np.asarray(con["beta.init"], dtype=float)
 
     delta_init = np.array([
-        _mapinvfun(delta_init[j], delta_min[j], delta_max[j], mapinvfun_arr[j])
+        _mapinvfun(delta_init[j], delta_min[j], delta_max[j],
+                   (mapinvfun_arr or [None] * deltas)[j])
         for j in range(deltas)
     ])
     delta_init = np.where(np.isnan(delta_arg), delta_init, delta_arg)
@@ -1204,7 +1207,8 @@ def selmodel(
     # --- Hessian (original scale, htransf=FALSE) ---------------------------- #
     # metafor: hes.tau2.fix | tau2 < tau2tol -> tau2 treated as fixed;
     # stepfun additionally freezes deltas that collapsed below deltatol.
-    if con["hes.tau2.fix"] or tau2 < con["tau2tol"]:
+    if (bool(con["hes.tau2.fix"]) or
+            tau2 < float(con["tau2tol"] if con["tau2tol"] is not None else 0.0)):
         tau2_hes = tau2
     else:
         tau2_hes = tau2_arg
@@ -1263,6 +1267,7 @@ def selmodel(
 
     # --- un-scale betas ------------------------------------------------------ #
     if scaleX:
+        assert mX is not None
         beta = mX @ beta
         vb = mX @ vb @ mX.T
         X = Xsave
@@ -1388,7 +1393,7 @@ def selmodel(
         level=x.level,
     )
     # the source fit is needed by profile_selmodel() to refit on a delta grid
-    out._model = x
+    setattr(out, "_model", x)
     return out
 
 
@@ -1465,7 +1470,7 @@ def profile_selmodel(result, delta=None, n_points: int = 20, span=None,
     ll = []
     for d in delta:
         try:
-            fit = selmodel(result._model, result.type,
+            fit = selmodel(getattr(result, "_model"), result.type,
                            alternative=result.alternative,
                            delta=[d], control=None)
             ll.append(float(fit.ll))

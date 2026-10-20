@@ -166,7 +166,7 @@ def _backtransf(x: float, sm: str, time: float | None = None) -> float:
     if sm == "IRS":
         return x ** 2
     if sm == "IRFT":
-        return _asin2ir(x, time)
+        return _asin2ir(x, time) if time is not None else float("nan")
     # IR
     return x
 

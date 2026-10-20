@@ -230,6 +230,9 @@ def metaprop(
     fixed_prop = _backtransf(fixed.pooled_est, sm, n_fixed)
     fl, fu = _ci(fixed, n_fixed)
 
+    random_prop: float | None
+    rl: float | None
+    ru: float | None
     if random_res is not None:
         random_prop = _backtransf(random_res.pooled_est, sm, n_random)
         rl, ru = _ci(random_res, n_random)
