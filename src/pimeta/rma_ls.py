@@ -387,6 +387,10 @@ def rma_ls(
         raise ValueError("'scale' is required for a location-scale model")
 
     # --- design matrices -------------------------------------------------
+    # A formula string ("~ dose + year") also carries an intercept marker that
+    # overrides the explicit `intercept` / `scale_intercept` defaults.
+    mods, intercept = _formula_terms(mods, data, intercept)
+    scale, scale_intercept = _formula_terms(scale, data, scale_intercept)
     mods_arr = None if mods is None else _as_matrix(
         _resolve(mods, data, k), k, "mods")
     scale_arr = _as_matrix(_resolve(scale, data, k), k, "scale")
@@ -646,6 +650,27 @@ def rma_ls(
         slab=([str(v) for v in slab] if slab is not None
               else [f"Study {i + 1}" for i in range(k)]),
     )
+
+
+def _formula_terms(spec, data, intercept):
+    """Expand a ``"~ a + b"`` formula into a bare moderator matrix.
+
+    Returns ``(matrix_or_None, intercept)``; a formula whose right-hand side is
+    empty (``"~ 0"``) yields ``None`` and leaves ``intercept`` untouched.
+    """
+    if not (isinstance(spec, str) and spec.strip().startswith("~")):
+        return spec, intercept
+    if data is None:
+        raise ValueError(
+            f"{spec!r} is a formula but no 'data' was supplied")
+    from .data_compat import design_matrix, parse_formula
+
+    parsed = parse_formula(spec)
+    if parsed.response is not None:
+        raise ValueError(
+            "'mods' / 'scale' formulas must be one-sided (e.g. '~ dose')")
+    X, _names = design_matrix(parsed, data, intercept=False)
+    return (X if X.size else None), parsed.intercept
 
 
 def _resolve_col(spec, data):

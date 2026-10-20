@@ -21,6 +21,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from .data_compat import resolve
+
 # Measures pooled on the log scale (back-transformed with exp after pooling).
 LOG_MEASURES = {"RR", "OR", "PETO", "IRR", "PLN", "PLO"}
 
@@ -79,6 +81,7 @@ def escalc(
     add: float = 0.5,
     drop00: bool = True,
     vtype: str = "LS",
+    data=None,
 ) -> EscalcResult:
     """Compute effect sizes and variances.
 
@@ -88,10 +91,25 @@ def escalc(
     (0.5 by default, matching metafor). ``drop00`` drops rows with zero events
     in both arms (metafor's default for RR).  ``vtype`` selects the variance
     estimator for SMD/SMDH (metafor's ``vtype``, default ``"LS"``).
+
+    ``data`` lets every column argument be given as a *name* instead of a
+    vector (``escalc("RR", "ai", "bi", "ci", "di", data=df)``); it accepts a
+    dict, a pandas/polars ``DataFrame``, a structured array or a list of
+    records.
     """
     measure = measure.upper()
     if measure not in SUPPORTED_MEASURES:
         raise ValueError(f"unsupported measure: {measure!r}")
+
+    if data is not None:
+        (ai, bi, ci, di, n1i, n2i, m1i, m2i, sd1i, sd2i, x1i, x2i, t1i, t2i,
+         xi, ni, ri) = (
+            resolve(v, data, name=n, dtype=None)
+            for v, n in ((ai, "ai"), (bi, "bi"), (ci, "ci"), (di, "di"),
+                         (n1i, "n1i"), (n2i, "n2i"), (m1i, "m1i"), (m2i, "m2i"),
+                         (sd1i, "sd1i"), (sd2i, "sd2i"), (x1i, "x1i"),
+                         (x2i, "x2i"), (t1i, "t1i"), (t2i, "t2i"), (xi, "xi"),
+                         (ni, "ni"), (ri, "ri")))
 
     ai = _vec(ai, "ai")
     bi = _vec(bi, "bi")

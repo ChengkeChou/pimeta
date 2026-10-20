@@ -21,6 +21,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .data_compat import resolve
 from .escalc import escalc
 from .pooling import PooledResult, _back_transform, pool_yv
 
@@ -329,6 +330,7 @@ def metabin(
     random: bool = True,
     method_tau: str = "REML",
     alpha: float = 0.05,
+    data=None,
 ) -> MetabResult:
     """Pool binary (2x2) study data (mirrors ``meta::metabin``).
 
@@ -343,7 +345,13 @@ def metabin(
             its SE multiplied by the dispersion factor ``phi``.
         method_tau: DL/HE/HS/SJ/ML/REML/PM/EB (default DL, matching meta).
             Unused by "LRP", which has no tau^2 (``tau2`` is NaN, as in R).
+        data: optional frame; the four column arguments may then be names.
     """
+    if data is not None:
+        event_e, n_e, event_c, n_c = (
+            resolve(v, data, name=n) for v, n in
+            ((event_e, "event_e"), (n_e, "n_e"),
+             (event_c, "event_c"), (n_c, "n_c")))
     sm = sm.upper()
     method = method.capitalize()
     if sm not in _SM:

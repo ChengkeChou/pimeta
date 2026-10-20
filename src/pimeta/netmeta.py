@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
+from .data_compat import resolve
+
 Z_975 = stats.norm.ppf(0.975)
 
 # netmeta's is_zero() uses .Machine$double.eps^0.5 ~ 1.49e-8.
@@ -1845,6 +1847,7 @@ def netmeta(
     sd2=None,
     time1=None,
     time2=None,
+    data=None,
 ) -> NetmetaResult:
     """Frequentist graph-theoretical network meta-analysis (Rücker 2012).
 
@@ -1874,6 +1877,24 @@ def netmeta(
         mean1, mean2, sd1, sd2: arm means / SDs.
         time1, time2: arm person-times.
     """
+    if data is not None:
+        TE = resolve(TE, data, name="TE")
+        seTE = resolve(seTE, data, name="seTE")
+        treat1 = resolve(treat1, data, name="treat1", dtype=None)
+        treat2 = resolve(treat2, data, name="treat2", dtype=None)
+        studlab = resolve(studlab, data, name="studlab", dtype=None)
+        n1 = resolve(n1, data, name="n1")
+        n2 = resolve(n2, data, name="n2")
+        event1 = resolve(event1, data, name="event1")
+        event2 = resolve(event2, data, name="event2")
+        incr2 = resolve(incr2, data, name="incr2")
+        mean1 = resolve(mean1, data, name="mean1")
+        mean2 = resolve(mean2, data, name="mean2")
+        sd1 = resolve(sd1, data, name="sd1")
+        sd2 = resolve(sd2, data, name="sd2")
+        time1 = resolve(time1, data, name="time1")
+        time2 = resolve(time2, data, name="time2")
+
     TE = list(TE)
     seTE = list(seTE)
     treat1 = list(treat1)

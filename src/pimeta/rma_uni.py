@@ -35,6 +35,7 @@ from .pooling import (
     confint_tau2,
     predict_rma,
 )
+from .data_compat import resolve, resolve_mods
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -410,33 +411,35 @@ def rma(
             level=level, scale_intercept=scale_intercept, link=link,
             optbeta=optbeta, alpha=alpha, btt=btt,
         )
-    yi = np.asarray(yi, dtype=float).ravel()
+    yi = resolve(yi, data, name="yi")
     if vi is None:
         if sei is None:
             raise ValueError("either 'vi' or 'sei' must be supplied")
-        sei = np.asarray(sei, dtype=float).ravel()
+        sei = resolve(sei, data, name="sei")
         vi = sei ** 2
     else:
-        vi = np.asarray(vi, dtype=float).ravel()
+        vi = resolve(vi, data, name="vi")
     if len(yi) != len(vi):
         raise ValueError("length of 'yi' and 'vi' must match")
+
+    if slab is not None:
+        slab = resolve(slab, data, name="slab", dtype=None)
 
     k = len(yi)
     not_na = [bool(np.isfinite(yi[i]) and np.isfinite(vi[i])) for i in range(k)]
 
     # Build the design matrix (intercept + optional moderators).
-    if mods is None:
-        mods_arr = None
-        X = np.ones((k, 1))
+    mods_arr, add_intercept = resolve_mods(mods, data, k)
+    if mods_arr is None:
+        if not add_intercept:
+            raise ValueError(
+                "a no-intercept model needs at least one moderator")
         p_mods = 0
+        X = np.ones((k, 1))
     else:
-        mods_arr = np.asarray(mods, dtype=float)
-        if mods_arr.ndim == 1:
-            mods_arr = mods_arr.reshape(-1, 1)
-        if mods_arr.shape[0] != k:
-            raise ValueError("'mods' must have one row per study")
         p_mods = mods_arr.shape[1]
-        X = np.column_stack([np.ones(k), mods_arr])
+        X = (np.column_stack([np.ones(k), mods_arr]) if add_intercept
+             else mods_arr)
 
     p = X.shape[1]
     int_only = p_mods == 0

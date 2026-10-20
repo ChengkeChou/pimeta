@@ -401,6 +401,69 @@ running, without giving up idiomatic Python names for everyone else.
 
 ---
 
+## Ecosystem integration
+
+Compatibility is implemented as **protocols**, not as one-off adapters, so a
+single implementation serves many downstream tools. Everything lives in
+`pimeta.interop`, every optional import is lazy, and `import pimeta` still needs
+only NumPy / SciPy / matplotlib.
+
+| Protocol | What you call | What it unlocks |
+|---|---|---|
+| tidy tables (broom) | `r.tidy()`, `r.glance()`, `r.augment()` | one row per coefficient / model / study — any pandas, polars or CSV pipeline |
+| estimator (scikit-learn) | `MetaRegressor().fit(X, y, sample_weight=1/vi)` | `Pipeline`, `GridSearchCV`, `cross_val_score`, `clone`, `joblib` / `dask` / `ray`, `optuna`, `mlflow`, `shap` |
+| results (statsmodels) | `as_results(r).conf_int()` | `summary_col`, report builders, anything that reads `params` / `bse` / `pvalues` |
+| frames | `r.to_table(backend=...)` | `dict`, `records`, `pandas`, `polars`, `pyarrow` |
+| labelled arrays | `to_xarray(n)` | `DataArray` / `Dataset` with `treat1` / `treat2` dims |
+| graphs | `to_networkx(n)` | centrality, communities, layouts, GraphML / GEXF export |
+
+```python
+import pimeta as ma
+from pimeta.interop import MetaRegressor, as_results, to_networkx
+
+r = ma.rma(yi, vi, mods=dose, method="REML")
+r.tidy()      # term / estimate / std.error / statistic / p.value / conf.low / conf.high
+r.glance()    # tau2, I2, QE, QEp, QM, logLik, AIC, BIC, ...
+r.augment()   # one row per study, plus .hat / .std.resid / .cooksd
+
+print(as_results(r).conf_int(alpha=0.05))
+
+est = MetaRegressor().fit(dose, yi, sample_weight=1 / vi)
+est.predict(new_dose, interval="prediction", vi=new_vi)
+```
+
+Ask an object what it supports instead of guessing:
+
+```python
+ma.interop.protocol_report(r)
+# {'estimator': False, 'tidy': True, 'statsmodels': False, ...}
+ma.interop.available()      # which optional backends are installed
+```
+
+Backends are opt-in: `pip install pimeta[pandas]`, `pimeta[polars]`,
+`pimeta[arrow]`, `pimeta[sklearn]`, `pimeta[statsmodels]`, `pimeta[xarray]`,
+`pimeta[networkx]` — or `pimeta[interop]` for all of them.
+
+### Data frames and formulas
+
+Every data-consuming entry point also accepts a **frame plus column names**, and
+`mods` accepts an R-style **formula**, so R code translates without unpacking
+columns by hand:
+
+```python
+df = {"yi": yi, "vi": vi, "dose": dose, "arm": arm, "slab": slab}
+
+r = ma.rma("yi", "vi", mods="~ dose + arm", data=df)
+d = ma.escalc("RR", "ai", "bi", "ci", "di", data=df)
+```
+
+Accepted frames: `dict`, pandas, polars, NumPy structured arrays and lists of
+records. Formulas support `a + b`, `a*b`, `a:b`, `0 + a` / `- 1` and `~ .`;
+string columns are dummy-coded the way R does it (first level dropped, `arm[B]`
+naming), so the coefficients line up with a `metafor` fit.
+
+---
+
 ## Examples
 
 `examples/bcg_meta_analysis.py` is a complete runnable script. It writes the 13
@@ -629,3 +692,52 @@ ma.funnel(yi, vi, ax=axes[1])
 
 **8. 需要时 R 名字照样能用。** `r_methods()` + 模块级 `__getattr__` 让逐行翻译
 过来的 R 脚本继续跑，同时不妨碍其他人用 Pythonic 的名字。
+
+### 生态对接：用协议，不用适配器
+
+兼容是按**协议**实现的，不是给每个库单独写适配器——写一次，多个生态都能用。
+全部放在 `pimeta.interop`，可选依赖全是懒加载，`import pimeta` 依然只需要
+NumPy / SciPy / matplotlib。
+
+| 协议 | 调用 | 解锁什么 |
+|---|---|---|
+| tidy 表格（broom） | `r.tidy()`、`r.glance()`、`r.augment()` | 每个系数 / 每个模型 / 每个研究一行，任何 pandas / polars / CSV 流程都能接 |
+| 估计器（sklearn） | `MetaRegressor().fit(X, y, sample_weight=1/vi)` | `Pipeline`、`GridSearchCV`、`cross_val_score`、`clone`、`joblib`/`dask`/`ray`、`optuna`、`mlflow`、`shap` |
+| 结果对象（statsmodels） | `as_results(r).conf_int()` | `summary_col`、报告生成器、任何读 `params`/`bse`/`pvalues` 的代码 |
+| 表格后端 | `r.to_table(backend=...)` | `dict`、`records`、`pandas`、`polars`、`pyarrow` |
+| 带标签数组 | `to_xarray(n)` | 带 `treat1`/`treat2` 维的 `DataArray`/`Dataset` |
+| 图 | `to_networkx(n)` | 中心性、社区发现、布局、GraphML/GEXF 导出 |
+
+```python
+import pimeta as ma
+from pimeta.interop import MetaRegressor, as_results, to_networkx
+
+r = ma.rma(yi, vi, mods=dose, method="REML")
+r.tidy()      # term / estimate / std.error / statistic / p.value / conf.low / conf.high
+r.glance()    # tau2、I2、QE、QEp、QM、logLik、AIC、BIC ……
+r.augment()   # 每个研究一行，附 .hat / .std.resid / .cooksd
+
+est = MetaRegressor().fit(dose, yi, sample_weight=1 / vi)
+est.predict(new_dose, interval="prediction", vi=new_vi)
+
+ma.interop.protocol_report(r)   # 这个对象支持哪些协议
+ma.interop.available()          # 装了哪些可选后端
+```
+
+按需安装后端：`pip install pimeta[pandas]`、`pimeta[polars]`、`pimeta[arrow]`、
+`pimeta[sklearn]`、`pimeta[statsmodels]`、`pimeta[xarray]`、`pimeta[networkx]`，
+或一次装齐 `pimeta[interop]`。
+
+**数据框与公式。** 所有吃数据的入口都支持 **frame + 列名**，`mods` 还额外支持
+R 风格公式，R 代码不用手工拆列：
+
+```python
+df = {"yi": yi, "vi": vi, "dose": dose, "arm": arm, "slab": slab}
+
+r = ma.rma("yi", "vi", mods="~ dose + arm", data=df)
+d = ma.escalc("RR", "ai", "bi", "ci", "di", data=df)
+```
+
+支持的 frame：`dict`、pandas、polars、NumPy 结构化数组、记录字典列表。
+公式支持 `a + b`、`a*b`、`a:b`、`0 + a` / `- 1`、`~ .`；字符串列按 R 的方式
+做哑变量编码（丢弃第一层，列名 `arm[B]`），所以系数与 `metafor` 对齐。

@@ -152,6 +152,20 @@ from .rma_list import (
     tail,
     tail_rma,
 )
+from .data_compat import (
+    FormulaSpec,
+    as_columns,
+    column_names,
+    design_matrix,
+    install_repr_html,
+    lookup,
+    model_frame,
+    parse_formula,
+    resolve,
+    resolve_mods,
+    to_dataframe,
+    to_html,
+)
 from .plotting import (
     PlotResult, bubble, drapery, forest, funnel, hasse, labbe, llplot,
     netgraph, netheat, netposet, plot_baujat, plot_gosh, plot_influence,
@@ -336,6 +350,20 @@ def __getattr__(name):
     if target is not None:
         return globals()[target]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+# Give every result object a compact HTML table in Jupyter/IPython without
+# repeating the mixin in ~40 dataclass definitions.
+_repr_html_classes = install_repr_html(globals())
+
+# Ecosystem interoperability lives in ``pimeta.interop``: the sklearn estimator
+# protocol, broom-style tidy tables, a statsmodels-shaped result view, frame
+# backends and labelled graph/array output.  Importing it here only attaches
+# cheap methods; the optional third-party libraries stay lazy.
+from . import interop  # noqa: E402
+
+_interop_classes = interop.install_methods(globals())
+
 
 __all__ = [
     "StudyEffect",
@@ -541,6 +569,12 @@ __all__ = [
     # settings
     "gs", "setvals", "settings_meta", "settings_netmeta",
     "META_DEFAULTS", "NETMETA_DEFAULTS",
+    # ecosystem interoperability
+    "interop",
+    # data-frame interoperability
+    "as_columns", "column_names", "lookup", "resolve", "resolve_mods",
+    "FormulaSpec", "parse_formula", "design_matrix", "model_frame",
+    "to_dataframe", "to_html", "install_repr_html",
     # transf.*
     "transf_abt", "transf_ahw", "transf_arcsin", "transf_clestod",
     "transf_dtobesd", "transf_dtocles", "transf_dtocles_int", "transf_dtocliffd",

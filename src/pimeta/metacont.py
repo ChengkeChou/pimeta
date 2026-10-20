@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from .escalc import escalc
 from .pooling import PooledResult, pool_yv
 from .metabin import _result_dict
+from .data_compat import resolve
 
 
 @dataclass
@@ -55,6 +56,7 @@ def metacont(
     random: bool = True,
     method_tau: str = "REML",
     alpha: float = 0.05,
+    data=None,
 ) -> MetacontResult:
     """Pool continuous (mean/SD) study data (mirrors ``meta::metacont``).
 
@@ -65,7 +67,14 @@ def metacont(
             difference, Hedges' g by default like meta::metacont).
         random: also fit the random-effects model.
         method_tau: tau-squared estimator (default DL).
+        data: optional frame; the six column arguments may then be names.
     """
+    if data is not None:
+        n_e, mean_e, sd_e, n_c, mean_c, sd_c = (
+            resolve(v, data, name=n) for v, n in
+            ((n_e, "n_e"), (mean_e, "mean_e"), (sd_e, "sd_e"),
+             (n_c, "n_c"), (mean_c, "mean_c"), (sd_c, "sd_c")))
+
     sm = sm.upper()
     if sm not in ("MD", "SMD", "SMDH"):
         raise ValueError("sm must be MD, SMD or SMDH")

@@ -49,8 +49,26 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# DataFrame-shaped return values (as_data_frame_*, read_rm5 tables, ...).
+# DataFrame-shaped return values (as_data_frame_*, read_rm5 tables, ...) and
+# the pandas backend of pimeta.interop.to_frame / tidy / glance / augment.
 pandas = ["pandas>=2.0"]
+# Further pimeta.interop backends.  None of these are required to analyse data;
+# they only change the type of the table/graph/array you get back.
+polars = ["polars>=0.20"]
+arrow = ["pyarrow>=14"]
+sklearn = ["scikit-learn>=1.3"]
+statsmodels = ["statsmodels>=0.14"]
+xarray = ["xarray>=2023.1"]
+networkx = ["networkx>=3.0"]
+interop = [
+    "pandas>=2.0",
+    "polars>=0.20",
+    "pyarrow>=14",
+    "scikit-learn>=1.3",
+    "statsmodels>=0.14",
+    "xarray>=2023.1",
+    "networkx>=3.0",
+]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",

@@ -8,6 +8,40 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **`pimeta.interop` — ecosystem compatibility as protocols, not adapters.**
+  A new subpackage that makes pimeta results consumable by the wider Python
+  stack without adding a single runtime dependency (every optional import is
+  lazy, so `import pimeta` still needs only NumPy/SciPy/matplotlib).
+  - **Tidy tables (broom protocol).** `tidy()`, `glance()` and `augment()` give
+    the one-row-per-coefficient / one-row-per-model / one-row-per-study tables
+    that `broom` established and that every tidy data flow expects.  They are
+    also attached as methods to all 43 result classes (`r.tidy()`,
+    `r.glance()`, `r.augment()`, `r.to_table()`), so no import is needed.
+    `tidy()` handles coefficient models (`term`/`estimate`/`std.error`/
+    `statistic`/`p.value`/`conf.low`/`conf.high`), row-wise results
+    (`leave1out`, `cumul`, `influence`) and scale models
+    (`component="beta"|"alpha"|"both"` with a `component` column).
+  - **Estimator protocol (`MetaRegressor`).** Duck-typed `fit`/`predict`/
+    `get_params`/`set_params` with `sample_weight = 1 / vi`, so the model works
+    inside `sklearn.pipeline.Pipeline`, `GridSearchCV`, `cross_val_score`,
+    `sklearn.base.clone` and `joblib`/`dask`/`ray` backends — verified against
+    `is_regressor()`, `clone()`, `Pipeline(StandardScaler, MetaRegressor)` and
+    `cross_val_score`.  Adds `predict(interval="confidence"|"prediction")` and
+    a weighted `score()`.
+  - **statsmodels-shaped results (`as_results`).** `params`, `bse`, `tvalues`,
+    `pvalues`, `conf_int()`, `cov_params()`, `llf`, `aic`, `bic`, `nobs`,
+    `df_resid`, `df_model`, `fittedvalues`, `resid`, `model.exog_names` and
+    `as_pandas()`.  `statsmodels.iolib.summary2.summary_col()` accepts the
+    adapter directly (verified against statsmodels 0.14).
+  - **Frame backends (`to_frame`).** `dict`, `records`, `pandas`, `polars` and
+    `pyarrow`, with scalar broadcasting and explicit errors on ragged columns.
+  - **Labelled and graph output.** `to_xarray()` turns the `n x n` NMA
+    contrast matrices into a `DataArray`/`Dataset` with `("treat1", "treat2")`
+    dims; `to_networkx()` turns the evidence network into a real `Graph` with
+    per-edge studies/effects and per-node P-scores.
+  - **Protocol introspection.** `supports(obj, "estimator")`,
+    `protocol_report(obj)` and `available()` answer "can this object go into
+    that tool" without guessing.
 - **Location-scale models — the last missing model family.** metafor has no
   `rma.ls()` function: the model is fitted by passing `scale = ~ z` to
   `rma()`.  `pimeta.rma()` now does the same and returns an `RmaLsResult`, so
