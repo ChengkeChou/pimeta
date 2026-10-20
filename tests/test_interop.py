@@ -28,7 +28,8 @@ from pimeta.interop.tables import normalize_columns
 YI = np.array([0.20, 0.40, 0.10, 0.50, 0.30, 0.15])
 VI = np.array([0.04, 0.05, 0.03, 0.06, 0.02, 0.05])
 DOSE = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-YEAR = np.array([1990.0, 1995.0, 2000.0, 2005.0, 2010.0, 2015.0])
+# Not proportional to DOSE: a linear year would make the design matrix singular.
+YEAR = np.array([1990.0, 1996.0, 2001.0, 2007.0, 2012.0, 2018.0])
 
 
 @pytest.fixture(scope="module")

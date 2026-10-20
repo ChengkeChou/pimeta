@@ -479,6 +479,24 @@ def rma(
     p = X.shape[1]
     int_only = p_mods == 0
 
+    # A collinear design makes (X'WX) singular; say so plainly instead of
+    # letting numpy raise "Singular matrix" from deep inside the estimator.
+    if p > 1:
+        rank = int(np.linalg.matrix_rank(X))
+        if rank < p:
+            if coefnames is not None:
+                names = list(coefnames)
+            elif add_intercept:
+                names = ["intrcpt"] + [f"mods[{i}]" for i in range(1, p)]
+            else:
+                names = [f"mods[{i}]" for i in range(p)]
+            raise ValueError(
+                "the design matrix is not of full rank: "
+                f"{p} columns but rank {rank} (moderators {names}).\n"
+                "At least two moderators are collinear, or a dummy-coded factor "
+                "is coded with all of its levels."
+            )
+
     # --- tau^2 ------------------------------------------------------------ #
     method_key = method.upper()
     if method_key not in ("FE", "DL", "HE", "HS", "SJ", "PM", "MP", "ML", "REML", "EB"):

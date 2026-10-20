@@ -27,6 +27,12 @@ print(r.tau2, r.I2, r.QE, r.QEp)        # 异质性
 R 代码里的 `r$b`、`r$tau2`、`r$I2`、`r$ci.lb` 在 Python 里就是 `r.b`、
 `r.tau2`、`r.I2`、`r.ci_lb`。已有的 R 脚本和教材可以近乎一对一翻译。
 
+## 先看使用手册
+
+[:octicons-arrow-right-24: **使用手册（可执行版）**](usage.md) —— 从第一次合并到网络 meta、
+多元模型、发表偏倚、绘图、命令行，每一段代码都是真实跑过的，输出也是真实输出
+（由 `tools/run_docs_examples.py` 生成，`tests/test_docs_examples.py` 在 CI 里复核）。
+
 ## 几个必须知道的约定
 
 | 约定 | 说明 |

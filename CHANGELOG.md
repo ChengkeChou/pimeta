@@ -547,6 +547,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - `[tool.mypy]` configuration so contributors get a reproducible
   `mypy src/pimeta` run.
 
+- **Chinese usage manual with executable examples.** `docs/zh/usage.md`
+  walks from a first pool through effect sizes, τ² estimators, meta-regression,
+  publication bias, multilevel models, network meta-analysis, result tables,
+  ecosystem interop, plots and the CLI. Every `python` block is followed by the
+  output it really produced: `tools/run_docs_examples.py` runs the blocks (one
+  shared namespace, document order) and rewrites the recorded output, and
+  `tests/test_docs_examples.py` re-runs them so the manual cannot drift. The
+  outputs are generated in one environment and cross-checked in another
+  (pandas 2 and pandas 3, numpy 1 and 2).
+
 ### Changed
 
 - `rma_mv()` gained `intercept=False` (R's `mods = ~ x1 + x2 - 1`) and `rho=`
@@ -566,6 +576,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   values; the τ² helpers in `tau2.py` and the array-taking helpers in
   `pooling.py` declared `list[float]` while being handed `np.ndarray`; and
   `RmaMvResult` advertised `np.ndarray` for fields it defaulted to `None`.
+
+- `ruff check` is now clean and actually verified: 304 findings became 0, and
+  the earlier "unverified lint job" caveat is gone. Two rules are ignored with a
+  stated reason — `B905` (every `zip()` pairs parallel arrays that are equal by
+  construction) and `E741` (`O`, `I` and `l` are the observation counts,
+  inertia and R source notation). `ruff format --check` is no longer enforced:
+  the house style is uniform but not ruff-format's, and adopting it would
+  rewrite 88 of 91 files.
 
 ### Not implemented
 
@@ -615,6 +633,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 All six moment estimators (`DL`, `HE`, `HS`, `SJ`, `PM`, `EB`) now agree with
 `rma(yi, vi, method=…)$tau2` to at worst 5.6e-17.
 
+- **`MetaRegressor` was unusable with scikit-learn ≥ 1.6.** `is_regressor()`,
+  `clone()`, `get_tags()` and every `Pipeline` raised
+  `AttributeError: 'MetaRegressor' object has no attribute '__sklearn_tags__'`,
+  because scikit-learn replaced the `_estimator_type` attribute with a tags
+  protocol. `MetaRegressor` now implements `__sklearn_tags__` (importing
+  scikit-learn only when it is asked) and still exposes `_estimator_type` for
+  older versions. Verified against 1.9.1.
+- **A rank-deficient design matrix now fails with an explanation.** Two collinear
+  moderators used to surface as `numpy.linalg.LinAlgError: Singular matrix` from
+  inside the τ² estimator; `rma()` now reports the offending columns and the
+  usual cause (collinear moderators, or a factor coded with all its levels).
+  The test fixture that had `year = 1990 + 5 * (dose - 1)` — exactly collinear
+  with `dose` — is fixed too.
+
 ### Removed
 
 - The `py.typed` marker and the `Typing :: Typed` classifier. The package ships
@@ -624,7 +656,6 @@ All six moment estimators (`DL`, `HE`, `HS`, `SJ`, `PM`, `EB`) now agree with
   back once that count reaches zero.
 
 ## [1.0.1] — 2026-10-18
-
 Documentation release. No library code changed; PyPI description is rebuilt from
 `README.md`, so a version bump was needed to publish the corrected docs.
 

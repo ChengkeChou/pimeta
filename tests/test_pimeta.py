@@ -3639,3 +3639,18 @@ def test_netrank_r_field_names_and_values():
     assert d["method"] == "P-score"
     assert d["ranking_random"] == pytest.approx(NR_RANKING_RANDOM, abs=1e-12)
     assert d["Pmatrix_common"][0][1] == pytest.approx(0.6381631950841189, abs=1e-12)
+
+def test_rma_rejects_a_collinear_design():
+    """A rank-deficient design must fail with a clear message, not a LinAlgError."""
+    dose = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    year = 1990.0 + 5.0 * (dose - 1.0)          # exactly collinear with dose
+    yi = np.array([0.20, 0.40, 0.10, 0.50, 0.30, 0.15])
+    vi = np.array([0.04, 0.05, 0.03, 0.06, 0.02, 0.05])
+
+    with pytest.raises(ValueError, match="not of full rank"):
+        ma.rma(yi, vi, mods=np.column_stack([dose, year]))
+
+    # The same model is fine once the collinearity is broken.
+    jittered = np.array([1990.0, 1996.0, 2001.0, 2007.0, 2012.0, 2018.0])
+    fit = ma.rma(yi, vi, mods=np.column_stack([dose, jittered]))
+    assert fit.p == 3

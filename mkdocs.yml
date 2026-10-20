@@ -88,4 +88,5 @@ nav:
       - Input, output and interoperability: api/io.md
       - S3-style generics: api/s3.md
   - 中文说明: zh/index.md
+  - 使用手册（可执行）: zh/usage.md
   - Changelog: changelog.md

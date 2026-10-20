@@ -227,7 +227,7 @@ Fitted ``rma.glmm`` model, mirroring the R ``$`` field set.
 ## `rma_mv`
 
 ```python
-rma_mv(yi, vi=None, V=None, mods=None, data=None, random: 'str' = '~ 1 | study', struct: 'str' = 'CS', rho=None, method: 'str' = 'REML', level: 'float' = 95.0, test: 'str' = 'z', dfs: 'str | np.ndarray' = 'residual', intercept: 'bool' = True, sigma2=None, slab=None, cluster=None) -> 'RmaMvResult'
+rma_mv(yi, vi=None, V=None, mods=None, data=None, random: 'str' = '~ 1 | study', struct: 'str' = 'CS', rho=None, method: 'str' = 'REML', level: 'float' = 95.0, test: 'str' = 'z', dfs: 'str | np.ndarray' = 'residual', intercept: 'bool' = True, sigma2=None, slab=None, cluster=None, warn_missing: 'bool' = True) -> 'RmaMvResult'
 ```
 
 *Mirrors R's `rma.mv`.*
@@ -252,6 +252,7 @@ Fit a multilevel / multivariate random-effects model (``metafor::rma.mv``).
 - `sigma2` — fix the variance components instead of estimating them (R's ``sigma2=``), which is what the leave-cluster-out influence diagnostics need.
 - `slab` — study labels, kept on the result for the plotting methods.
 - `cluster` — optional clustering variable, kept for the diagnostics.
+- `warn_missing` — emit a warning naming the studies dropped because a value is missing (R's ``na.action`` drops them silently).
 
 ## `RmaMvResult`
 
@@ -374,7 +375,7 @@ RmaMhResult(beta: 'float', se: 'float', zval: 'float', pval: 'float', ci_lb: 'fl
 ## `rma`
 
 ```python
-rma(yi, vi=None, sei=None, mods=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, btt=None, digits: 'int' = 4, scale=None, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None, warn_missing: 'bool' = True) -> "'RmaResult | RmaLsResult'"
+rma(yi, vi=None, sei=None, mods=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, btt=None, digits: 'int' = 4, scale=None, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None, warn_missing: 'bool' = True) -> 'RmaResult | RmaLsResult'
 ```
 
 *Mirrors R's `rma`.*
@@ -436,7 +437,7 @@ Fit a publication-bias selection model on an existing ``rma`` fit.
 ## `SelModelResult`
 
 ```python
-SelModelResult(beta: 'list[float]', b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float', ci_lb_tau2: 'float', ci_ub_tau2: 'float', delta: 'list[float]', vd: 'np.ndarray', se_delta: 'list[float]', zval_delta: 'list[float]', pval_delta: 'list[float]', ci_lb_delta: 'list[float]', ci_ub_delta: 'list[float]', QM: 'float', QMp: 'float', ll: 'float', ll0: 'float', LRT: 'float', LRTdf: 'int', LRTp: 'float', LRT_tau2: 'float', LRTp_tau2: 'float', parms: 'int', fit_stats: 'dict', pvals: 'list[float]', type: 'str', alternative: 'str', steps: 'list[float]', pgrp: 'list', k0: 'int', k1: 'int', model: 'str', k: 'int', p: 'int', tau2_fix: 'bool', method: 'str', yi: 'list[float]', vi: 'list[float]', level: 'float') -> None
+SelModelResult(beta: 'list[float]', b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float', ci_lb_tau2: 'float', ci_ub_tau2: 'float', delta: 'list[float]', vd: 'np.ndarray', se_delta: 'list[float]', zval_delta: 'list[float]', pval_delta: 'list[float]', ci_lb_delta: 'list[float]', ci_ub_delta: 'list[float]', QM: 'float', QMp: 'float', ll: 'float', ll0: 'float', LRT: 'float', LRTdf: 'int', LRTp: 'float', LRT_tau2: 'float', LRTp_tau2: 'float', parms: 'int', fit_stats: 'dict', pvals: 'list[float]', type: 'str', alternative: 'str', steps: 'list[float]', pgrp: 'list', k0: 'int', k1: 'int', model: 'str', k: 'int', p: 'int', tau2_fix: 'bool', method: 'str', yi: 'list[float]', vi: 'list[float]', level: 'float', _model: 'Any' = None) -> None
 ```
 
 *Mirrors R's `rma.uni.selmodel`.*

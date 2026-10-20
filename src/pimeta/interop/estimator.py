@@ -67,7 +67,23 @@ class MetaRegressor:
     """
 
     #: Tells ``sklearn.base.is_regressor`` what kind of estimator this is.
+    #: sklearn < 1.6 reads this attribute directly.
     _estimator_type = "regressor"
+
+    def __sklearn_tags__(self):
+        """sklearn >= 1.6 estimator tags (``get_tags`` / ``is_regressor``).
+
+        sklearn deprecated ``_estimator_type`` in favour of this protocol, so
+        both are provided.  The import is local: pimeta never requires sklearn,
+        it only answers when sklearn asks.
+        """
+        from sklearn.base import BaseEstimator
+
+        tags = BaseEstimator().__sklearn_tags__()
+        tags.estimator_type = "regressor"
+        tags.target_tags.required = True
+        tags.target_tags.one_d_labels = True
+        return tags
 
     def __init__(self, method: str = "REML", test: str = "z",
                  level: float = 0.95, measure: str = "GEN"):

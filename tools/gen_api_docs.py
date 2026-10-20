@@ -65,6 +65,10 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "meta_compose": ("drivers", "High-level drivers"),
     # network meta-analysis
     "netmeta": ("network", "Network meta-analysis"),
+    "nma": ("network", "Network meta-analysis"),
+    "nma.impact": ("network", "Network meta-analysis"),
+    "nma.measures": ("network", "Network meta-analysis"),
+    "nma.pairwise": ("network", "Network meta-analysis"),
     # publication bias / sensitivity
     "publication_bias": ("bias", "Publication bias"),
     "fsn": ("bias", "Publication bias"),
@@ -377,6 +381,16 @@ def main() -> int:
     for path, text in pages.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8", newline="\n")
+
+    # ``docs/api/`` is entirely generated.  Drop pages that this run did not
+    # produce, otherwise a topic that loses its last name (or gets renamed)
+    # leaves a stale copy behind that still shows up in a site search.
+    generated = set(pages)
+    for stale in sorted((OUT / "api").glob("*.md")):
+        if stale not in generated:
+            stale.unlink()
+            print(f"removed stale page {stale.relative_to(ROOT)}")
+
     total = len(pimeta.__all__)
     print(f"wrote {len(pages)} pages covering {total} public names")
     for path in sorted(pages):

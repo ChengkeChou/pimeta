@@ -168,6 +168,8 @@ All 393 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`NetmetabinResult`](network.md#netmetabinresult) | Network meta-analysis | — |
 | [`netpairwise`](network.md#netpairwise) | Network meta-analysis | — |
 | [`NetpairwiseResult`](network.md#netpairwiseresult) | Network meta-analysis | — |
+| [`pairwise`](network.md#pairwise) | Network meta-analysis | — |
+| [`PairwiseData`](network.md#pairwisedata) | Network meta-analysis | — |
 | [`netrank`](network.md#netrank) | Network meta-analysis | — |
 | [`NetrankResult`](network.md#netrankresult) | Network meta-analysis | netrank |
 | [`netsplit`](network.md#netsplit) | Network meta-analysis | — |
@@ -395,5 +397,3 @@ All 393 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`settings_netmeta`](s3.md#settings_netmeta) | S3-style generics and reporting | — |
 | [`META_DEFAULTS`](s3.md#meta_defaults) | S3-style generics and reporting | — |
 | [`NETMETA_DEFAULTS`](s3.md#netmeta_defaults) | S3-style generics and reporting | — |
-| [`pairwise`](misc.md#pairwise) | Other | — |
-| [`PairwiseData`](misc.md#pairwisedata) | Other | — |
