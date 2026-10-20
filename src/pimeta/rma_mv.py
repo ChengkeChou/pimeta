@@ -29,6 +29,8 @@ import numpy as np
 from scipy import stats
 from scipy.optimize import minimize, minimize_scalar
 
+from .missing import complete_cases
+
 Z_975 = stats.norm.ppf(0.975)
 
 
@@ -1014,6 +1016,7 @@ def rma_mv(
     sigma2=None,
     slab=None,
     cluster=None,
+    warn_missing: bool = True,
 ) -> RmaMvResult:
     """Fit a multilevel / multivariate random-effects model (``metafor::rma.mv``).
 
@@ -1050,6 +1053,8 @@ def rma_mv(
             diagnostics need.
         slab: study labels, kept on the result for the plotting methods.
         cluster: optional clustering variable, kept for the diagnostics.
+        warn_missing: emit a warning naming the studies dropped because a
+            value is missing (R's ``na.action`` drops them silently).
     """
     Y = np.asarray(yi, dtype=float).reshape(-1, 1)
     k = Y.shape[0]
@@ -1063,6 +1068,30 @@ def rma_mv(
 
     if V.shape != (k, k):
         raise ValueError(f"V must be ({k}, {k}), got {V.shape}")
+
+    # Drop incomplete cases (R's na.action) before anything depends on k.
+    checked: dict = {"yi": Y.ravel(), "vi": np.diag(V)}
+    mods_pre = None if mods is None else np.asarray(mods, dtype=float)
+    if mods_pre is not None and mods_pre.ndim == 2:
+        for j in range(mods_pre.shape[1]):
+            checked[f"mods[{j}]"] = mods_pre[:, j]
+    keep, _dropped = complete_cases(checked, context="studies", warn=warn_missing)
+    if not keep.all():
+        Y = Y[keep]
+        V = V[np.ix_(keep, keep)]
+        k = Y.shape[0]
+        if mods is not None and mods_pre is not None:
+            mods = mods_pre[keep]
+        if slab is not None and len(list(slab)) == keep.size:
+            slab = [s for s, ok in zip(slab, keep) if ok]
+        if cluster is not None and np.asarray(cluster).shape[0] == keep.size:
+            cluster = np.asarray(cluster)[keep]
+        if data is not None:
+            # The random-effects factors come from ``data``; keep it aligned.
+            from .data_compat import as_columns
+
+            data = {name: np.asarray(values)[keep]
+                    for name, values in as_columns(data).items()}
 
     # fixed-effect design matrix
     if mods is not None:

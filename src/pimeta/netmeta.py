@@ -30,6 +30,13 @@ import numpy as np
 from scipy import stats
 
 from .data_compat import resolve
+from .missing import complete_cases
+from .nma.impact import (  # noqa: F401  (re-export; _comparison_list is shared
+    NetimpactResult,          # with _hatmatrix_aggr further down this module)
+    _comparison_list,
+    netimpact,
+)
+from .nma.measures import NetmeasuresResult, netmeasures  # noqa: F401
 from .nma.pairwise import PairwiseData, pairwise  # noqa: F401
 
 Z_975 = stats.norm.ppf(0.975)
@@ -1850,6 +1857,7 @@ def netmeta(
     time1=None,
     time2=None,
     data=None,
+    warn_missing: bool = True,
 ) -> NetmetaResult:
     """Frequentist graph-theoretical network meta-analysis (Rücker 2012).
 
@@ -1902,13 +1910,33 @@ def netmeta(
     treat1 = list(treat1)
     treat2 = list(treat2)
     # Keep the raw (un-normalized) directions for decomp.design / nma.krahn.
+    m = len(TE)
+    if not (len(seTE) == len(treat1) == len(treat2) == m):
+        raise ValueError("TE, seTE, treat1, treat2 must have equal length")
+
+    # Drop incomplete comparisons (R's na.action).
+    def _num(vals):
+        return np.array([np.nan if v is None else float(v) for v in vals],
+                        dtype=float)
+
+    keep, _dropped = complete_cases(
+        {"TE": _num(TE), "seTE": _num(seTE)},
+        context="comparisons", warn=warn_missing)
+    if not keep.all():
+        TE = [v for v, ok in zip(TE, keep) if ok]
+        seTE = [v for v, ok in zip(seTE, keep) if ok]
+        treat1 = [v for v, ok in zip(treat1, keep) if ok]
+        treat2 = [v for v, ok in zip(treat2, keep) if ok]
+        if studlab is not None:
+            studlab = [v for v, ok in zip(list(studlab), keep) if ok]
+        m = len(TE)
+        if m == 0:
+            raise ValueError("no comparisons left after dropping missing values")
+
     TE_raw = list(TE)
     seTE_raw = list(seTE)
     treat1_raw = list(treat1)
     treat2_raw = list(treat2)
-    m = len(TE)
-    if not (len(seTE) == len(treat1) == len(treat2) == m):
-        raise ValueError("TE, seTE, treat1, treat2 must have equal length")
 
     if method_tau.upper() not in ("DL", "ML", "REML"):
         raise ValueError(
@@ -5631,256 +5659,6 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
         trts=trts,
         covar=cov_r,
         level=level,
-    )
-
-
-# --------------------------------------------------------------------------- #
-# netmeta::netmeasures
-# --------------------------------------------------------------------------- #
-
-class NetmeasuresResult:
-    """Result of :func:`netmeasures` (``netmeta::netmeasures``)."""
-
-    __slots__ = ("proportion", "meanpath", "minpar", "minpar_study",
-                 "H_tilde", "random", "tau_preset")
-
-    def __init__(self, proportion, meanpath, minpar, minpar_study,
-                 H_tilde, random, tau_preset):
-        self.proportion = proportion
-        self.meanpath = meanpath
-        self.minpar = minpar
-        self.minpar_study = minpar_study
-        self.H_tilde = H_tilde
-        self.random = random
-        self.tau_preset = tau_preset
-
-    def __repr__(self):
-        return (f"NetmeasuresResult(k={len(self.proportion)}, "
-                f"random={self.random})")
-
-    def as_dict(self):
-        """R-style ``$`` access."""
-        return {
-            "proportion": self.proportion,
-            "meanpath": self.meanpath,
-            "minpar": self.minpar,
-            "minpar.study": self.minpar_study,
-            "H.tilde": self.H_tilde,
-            "random": self.random,
-            "tau.preset": self.tau_preset,
-        }
-
-
-def _htilde(H, groups):
-    """``H.tilde`` — absolute-sum aggregation within design (or study) blocks.
-
-    R::
-
-        l <- lapply(split(H, <block index>), function(x) matrix(x, nrow(H)))
-        H.tilde <- sapply(l, function(x) apply(x, 1, function(x)
-                       0.5 * (abs(sum(x)) + sum(abs(x)))))
-    """
-    order = list(dict.fromkeys(groups))
-    out = np.zeros((H.shape[0], len(order)))
-    for j, g in enumerate(order):
-        cols = [r for r, v in enumerate(groups) if v == g]
-        blk = H[:, cols]
-        out[:, j] = 0.5 * (np.abs(blk.sum(axis=1)) + np.abs(blk).sum(axis=1))
-    return out, order
-
-
-def netmeasures(result, random=None, tau_preset=None):
-    """``netmeta::netmeasures`` — network path measures (Koenig et al. 2013).
-
-    Args:
-        result: a :class:`NetmetaResult`.
-        random: use the random-effects model.  Defaults to ``True``; forced to
-            ``True`` when ``tau_preset`` is given.
-        tau_preset: fixed heterogeneity variance.
-
-    Returns:
-        :class:`NetmeasuresResult` with ``proportion`` (share of the network
-        estimate's variance that is direct evidence), ``meanpath``, ``minpar``
-        and ``minpar_study``.
-    """
-    if not isinstance(result, NetmetaResult):
-        raise TypeError("argument 'result' must be a NetmetaResult")
-
-    if random is None:
-        random = True
-    if tau_preset is not None:
-        tau_preset = float(tau_preset)
-        if tau_preset < 0:
-            raise ValueError("argument 'tau_preset' must be non-negative")
-        random = True
-
-    if random:
-        t2 = result.tau if tau_preset is None else tau_preset
-        tau_preset_out = result.tau if tau_preset is None else tau_preset
-    else:
-        t2 = 0.0
-        tau_preset_out = None
-
-    nmak = _nma_krahn_full(
-        result.TE_raw, result.seTE_raw, result.treat1_raw, result.treat2_raw,
-        result.studlab_raw, result.narms_raw, list(result.trts),
-        "", float(t2),
-    )
-
-    if nmak["n"] == 2:
-        designs = list(dict.fromkeys(d["design"] for d in nmak["design"]))
-        prop = {d: 1.0 for d in designs}
-        return NetmeasuresResult(prop, dict(prop), None, None, None,
-                                 random, tau_preset_out)
-
-    H = nmak["H"]
-    x_obs_s = nmak["x_obs_studies"]
-    v_studies = nmak["V_studies"]
-    v_studies_inv = np.linalg.pinv(v_studies)
-    H_studies = (nmak["X_full"]
-                 @ np.linalg.pinv(x_obs_s.T @ v_studies_inv @ x_obs_s)
-                 @ x_obs_s.T
-                 @ v_studies_inv)
-
-    poss = list(nmak["trts_poss"])
-    proportion = {name: 0.0 for name in poss}
-    network = nmak["network"]
-    for d in nmak["direct"]:
-        comp = d["comparison"]
-        if comp in proportion and not math.isnan(d["seTE"]):
-            proportion[comp] = (network[comp][1] ** 2) / (d["seTE"] ** 2)
-
-    H_tilde, designs = _htilde(H, nmak["design_col"])
-    H_tilde_s, studies = _htilde(H_studies, nmak["studlab_studies"])
-
-    meanpath = {n: float(H_tilde[i, :].sum()) for i, n in enumerate(poss)}
-    minpar = {}
-    for i, n in enumerate(poss):
-        mx = float(np.abs(H_tilde[i, :]).max())
-        minpar[n] = float("inf") if mx == 0.0 else 1.0 / mx
-    minpar_study = {}
-    for i, n in enumerate(poss):
-        mx = float(np.abs(H_tilde_s[i, :]).max())
-        minpar_study[n] = float("inf") if mx == 0.0 else 1.0 / mx
-
-    return NetmeasuresResult(
-        proportion=proportion,
-        meanpath=meanpath,
-        minpar=minpar,
-        minpar_study=minpar_study,
-        H_tilde={"rows": poss, "cols": designs, "values": H_tilde},
-        random=random,
-        tau_preset=tau_preset_out,
-    )
-
-
-# --------------------------------------------------------------------------- #
-# netmeta::netimpact
-# --------------------------------------------------------------------------- #
-
-class NetimpactResult:
-    """Result of :func:`netimpact` (``netmeta::netimpact``)."""
-
-    __slots__ = ("impact_common", "impact_random", "impact_fixed",
-                 "comparisons", "studies", "ignored_comparisons",
-                 "seTE_ignore")
-
-    def __init__(self, impact_common, impact_random, comparisons, studies,
-                 ignored_comparisons, seTE_ignore):
-        self.impact_common = impact_common
-        self.impact_random = impact_random
-        self.impact_fixed = impact_common
-        self.comparisons = comparisons
-        self.studies = studies
-        self.ignored_comparisons = ignored_comparisons
-        self.seTE_ignore = seTE_ignore
-
-    def __repr__(self):
-        return (f"NetimpactResult(studies={len(self.studies)}, "
-                f"comparisons={len(self.comparisons)})")
-
-    def as_dict(self):
-        return {
-            "impact.common": self.impact_common,
-            "impact.random": self.impact_random,
-            "impact.fixed": self.impact_common,
-            "ignored.comparisons": self.ignored_comparisons,
-            "seTE.ignore": self.seTE_ignore,
-        }
-
-
-def _comparison_list(trts):
-    """Row-major ``i < j`` comparison labels — netmeta's ``x$comparisons``."""
-    out = []
-    for i in range(len(trts) - 1):
-        for j in range(i + 1, len(trts)):
-            out.append(f"{trts[i]}:{trts[j]}")
-    return out
-
-
-def netimpact(result, seTE_ignore=None):
-    """``netmeta::netimpact`` — leave-one-study-out impact on all comparisons.
-
-    Each study is down-weighted (its standard errors are replaced by
-    ``seTE_ignore``) and the network is re-estimated with the original ``tau``
-    as ``tau_preset``; the reported impact is ``1 - (seTE / seTE_removed)^2``.
-
-    Returns:
-        :class:`NetimpactResult` — ``impact_common``/``impact_random`` map
-        study labels to ``{comparison: impact}`` dictionaries.
-    """
-    if not isinstance(result, NetmetaResult):
-        raise TypeError("argument 'result' must be a NetmetaResult")
-
-    se = np.asarray(result.seTE_raw, dtype=float)
-    if seTE_ignore is None:
-        seTE_ignore = 1000.0 * float(np.nanmax(se))
-    seTE_ignore = float(seTE_ignore)
-
-    te = list(result.TE_raw)
-    t1 = list(result.treat1_raw)
-    t2 = list(result.treat2_raw)
-    stud = list(result.studlab_raw)
-    trts = list(result.trts)
-    studies = list(dict.fromkeys(stud))
-
-    lower = [(i, j) for i in range(len(trts) - 1) for j in range(i + 1, len(trts))]
-    comps = [f"{trts[i]}:{trts[j]}" for i, j in lower]
-
-    def _flat(mat):
-        mat = np.asarray(mat, dtype=float)
-        return {(i, j): float(mat[i, j]) for i, j in lower}
-
-    base_c = _flat(result.seTE_common)
-    base_r = _flat(result.seTE_random)
-
-    tiny = sys.float_info.epsilon ** 0.5  # .Machine$double.eps^0.5
-    impact_c = {s: {} for s in studies}
-    impact_r = {s: {} for s in studies}
-
-    raw_comp = [f"{a}:{b}" for a, b in zip(t1, t2)]
-    ignored = {s: [c for c, sv in zip(raw_comp, stud) if sv == s]
-               for s in studies}
-
-    for s in studies:
-        se_i = [seTE_ignore if sv == s else se[k] for k, sv in enumerate(stud)]
-        net_i = netmeta(te, se_i, t1, t2, stud, tau_preset=result.tau)
-        new_c = _flat(net_i.seTE_common)
-        new_r = _flat(net_i.seTE_random)
-        for idx, key in enumerate(lower):
-            name = comps[idx]
-            ic = 1.0 - (base_c[key] / new_c[key]) ** 2
-            ir = 1.0 - (base_r[key] / new_r[key]) ** 2
-            impact_c[s][name] = 0.0 if abs(ic) < tiny else float(ic)
-            impact_r[s][name] = 0.0 if abs(ir) < tiny else float(ir)
-
-    return NetimpactResult(
-        impact_common=impact_c,
-        impact_random=impact_r,
-        comparisons=comps,
-        studies=studies,
-        ignored_comparisons=ignored,
-        seTE_ignore=seTE_ignore,
     )
 
 
