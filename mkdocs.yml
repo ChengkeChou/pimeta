@@ -1,0 +1,90 @@
+site_name: pimeta
+site_description: Pure-Python meta-analysis — a numerically verified port of R's metafor, netmeta and meta
+site_url: https://github.com/ChengkeChou/pimeta
+repo_url: https://github.com/ChengkeChou/pimeta
+repo_name: ChengkeChou/pimeta
+edit_uri: edit/main/docs/
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_javascript:
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Quick start: quickstart.md
+  - Coming from R: migration-from-r.md
+  - Guides:
+      - Effect sizes: guide/effect-sizes.md
+      - Pooling: guide/pooling.md
+      - Meta-regression: guide/meta-regression.md
+      - Heterogeneity: guide/heterogeneity.md
+      - Publication bias: guide/publication-bias.md
+      - Network meta-analysis: guide/network-meta-analysis.md
+      - Multilevel models: guide/multilevel.md
+      - Selection and scale models: guide/selection-models.md
+      - Plots: guide/plots.md
+      - Data frames and formulas: guide/data-frames.md
+      - Interoperability: guide/interop.md
+  - Reference:
+      - API conventions: reference/api-conventions.md
+      - Differences from R: reference/differences.md
+      - R method-name map: reference/r-method-map.md
+  - API reference:
+      - Overview: api/index.md
+      - Effect sizes: api/effect-sizes.md
+      - Models: api/models.md
+      - High-level drivers: api/drivers.md
+      - Network meta-analysis: api/network.md
+      - Publication bias: api/bias.md
+      - Diagnostics and utilities: api/diagnostics.md
+      - Figures: api/plotting.md
+      - Input, output and interoperability: api/io.md
+      - S3-style generics: api/s3.md
+  - 中文说明: zh/index.md
+  - Changelog: changelog.md

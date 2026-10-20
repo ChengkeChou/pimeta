@@ -1,0 +1,137 @@
+# Pooling
+
+`rma` is the workhorse — a port of `metafor::rma()`, returning the same `$`
+fields as the R object.
+
+```python
+import pimeta as ma
+
+yi = [0.20, 0.40, 0.10, 0.50]
+vi = [0.04, 0.05, 0.03, 0.06]
+
+r = ma.rma(yi, vi, method="REML")
+
+r.b[0]        # pooled estimate (analysis scale)
+r.se[0]       # standard error
+r.ci_lb[0], r.ci_ub[0]
+r.tau2        # between-study variance
+r.I2, r.H2    # heterogeneity as percentages
+r.QE, r.QEp   # Cochran's Q, p-value
+```
+
+## Common vs random effects
+
+```python
+import pimeta as ma
+
+fixed = ma.rma(yi, vi, method="FE")        # common-effect
+random = ma.rma(yi, vi, method="REML")     # random-effects
+```
+
+`method` names the τ² estimator. The default is `"REML"`, matching `metafor`.
+
+| Estimator | Notes |
+|---|---|
+| `DL` | DerSimonian–Laird; the `meta` package default |
+| `HE`, `HS`, `SJ` | Hedges, Hunter–Schmidt, Sidik–Jonkman |
+| `ML`, `REML` | maximum likelihood; `metafor`'s default |
+| `PM`, `EB` | Paule–Mandel, empirical Bayes |
+| `GENQ`, `GENQM`, `QGENQ`, `QGENQM` | generalised Q with a specified `tau2` target |
+
+## Standard errors
+
+```python
+import pimeta as ma
+
+# Hartung-Knapp (recommended when k is small).
+r_hk = ma.rma(yi, vi, method="REML", test="knha")
+print(r_hk.se[0], r_hk.ci_lb[0], r_hk.ci_ub[0])
+
+# Ad hoc Knapp-Hartung variants.
+r_adhoc = ma.rma(yi, vi, test="adhoc")
+```
+
+With `test="knha"` the statistic switches to a *t* with `k - p` degrees of
+freedom, exactly as in `metafor`.
+
+## Confidence interval for τ²
+
+`confint(r)` returns a dict — R's `confint.rma()` gives the τ² interval, not the
+coefficient interval:
+
+```python
+import pimeta as ma
+
+ci = ma.confint(r, level=0.95, type="QP")
+print(ci["tau2"], ci["ci_lb"], ci["ci_ub"])
+
+# Profile-likelihood instead of Q-profile.
+ci_pl = ma.confint(r, type="PL")
+
+# Exact (t-distribution based) interval.
+ci_exact = ma.confint(r, type="HT")
+```
+
+## Prediction intervals
+
+```python
+import pimeta as ma
+
+pi = ma.predict(r, level=0.95)
+print(pi.pred, pi.pi_lb, pi.pi_ub)
+
+# For new moderator values, in a meta-regression.
+pi_new = ma.predict(r, newmods=[[4.0]])
+```
+
+## Profiling τ²
+
+```python
+import pimeta as ma
+
+prof = ma.profile_rma(r, n_points=40)
+print(prof.tau2, prof.ll)
+
+ax = ma.plot(prof)     # draws the log-likelihood curve
+```
+
+## By-hand pooling
+
+If you already have analysis-scale `(y, v)` arrays and want the same numbers
+without the R-shaped result object:
+
+```python
+import pimeta as ma
+
+res = ma.pool_yv(y, v, None, effect_type="MD", model="random", method="REML")
+print(res.pooled_effect, res.pooled_se, res.q, res.i2)
+```
+
+## Fixed-effect-only models
+
+`rma.mh` (Mantel–Haenszel) and `rma.peto` are fixed-effect-only, mirror their
+metafor counterparts, and support `weights`, `cumul`, `leave1out`, `rstandard`,
+`rstudent`, `confint` and `qqnorm`:
+
+```python
+import pimeta as ma
+
+mh = ma.rma_mh(ai=ai, bi=bi, ci=ci, di=di, measure="RR")
+print(mh.b[0], mh.ci_lb[0], mh.ci_ub[0])
+
+peto = ma.rma_peto(ai=ai, bi=bi, ci=ci, di=di)
+print(peto.b[0])
+```
+
+## Which output you get
+
+| Call | Result class | Mirrors |
+|---|---|---|
+| `rma(...)` | `RmaResult` | `rma.uni` |
+| `rma(..., scale=~ z)` | `RmaLsResult` | location-scale (`rma.ls`) |
+| `rma_mv(...)` | `RmaMvResult` | `rma.mv` |
+| `rma_glmm(...)` | `RmaGlmmResult` | `rma.glmm` |
+| `metagen(...)` | `PooledResult` | `meta::metagen` |
+| `metabin`, `metacont`, … | `MetabResult`, `MetacontResult`, … | `meta::metabin` etc. |
+
+All of them expose `to_dict()`, `tidy()`, `glance()` and a Jupyter HTML table.

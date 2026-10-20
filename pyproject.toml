@@ -76,6 +76,11 @@ dev = [
     "twine>=4.0",
     "ruff>=0.4",
 ]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.5",
+    "pymdown-extensions>=10.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ChengkeChou/pimeta"

@@ -8,6 +8,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Documentation site (`docs/`).** A full guide set plus a **generated** API
+  reference. `tools/gen_api_docs.py` walks `pimeta.__all__` (390 names), groups
+  the names by topic and renders one Markdown page per topic from the live
+  docstrings — no mkdocstrings, no Sphinx, no build step, so the reference
+  renders identically on GitHub, in VS Code and under MkDocs. It also
+  regenerates the `R S3 method -> pimeta callable` table and copies
+  `CHANGELOG.md` into the site.
+  - `docs/index.md`, `docs/quickstart.md` — landing page and a complete
+    walkthrough.
+  - `docs/migration-from-r.md` — every R idiom (`$`, `generic.class`, `x[i]`,
+    `mods=~`, `set.seed`) with its Python equivalent.
+  - `docs/guide/` — eleven task pages: effect sizes, pooling, meta-regression,
+    heterogeneity, publication bias, network meta-analysis, multilevel models,
+    selection and scale models, plots, data frames and formulas,
+    interoperability.
+  - `docs/reference/` — API conventions, differences from R, R method-name map.
+  - `docs/zh/index.md` — Chinese quick start and conventions.
+  - `mkdocs.yml` (material theme) and a `docs` extra so the site can be built
+    with `pip install pimeta[docs] && mkdocs serve`.
+  - `tests/test_docs.py` (12 tests) keeps the docs honest: every public callable
+    must have a docstring, the generated pages must cover every name in
+    `__all__`, every relative link must resolve, every `ma.<name>` mentioned in
+    prose must exist, and the snippets on the landing page and quickstart are
+    executed.
 - **`pimeta.interop` — ecosystem compatibility as protocols, not adapters.**
   A new subpackage that makes pimeta results consumable by the wider Python
   stack without adding a single runtime dependency (every optional import is

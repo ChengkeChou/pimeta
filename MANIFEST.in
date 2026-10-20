@@ -9,3 +9,9 @@ recursive-include tests/data *.csv
 
 # Runnable walkthrough referenced from the README.
 recursive-include examples *.py
+
+# Documentation sources (generated with `python tools/gen_api_docs.py`).
+recursive-include docs *.md
+recursive-include docs *.yml
+recursive-include tools *.py
+include mkdocs.yml
