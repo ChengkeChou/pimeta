@@ -74,6 +74,20 @@ class RmaMvResult:
     # internals consumed by ranef() (not serialised)
     components: list | None = field(repr=False, default=None)
     params: np.ndarray = field(repr=False, default_factory=lambda: np.empty(0))
+    # inputs kept so that metafor's rma.mv methods (hatvalues, weights,
+    # rstandard, cooks.distance, dfbetas, rstudent, qqnorm) can recompute on
+    # subsets of the data.
+    V: np.ndarray = field(repr=False, default_factory=lambda: np.empty((0, 0)))
+    mods: np.ndarray | None = field(repr=False, default=None)
+    struct: str = "CS"
+    dfs: str | float | list | None = None
+    intercept_incl: bool = True
+    slab: list[str] | None = None
+    cluster: list | None = None
+    test: str = "z"
+    # grouping variables used to fit the model, needed by the refit-based
+    # diagnostics (stored under a private name so repr stays short).
+    _data: dict | None = field(repr=False, default=None)
 
 
 def _encode_levels(values):
@@ -94,10 +108,21 @@ def _one_hot(values):
 
 def _get_col(data, name):
     """Pull a column from a dict-like or pandas DataFrame ``data``."""
+    if data is None:
+        raise ValueError(
+            f"the random-effects formula refers to the grouping variable "
+            f"{name!r}, but no 'data' was supplied; pass a data frame (or a "
+            f"dict) holding that column")
     if hasattr(data, "iloc"):  # pandas DataFrame
         col = data[name]
         return [v for v in col]
-    return [v for v in data[name]]
+    try:
+        return [v for v in data[name]]
+    except KeyError:
+        raise ValueError(
+            f"grouping variable {name!r} is not a column of 'data' "
+            f"(available: {sorted(data) if hasattr(data, '__iter__') else data})"
+        ) from None
 
 
 def _parse_random_factors(random: str) -> list[str]:
@@ -173,11 +198,18 @@ def _component_from_inner_outer(inner: str, outer: str, struct: str) -> list[dic
 
 
 def _parse_random_components(random, struct="CS") -> list[dict]:
-    """Parse ``random`` (formula string or list of formula strings) into a
-    list of component descriptors.  Handles ``~ 1 | a/b`` (nested
-    intercepts), ``~ 1 | a + 1 | b`` (multiple intercepts) and
-    ``~ inner | outer`` (structured random effects / random slopes).
+    """Parse ``random`` into a list of component descriptors.
+
+    Handles ``~ 1 | a/b`` (nested intercepts), ``~ 1 | a + 1 | b`` (multiple
+    intercepts) and ``~ inner | outer`` (structured random effects / random
+    slopes).
     """
+    _known = ("CS", "HCS", "UN", "ID", "DIAG", "GEN", "AR", "HAR", "CAR",
+              "SPEXP", "SPGAU", "SPLONG", "EXP", "GAU")
+    if struct is not None and str(struct).upper() not in _known:
+        raise ValueError(
+            f"unknown 'struct' {struct!r}; supported: {', '.join(_known)}")
+    struct = str(struct).upper()
     if isinstance(random, (list, tuple)):
         structs = struct if isinstance(struct, (list, tuple)) else [struct] * len(random)
         comps: list[dict] = []
@@ -196,6 +228,10 @@ def _parse_random_components(random, struct="CS") -> list[dict]:
     # multiple ``... | ...`` terms joined by ``+``
     comps = []
     for term in _split_top_plus(rhs):
+        if "|" not in term:
+            raise ValueError(
+                f"random-effects formula {random!r} has no grouping factor; "
+                f"use the form '~ 1 | study' (or '~ inner | outer')")
         inner, outer = term.split("|", 1)
         comps.extend(_component_from_inner_outer(inner.strip(), outer.strip(), struct))
     return comps
@@ -974,6 +1010,9 @@ def rma_mv(
     test: str = "z",
     dfs: str = "residual",
     intercept: bool = True,
+    sigma2=None,
+    slab=None,
+    cluster=None,
 ) -> RmaMvResult:
     """Fit a multilevel / multivariate random-effects model (``metafor::rma.mv``).
 
@@ -1005,6 +1044,11 @@ def rma_mv(
             value / array (one df per coefficient).
         intercept: prepend an intercept column to ``mods`` (``False`` matches
             R's ``mods = ~ x1 + x2 - 1``).
+        sigma2: fix the variance components instead of estimating them (R's
+            ``sigma2=``), which is what the leave-cluster-out influence
+            diagnostics need.
+        slab: study labels, kept on the result for the plotting methods.
+        cluster: optional clustering variable, kept for the diagnostics.
     """
     Y = np.asarray(yi, dtype=float).reshape(-1, 1)
     k = Y.shape[0]
@@ -1066,47 +1110,32 @@ def rma_mv(
             offset += c.n_params
         return _mv_loglik(D_list, Y, V, X, method)
 
-    lbfgsb_opts = {"ftol": 1e-12, "gtol": 1e-10, "maxiter": 20000, "maxls": 60}
-    opt = minimize(obj, init, method="L-BFGS-B", bounds=bounds, options=lbfgsb_opts)
+    if sigma2 is not None:
+        # Variance components given by the user.  ``NaN`` entries stay free
+        # (this is how ``profile.rma.mv`` pins one component at a time while
+        # the others are still estimated, matching R's ``sigma2=NA``).
+        fixed = np.asarray(sigma2, dtype=float).ravel()
+        if fixed.size != init.size:
+            raise ValueError(
+                f"'sigma2' has {fixed.size} value(s) but the model has "
+                f"{init.size} variance component(s)")
+        pinned = np.isfinite(fixed)
+        if pinned.all():
+            params = fixed
+        else:
+            def _expand(theta, _pinned=pinned, _fixed=fixed):
+                out = np.empty(_fixed.size)
+                out[_pinned] = _fixed[_pinned]
+                out[~_pinned] = theta
+                return out
 
-    # GEN (unstructured random slopes) is ill-conditioned on the raw scale of
-    # the inner predictors: the marginal likelihood has a shallow ridge near
-    # the degenerate (rho = -1) boundary where L-BFGS-B stalls in a poor local
-    # optimum.  metafor's nlminb traverses this ridge; Nelder-Mead is the most
-    # reliable scipy fallback and is only needed when a GEN term is present.
-    if any(c.kind == "gen" for c in components):
-        opt_nm = minimize(
-            obj,
-            init,
-            method="Nelder-Mead",
-            options={"xatol": 1e-10, "fatol": 1e-12, "maxiter": 100000, "maxfev": 100000},
-        )
-        if obj(opt_nm.x) < obj(opt.x):
-            opt = minimize(obj, opt_nm.x, method="L-BFGS-B", bounds=bounds, options=lbfgsb_opts)
-
-    # With a single variance component the profile likelihood is very flat
-    # around its maximum and L-BFGS-B stops a few 1e-8 short of it.  Golden
-    # section on the 1-D objective polishes the estimate to machine precision.
-    if len(init) == 1 and bounds[0][1] is None:
-        best = float(opt.x[0])
-        best_f = float(obj(opt.x))
-        lo = max(0.0, best - max(1e-3, 0.5 * abs(best)))
-        hi = best + max(1e-3, 0.5 * abs(best))
-        for _ in range(4):
-            if not hi > lo:
-                break
-            sc = minimize_scalar(
-                lambda t: float(obj(np.array([t]))),
-                bounds=(lo, hi),
-                method="bounded",
-                options={"xatol": 1e-14 * max(1.0, abs(hi))},
-            )
-            if sc.fun < best_f:
-                best, best_f = float(sc.x), float(sc.fun)
-            span = max(1e-8, 0.02 * max(1.0, abs(best)))
-            lo, hi = max(0.0, best - span), best + span
-        opt.x = np.array([best])
-    params = opt.x
+            params = _expand(_mv_optimise(
+                lambda th: obj(_expand(th)), init[~pinned],
+                [b for b, pin in zip(bounds, pinned) if not pin],
+                components, minimize, minimize_scalar))
+    else:
+        params = _mv_optimise(
+            obj, init, bounds, components, minimize, minimize_scalar)
 
     # final fit at the optimum
     D_list = []
@@ -1232,7 +1261,80 @@ def rma_mv(
         s2w=float(s2w),
         components=components,
         params=params,
+        V=V,
+        mods=mods,
+        struct=str(struct),
+        dfs=(dfs if not isinstance(dfs, np.ndarray) else dfs.tolist()),
+        intercept_incl=bool(intercept),
+        slab=([str(v) for v in slab] if slab is not None
+              else [f"Study {i + 1}" for i in range(k)]),
+        cluster=(list(cluster) if cluster is not None else None),
+        test=test,
+        _data=_as_data_dict(data),
     )
+
+
+def _as_data_dict(data):
+    """Normalise the grouping data to a plain ``{name: list}`` dict."""
+    if data is None:
+        return None
+    if isinstance(data, dict):
+        return {str(k): (list(v) if hasattr(v, "__len__") else v)
+                for k, v in data.items()}
+    cols = getattr(data, "columns", None)
+    if cols is not None:
+        return {str(c): list(data[c]) for c in cols}
+    raise TypeError("argument 'data' must be a dict or a DataFrame")
+
+
+def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
+    """Maximise the marginal likelihood over the variance components.
+
+    Split out of :func:`rma_mv` so that the diagnostics can refit on subsets
+    while the user-facing code path stays readable.
+    """
+    lbfgsb_opts = {"ftol": 1e-12, "gtol": 1e-10, "maxiter": 20000, "maxls": 60}
+    opt = minimize(obj, init, method="L-BFGS-B", bounds=bounds,
+                   options=lbfgsb_opts)
+
+    # GEN (unstructured random slopes) is ill-conditioned on the raw scale of
+    # the inner predictors: the marginal likelihood has a shallow ridge near
+    # the degenerate (rho = -1) boundary where L-BFGS-B stalls in a poor local
+    # optimum.  metafor's nlminb traverses this ridge; Nelder-Mead is the most
+    # reliable scipy fallback and is only needed when a GEN term is present.
+    if any(c.kind == "gen" for c in components):
+        opt_nm = minimize(
+            obj, init, method="Nelder-Mead",
+            options={"xatol": 1e-10, "fatol": 1e-12,
+                     "maxiter": 100000, "maxfev": 100000},
+        )
+        if obj(opt_nm.x) < obj(opt.x):
+            opt = minimize(obj, opt_nm.x, method="L-BFGS-B", bounds=bounds,
+                           options=lbfgsb_opts)
+
+    # With a single variance component the profile likelihood is very flat
+    # around its maximum and L-BFGS-B stops a few 1e-8 short of it.  Golden
+    # section on the 1-D objective polishes the estimate to machine precision.
+    if len(init) == 1 and bounds[0][1] is None:
+        best = float(opt.x[0])
+        best_f = float(obj(opt.x))
+        lo = max(0.0, best - max(1e-3, 0.5 * abs(best)))
+        hi = best + max(1e-3, 0.5 * abs(best))
+        for _ in range(4):
+            if not hi > lo:
+                break
+            sc = minimize_scalar(
+                lambda t: float(obj(np.array([t]))),
+                bounds=(lo, hi),
+                method="bounded",
+                options={"xatol": 1e-14 * max(1.0, abs(hi))},
+            )
+            if sc.fun < best_f:
+                best, best_f = float(sc.x), float(sc.fun)
+            span = max(1e-8, 0.02 * max(1.0, abs(best)))
+            lo, hi = max(0.0, best - span), best + span
+        return np.array([best])
+    return opt.x
 
 
 def _block_diag(blocks):
@@ -1353,7 +1455,7 @@ def _satterthwaite_dof(B, E_list, X_list, Omega_list) -> np.ndarray:
 
 def robust(
     result: RmaMvResult,
-    cluster,
+    cluster=None,
     adjust: bool = True,
     clubSandwich: bool = False,
     vcov: str = "CR2",
@@ -1361,6 +1463,9 @@ def robust(
     level: float | None = None,
 ):
     """Cluster-robust inference for an ``rma.mv`` fit (``metafor::robust``).
+
+    ``cluster`` is required, exactly as in R (``robust.rma.mv`` has no
+    default); when the fit stored one, it is reused.
 
     Default path (``clubSandwich=False``) — metafor's CR0/CR1 sandwich over
     the full marginal var-cov matrix: ``bread = vb X' M^-1``, block-diagonal
@@ -1375,6 +1480,11 @@ def robust(
     the working covariance equal to the full marginal matrix ``M``, plus
     ``coef_test`` in {"Satterthwaite", "naive-t", "naive-tp", "z"}.
     """
+    if cluster is None:
+        stored = getattr(result, "cluster", None)
+        if stored is None:
+            raise ValueError("Argument 'cluster' must be specified.")
+        cluster = stored
     X = result.X
     yi = result.yi
     beta = np.asarray(result.beta, dtype=float).reshape(-1, 1)

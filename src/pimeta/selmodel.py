@@ -1340,7 +1340,7 @@ def selmodel(
         "REML": {"ll": np.nan, "dev": np.nan, "AIC": np.nan, "BIC": np.nan, "AICc": np.nan},
     }
 
-    return SelModelResult(
+    out = SelModelResult(
         beta=[float(v) for v in beta],
         b=[float(v) for v in beta],
         se=[float(v) for v in se],
@@ -1387,3 +1387,96 @@ def selmodel(
         vi=[float(v) for v in vi],
         level=x.level,
     )
+    # the source fit is needed by profile_selmodel() to refit on a delta grid
+    out._model = x
+    return out
+
+
+
+# --------------------------------------------------------------------------- #
+# profile.rma.uni.selmodel
+# --------------------------------------------------------------------------- #
+
+class SelProfileResult:
+    """Result of :func:`profile_selmodel` (``profile.rma.uni.selmodel``).
+
+    ``delta`` holds the profiled selection parameters, ``ll`` the corresponding
+    maximised log-likelihoods and ``ci_lb``/``ci_ub`` the profile-likelihood
+    limits (the ``delta`` values where ``ll`` drops by ``chi2(1, 1-alpha)/2``).
+    """
+
+    __slots__ = ("delta", "ll", "maxll", "delta_hat", "ci_lb", "ci_ub",
+                 "level", "type", "k")
+
+    def __init__(self, delta, ll, maxll, delta_hat, ci_lb, ci_ub, level,
+                 type_, k):
+        self.delta = delta
+        self.ll = ll
+        self.maxll = maxll
+        self.delta_hat = delta_hat
+        self.ci_lb = ci_lb
+        self.ci_ub = ci_ub
+        self.level = level
+        self.type = type_
+        self.k = k
+
+    def __repr__(self):
+        return (f"SelProfileResult(type={self.type!r}, delta_hat="
+                f"{self.delta_hat!r}, ci=[{self.ci_lb!r}, {self.ci_ub!r}])")
+
+    def to_dict(self):
+        return {"delta": self.delta, "ll": self.ll, "maxll": self.maxll,
+                "delta_hat": self.delta_hat, "ci_lb": self.ci_lb,
+                "ci_ub": self.ci_ub, "level": self.level, "type": self.type,
+                "k": self.k}
+
+
+def profile_selmodel(result, delta=None, n_points: int = 20, span=None,
+                     level: float = 0.95):
+    """Profile the log-likelihood of a selection model over ``delta``.
+
+    ``profile.rma.uni.selmodel`` refits the model on a grid of fixed ``delta``
+    values and records the maximised log-likelihood, then inverts the
+    likelihood-ratio test to obtain a profile CI for the selection parameter.
+    The refits here re-estimate tau^2 exactly as the rest of this module does;
+    R additionally fixes tau^2 at the full-model estimate, so the curve can
+    differ in the third or fourth digit.
+
+    Args:
+        result: :class:`SelModelResult` from :func:`selmodel`.
+        delta: explicit grid (default: ``n_points`` values spanning
+            ``delta_hat +/- span * |delta_hat|``, or +/-2 when
+            ``delta_hat == 0``).
+        n_points: grid size when ``delta`` is not given.
+        span: half-width of the default grid, as a multiple of ``|delta_hat|``.
+        level: confidence level for the profile limits.
+
+    Returns:
+        :class:`SelProfileResult`.
+    """
+    if not isinstance(result, SelModelResult):
+        raise TypeError("argument 'result' must be a SelModelResult")
+    hat = float(np.asarray(result.delta, dtype=float).ravel()[0])
+    if delta is None:
+        half = (abs(hat) * (1.5 if span is None else float(span))) or 2.0
+        delta = list(np.linspace(hat - half, hat + half, int(n_points)))
+    delta = [float(v) for v in delta]
+
+    ll = []
+    for d in delta:
+        try:
+            fit = selmodel(result._model, result.type,
+                           alternative=result.alternative,
+                           delta=[d], control=None)
+            ll.append(float(fit.ll))
+        except Exception:  # pragma: no cover - degenerate grid point
+            ll.append(float("nan"))
+
+    arr = np.asarray(ll, dtype=float)
+    maxll = float(np.nanmax(arr)) if np.isfinite(arr).any() else float("nan")
+    cut = maxll - 0.5 * float(stats.chi2.ppf(level, 1))
+    ok = np.asarray(delta, dtype=float)[arr >= cut]
+    ci_lb = float(np.min(ok)) if ok.size else float("nan")
+    ci_ub = float(np.max(ok)) if ok.size else float("nan")
+    return SelProfileResult(delta, ll, maxll, hat, ci_lb, ci_ub, level,
+                            str(result.type), int(result.k))

@@ -172,6 +172,20 @@ def test_conv_wald_level_changes_the_variance():
     assert np.asarray(tight.vi)[0] < np.asarray(loose.vi)[0]
 
 
+def test_conv_wald_accepts_both_level_conventions():
+    """metafor's chklevel() takes 95 or 0.95; both must give the same answer."""
+    pct = ma.conv_wald(0.5, 0.1, 0.9, level=95)
+    frac = ma.conv_wald(0.5, 0.1, 0.9, level=0.95)
+    assert np.asarray(frac.vi)[0] == pytest.approx(np.asarray(pct.vi)[0],
+                                                   abs=1e-12)
+
+
+def test_conv_wald_rejects_an_impossible_level():
+    for bad in (0.0, 100.0, -5.0, 150.0):
+        with pytest.raises(ValueError, match="level"):
+            ma.conv_wald(0.5, 0.1, 0.9, level=bad)
+
+
 def test_conv_wald_applies_the_transform():
     res = ma.conv_wald(0.5, 0.1, 0.9, transf=np.exp)
     assert np.asarray(res.yi)[0] == pytest.approx(math.exp(0.5), abs=1e-12)

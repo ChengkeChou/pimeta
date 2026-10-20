@@ -145,6 +145,17 @@ def test_comps_splits_components():
     assert ma.comps(["A+B", "C"]) == [["A", "B"], ["C"]]
 
 
+def test_comps_orders_by_the_trts_argument():
+    """netmeta::comps() takes a reference list of components."""
+    assert ma.comps("B+A", trts=["A", "B", "C"]) == ["A", "B"]
+    assert ma.comps(["B+A", "C"], trts=["A", "B", "C"]) == [["A", "B"], ["C"]]
+
+
+def test_comps_rejects_a_component_outside_trts():
+    with pytest.raises(ValueError, match="not in 'trts'"):
+        ma.comps("A+Z", trts=["A", "B"])
+
+
 def test_combinations_returns_sorted_unique_components():
     assert ma.combinations("A+B") == ["A", "B"]
     assert ma.combinations(["A+B", "C", "A"]) == ["A", "C", "A+B"]
@@ -772,8 +783,30 @@ def test_pairwise_needs_a_full_continuous_outcome():
 
 
 def test_pairwise_rejects_data_frames():
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError, match="dict or a DataFrame"):
         ma.pairwise(treat=["A", "B"], data=object())
+
+
+def test_pairwise_accepts_a_data_mapping():
+    """metafor's ``data=`` evaluates the arguments inside the data frame."""
+    res = ma.pairwise(data={"treat": ["A", "B"], "n": [10, 10],
+                            "event": [2, 3], "studlab": ["s", "s"]})
+    assert res.sm == "OR"
+    assert len(res.TE) == 1
+
+
+def test_pairwise_explicit_arguments_win_over_the_data_columns():
+    res = ma.pairwise(data={"treat": ["A", "B"], "n": [10, 10],
+                            "event": [2, 3], "studlab": ["s", "s"]},
+                      n=[20, 20])
+    ref = ma.pairwise(treat=["A", "B"], n=[20, 20], event=[2, 3],
+                      studlab=["s", "s"])
+    assert res.TE == pytest.approx(ref.TE)
+
+
+def test_pairwise_data_needs_a_treat_column():
+    with pytest.raises(ValueError, match="'treat' column"):
+        ma.pairwise(data={"n": [10, 10], "event": [2, 3]})
 
 
 def test_pairwise_result_round_trips():

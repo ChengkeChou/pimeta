@@ -697,6 +697,22 @@ def rma_glmm(
 
     two_arm = measure in _BINARY_GLMM
 
+    # metafor's rma.glmm() dispatches on the measure, so a mismatched pair of
+    # arguments produced a bare ``TypeError: 'NoneType' object is not
+    # iterable``.  Name the arguments the chosen measure actually needs.
+    if two_arm:
+        if any(v is None for v in (ai, bi, ci, di)):
+            raise ValueError(
+                f"measure {measure!r} is a two-arm measure: 'ai', 'bi', 'ci' "
+                f"and 'di' are all required (single-arm measures are "
+                f"PLO, PR and PLN, which take 'xi'/'ni')")
+    else:
+        if xi is None or ni is None:
+            raise ValueError(
+                f"measure {measure!r} is a single-arm measure: 'xi' and 'ni' "
+                f"are both required (two-arm measures are OR, RR and RD, "
+                f"which take 'ai'/'bi'/'ci'/'di')")
+
     # ---- raw data -------------------------------------------------------- #
     if two_arm:
         ai = np.asarray([float(x) for x in ai])

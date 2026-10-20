@@ -303,13 +303,15 @@ def points_regplot(result, ax=None):
         result: the dict returned by :func:`~.plotting.regplot` **or** a
             ``(xi, yi, ...)`` collection; when given a
             :class:`~.rma_uni.RmaResult` the moderator is taken from ``X``.
-        ax: axes to draw on.
+        ax: axes to draw on (defaults to the current axes).
 
     Returns:
         ``ax``.
     """
     if ax is None:
-        raise ValueError("'ax' is required")
+        import matplotlib.pyplot as plt
+
+        ax = plt.gca()
     mod = getattr(result, "X", None)
     yi = getattr(result, "yi", None)
     if mod is None or yi is None:

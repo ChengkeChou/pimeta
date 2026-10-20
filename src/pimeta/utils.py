@@ -112,7 +112,7 @@ def bldiag(*blocks, order=None):
 # blsplit
 # --------------------------------------------------------------------------- #
 
-def blsplit(x, cluster, fun=None, args=None, sort=False):
+def blsplit(x, cluster=None, fun=None, args=None, sort=False):
     """``metafor::blsplit`` — split a (symmetric) matrix by cluster.
 
     Args:
@@ -394,30 +394,23 @@ def pairmat(result, btt=None, fixed=False):
 
 
 def _coef_names(result):
+    """R-style coefficient labels for a fitted model (``intrcpt``, ``mod1``...)."""
     p = int(result.p)
     mods = getattr(result, "mods", None)
-    names = ["intrcpt"]
+    mod_names: list[str] = []
     if isinstance(mods, (list, tuple)):
         if mods and all(isinstance(m, str) for m in mods):
-            names.extend([str(m) for m in mods])
+            mod_names = [str(m) for m in mods]
         else:
-            names.extend([f"mod{i + 1}" for i in range(len(mods))])
+            mod_names = [f"mod{i + 1}" for i in range(len(mods))]
     elif isinstance(mods, str):
-        names.extend([m.strip() for m in mods.replace("+", " ").split()
-                      if m.strip()])
+        mod_names = [m.strip() for m in mods.replace("+", " ").split() if m.strip()]
     elif mods is not None:
-        try:
-            n_mods = int(np.asarray(mods).reshape(-1).size)
-        except Exception:
-            n_mods = 0
-        if np.asarray(mods).ndim == 1 and p == 2:
-            n_mods = 1
-        elif np.asarray(mods).ndim == 2:
-            n_mods = np.asarray(mods).shape[1]
-        names.extend([f"mod{i + 1}" for i in range(max(0, n_mods - 1))])
+        arr = np.asarray(mods)
+        n_mods = 1 if arr.ndim <= 1 else int(arr.shape[1])
+        mod_names = [f"mod{i + 1}" for i in range(n_mods)]
     int_incl = bool(getattr(result, "int_incl", True))
-    if not int_incl:
-        names = names[1:]
+    names = (["intrcpt"] if int_incl else []) + mod_names
     while len(names) < p:
         names.append(f"V{len(names) + 1}")
     return names[:p]
@@ -691,10 +684,14 @@ def _fitstats_core(result):
                               / (max(k, parms + 2) - parms - 1)),
     }
     n_r = k - p
+    # R's log(0) is -Inf rather than an error, so a saturated model reports
+    # BIC = -Inf instead of blowing up here.
+    bic_reml = (-2 * ll_reml + parms * math.log(n_r) if n_r > 0
+                else (-math.inf if parms > 0 else 0.0))
     reml = {
         "ll": ll_reml, "dev": -2 * ll_reml,
         "AIC": -2 * ll_reml + 2 * parms,
-        "BIC": -2 * ll_reml + parms * math.log(n_r),
+        "BIC": bic_reml,
         "AICc": -2 * ll_reml + (2 * parms * max(n_r, parms + 2)
                                 / (max(n_r, parms + 2) - parms - 1)),
     }
@@ -703,7 +700,7 @@ def _fitstats_core(result):
 
 def _is_matreg(result):
     return (not hasattr(result, "X") and hasattr(result, "beta")
-            and hasattr(result, "yi"))
+            and hasattr(result, "R2"))
 
 
 def fitstats(result, REML=None):
@@ -876,11 +873,10 @@ def sigma_matreg(result, REML=True):
     """``metafor::sigma.matreg`` — residual SD of a ``matreg`` fit."""
     if str(getattr(result, "test", "")) != "t":
         raise ValueError("Model does not contain a 'sigma' estimate.")
-    for attr in ("sigma2_reml" if REML else "sigma2_ml",):
-        v = getattr(result, attr, None)
-        if v is not None:
-            return math.sqrt(float(v))
-    raise ValueError("Model does not contain a 'sigma' estimate.")
+    v = getattr(result, "sigma2_reml" if REML else "sigma2_ml", None)
+    if v is None:
+        raise ValueError("Model does not contain a 'sigma' estimate.")
+    return math.sqrt(float(v))
 
 
 def update_rma(result, mods=None, **kwargs):
@@ -1085,26 +1081,40 @@ def _fitstats_parts(yi, vi, x, b, tau2, method):
 
 
 def _matreg_fitstats(result):
-    yi = np.asarray(result.yi, dtype=float)
-    vi = np.asarray(result.vi, dtype=float)
-    p = np.asarray(result.beta, dtype=float).size
-    x = np.vstack([np.ones(yi.size), np.zeros((p - 1, yi.size))]).T \
-        if p > 1 else np.ones((yi.size, 1))
-    x = np.ones((yi.size, p))
-    b = np.asarray(result.beta, dtype=float)
-    return _fitstats_parts(yi, vi, x, b, 0.0, "FE")
+    """``fitstats.matreg`` — metafor stores both columns on the object."""
+    fs = getattr(result, "fit_stats", None)
+    if fs is None:
+        raise ValueError(
+            "Model does not contain fit statistics; 'matreg' only computes "
+            "them when the model was fitted from 'n' rather than 'V'.")
+    return FitstatsResult(dict(fs["ML"]), dict(fs["REML"]), "ML",
+                          int(result.parms), int(result.nobs),
+                          int(result.p) + 1)
 
 
 def as_data_frame_confint(result, include_na=False):
     """``metafor::as.data.frame.confint.rma`` — CIs as a data frame.
 
-    Accepts a :class:`~.pooling.Tau2Confint`, a :class:`VifResult`, an
-    ``anova``-style result or a plain dict of columns; returns a list of dicts
-    with the columns ``estimate``/``ci.lb``/``ci.ub`` when available.
+    Accepts a :class:`~.pooling.Tau2Confint`, a :class:`VifResult`, a
+    ``matreg`` fit, an ``anova``-style result or a plain dict of columns;
+    returns a list of dicts with the columns ``estimate``/``ci.lb``/``ci.ub``
+    (metafor's names) when available.
     """
     rows = []
     d = result if isinstance(result, dict) else getattr(result, "__dict__", {})
-    keys = list(d)
+    if "estimate" not in d:
+        # metafor's rows are estimate/ci.lb/ci.ub; our objects call the point
+        # estimate `beta` (matreg), `tau2` (Tau2Confint) or `coef`.
+        for alt in ("beta", "coef", "tau2", "estimate"):
+            if alt in d:
+                d = dict(d)
+                d["estimate"] = d.pop(alt)
+                break
+    if "ci_lb" in d and "ci.lb" not in d:
+        d = dict(d)
+        d["ci.lb"] = d.pop("ci_lb")
+        d["ci.ub"] = d.pop("ci_ub")
+    keys = [k for k in d if k not in ("vb", "names", "fit_stats")]
     n = 1
     for k in keys:
         v = d[k]

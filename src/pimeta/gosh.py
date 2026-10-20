@@ -290,8 +290,8 @@ def gosh(
         probs = probs / probs.sum()
         j = rng.choice(sizes, size=n_tot, replace=True, p=probs)
         incl = []
-        for m in j:
-            sel = rng.choice(k, size=int(m), replace=False)
+        for samp in j:
+            sel = rng.choice(k, size=int(samp), replace=False)
             row = [False] * k
             for i in sel:
                 row[int(i)] = True

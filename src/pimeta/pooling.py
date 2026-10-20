@@ -379,6 +379,28 @@ def _profile_tau2_func(
     return -2.0 * (ll - ll_opt) - objective
 
 
+def _resolve_alpha(level: float) -> float:
+    """Normalise a confidence specification to a tail probability.
+
+    This module historically took ``level`` to be the *alpha* (``0.05`` for a
+    95% interval) while the rest of the package (and metafor) use the
+    confidence level (``95``).  Passing ``0.95`` therefore silently produced a
+    95%-alpha interval instead of a 95%-confidence one.  Both spellings are
+    accepted now, disambiguated the only sensible way: anything ``>= 0.5`` is a
+    confidence level (``95`` or ``0.95``), anything below is an alpha.
+    """
+    level = float(level)
+    if np.isnan(level) or not (0.0 < level < 100.0):
+        raise ValueError(
+            "argument 'level' must be a confidence level (95 or 0.95) or a "
+            "tail probability such as 0.05")
+    if level >= 1.0:
+        return 1.0 - level / 100.0
+    if level > 0.5:
+        return 1.0 - level
+    return level
+
+
 @dataclass
 class Tau2Confint:
     """CI for tau^2 / tau / I^2 / H^2 (mirrors ``metafor::confint``)."""
@@ -434,6 +456,7 @@ def confint_tau2(
     type = type.upper()
     if type not in ("QP", "PL", "HT"):
         raise ValueError(f"unsupported confint type: {type!r}")
+    level = _resolve_alpha(level)
 
     # Typical sampling variance (fixed-effect weights 1/vi) + I^2/H^2.
     # metafor: vt <- (k - p) / .tr(P)  with  P = W.FE - W.FE X (X'W.FE X)^-1 X' W.FE
@@ -633,6 +656,7 @@ def predict_rma(
     predtype = predtype.lower()
     if predtype not in ("default", "simple", "riley", "t"):
         raise ValueError(f"unsupported predtype: {predtype!r}")
+    level = _resolve_alpha(level)
     if parms is None:
         parms = p + 1  # rma.uni: p coefficients + 1 variance component (tau2)
 
@@ -742,6 +766,7 @@ def hc_rma(
         raise ValueError("hc: k = 1")
     if np.any(vi <= 0.0):
         raise ValueError("hc: one or more sampling variances are non-positive")
+    level = _resolve_alpha(level)
 
     wi = 1.0 / vi
     W1 = float(np.sum(wi))

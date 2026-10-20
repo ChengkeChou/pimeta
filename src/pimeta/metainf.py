@@ -21,6 +21,7 @@ import numpy as np
 from scipy import stats
 
 from .metagen import MetagenResult, metagen
+from .rma_list import RowSlicable
 
 
 # --------------------------------------------------------------------------- #
@@ -63,7 +64,7 @@ class MetainfResult:
 
 
 @dataclass
-class MetacumResult:
+class MetacumResult(RowSlicable):
     """``meta::metacum`` — one row per cumulative prefix of studies."""
 
     studlab: list[str]

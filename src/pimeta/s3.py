@@ -194,8 +194,19 @@ def BIC(x):
 
 
 @singledispatch
-def weights(x, pct=False):
+def weights(x, pct=False, type=None):
     """``weights`` — study weights (raw or as percentages)."""
+    from .rma_mv import RmaMvResult
+    from .rma_peto_mh import is_mh_result, mh_weights
+
+    if is_mh_result(x):
+        # weights.rma.mh / weights.rma.peto: percentages by default.
+        return mh_weights(x, type="diagonal" if pct is not False else "matrix")
+    if isinstance(x, RmaMvResult):
+        from .mv_diagnostics import mv_weights
+
+        want = type or ("diagonal" if pct is not False else "matrix")
+        return mv_weights(x, type=want)
     w = _first(x, "weights", "w")
     if w is None:
         raise TypeError(f"weights() is not defined for {type(x).__name__}")
@@ -232,8 +243,16 @@ def simulate(x, nsim=1, seed=None):
 
 
 @singledispatch
-def confint(x, level=0.95, type="QP"):
-    """``confint`` — confidence interval of tau^2 (or of the coefficients)."""
+def confint(x, level=0.95, type="QP", transf=None):
+    """``confint`` — confidence interval of tau^2 (or of the coefficients).
+
+    ``transf`` is only used by the ``rma.mh`` / ``rma.peto`` methods, where
+    ``transf=True`` back-transforms the ratio measures with ``exp()``.
+    """
+    from .rma_peto_mh import is_mh_result, mh_confint
+
+    if is_mh_result(x):
+        return mh_confint(x, level=level, transf=transf)
     tau2 = _opt(x, "tau2")
     yi = _opt(x, "yi")
     vi = _opt(x, "vi")
@@ -289,8 +308,14 @@ def predict(x, newmods=None, level=0.95, predtype="default"):
 
 
 @singledispatch
-def hatvalues_rma(x):
+def hatvalues_rma(x, type="diagonal"):
     """``hatvalues`` — leverages of the studies."""
+    from .rma_mv import RmaMvResult
+
+    if isinstance(x, RmaMvResult):
+        from .mv_diagnostics import mv_hatvalues
+
+        return mv_hatvalues(x, type=type)
     w = _first(x, "weights", "w")
     X = _first(x, "X", "X_matrix")
     if w is None or X is None:
@@ -302,8 +327,14 @@ def hatvalues_rma(x):
 
 
 @singledispatch
-def dfbetas_rma(x):
+def dfbetas_rma(x, cluster=None):
     """``dfbetas`` — change in the coefficients when dropping each study."""
+    from .rma_mv import RmaMvResult
+
+    if isinstance(x, RmaMvResult):
+        from .mv_diagnostics import mv_dfbetas
+
+        return np.asarray(mv_dfbetas(x, cluster=cluster), dtype=float)
     from .sensitivity import influence
     yi = _first(x, "yi")
     vi = _first(x, "vi")
@@ -328,8 +359,17 @@ def dfbetas_rma(x):
 
 
 @singledispatch
-def rstandard_rma(x):
+def rstandard_rma(x, cluster=None):
     """``rstandard`` — standardised residuals."""
+    from .rma_mv import RmaMvResult
+    from .rma_peto_mh import is_mh_result, mh_rstandard
+
+    if is_mh_result(x):
+        return mh_rstandard(x)
+    if isinstance(x, RmaMvResult):
+        from .mv_diagnostics import mv_rstandard
+
+        return mv_rstandard(x, cluster=cluster)
     res = residuals(x)
     vi = _first(x, "vi")
     tau2 = float(_opt(x, "tau2") or 0.0)
@@ -476,12 +516,21 @@ def plot(x, which="forest", **kwargs):
 
     ``which`` selects the figure (``"forest"``, ``"funnel"``, ``"radial"``,
     ``"labbe"``, ``"qqnorm"``, ``"baujat"``, ``"gosh"``, ``"profile"``,
-    ``"bubble"``, ``"drapery"``, ``"regplot"``).  The study-level ``yi``/``vi``
-    are extracted from the fitted object automatically.
+    ``"bubble"``, ``"drapery"``, ``"regplot"``, ``"influence"``,
+    ``"permutest"``).  The study-level ``yi``/``vi`` are extracted from the
+    fitted object automatically.
+
+    Passing an already-computed profile object (``plot(profile_rmamv(x))``
+    or ``plot(profile_selmodel(x))``) draws the profile even with the default
+    ``which``, matching R's S3 dispatch.
     """
     from . import plotting
 
     name = str(which).lower()
+    if name == "forest" and getattr(x, "yi", None) is None and (
+            hasattr(x, "sigma2") or hasattr(x, "delta")
+            or hasattr(x, "alpha")) and hasattr(x, "ll"):
+        name = "profile"
     yi = _opt(x, "yi")
     vi = _opt(x, "vi")
     sei = _opt(x, "sei")
@@ -533,6 +582,39 @@ def plot(x, which="forest", **kwargs):
             gosh(np.asarray(yi, dtype=float), np.asarray(vi, dtype=float)),
             **kwargs)
     if name == "profile":
+        from .mv_diagnostics import MvProfileResult, profile_rmamv
+        from .selmodel import SelModelResult
+
+        if isinstance(x, SelModelResult):
+            # profile.rma.uni.selmodel: profile over the selection parameter
+            from .selmodel import profile_selmodel
+
+            prof_keys = ("delta", "n_points", "span", "level")
+            prof_kw = {k: kwargs.pop(k) for k in prof_keys if k in kwargs}
+            prof_kw.setdefault("n_points", 12)
+            return plotting.plot_selprofile(profile_selmodel(x, **prof_kw),
+                                            **kwargs)
+        if isinstance(x, MvProfileResult):
+            # plot() of an already-computed profile.rma.mv
+            return plotting.plot_mv_profile(x, **kwargs)
+        from .rma_ls import RmaLsProfileResult, RmaLsResult, profile_rma_ls
+
+        if isinstance(x, RmaLsProfileResult):
+            return plotting.plot_mv_profile(x, **kwargs)
+        if isinstance(x, RmaLsResult):
+            # plot(x, which="profile") on a location-scale fit
+            prof_keys = ("alpha", "steps", "xlim")
+            prof_kw = {k: kwargs.pop(k) for k in prof_keys if k in kwargs}
+            return plotting.plot_mv_profile(profile_rma_ls(x, **prof_kw),
+                                            **kwargs)
+        from .rma_mv import RmaMvResult
+
+        if isinstance(x, RmaMvResult):
+            # plot(x, which="profile") on a fit == plot(profile(x))
+            prof_keys = ("sigma2", "steps", "xlim")
+            prof_kw = {k: kwargs.pop(k) for k in prof_keys if k in kwargs}
+            return plotting.plot_mv_profile(profile_rmamv(x, **prof_kw),
+                                            **kwargs)
         return plotting.llplot(x, **kwargs)
     if name == "bubble":
         return plotting.bubble(x, **kwargs)
@@ -540,4 +622,42 @@ def plot(x, which="forest", **kwargs):
         return plotting.drapery(x, **kwargs)
     if name == "regplot":
         return plotting.regplot(x, **kwargs)
+    if name in ("influence", "influential", "infl"):
+        # plot(x, which="influence") == metafor's plot(influence(x))
+        from .plotting import plot_influence
+        from .sensitivity import influence
+
+        if hasattr(x, "is_infl"):
+            res = x
+        else:
+            if yi is None or vi is None:
+                raise TypeError(
+                    "plot(x, which='influence') needs study-level yi/vi")
+            mods = _opt(x, "X")
+            if mods is not None:
+                mods = np.asarray(mods, dtype=float)[:, 1:]
+            res = influence(
+                np.asarray(yi, dtype=float), np.asarray(vi, dtype=float),
+                X=mods, X_names=None,
+                method=_opt(x, "method") or "REML",
+                test=(_opt(x, "test") if _opt(x, "test") in ("z", "knha")
+                      else "z"),
+            )
+        if slab is None:
+            slab = _opt(x, "slab")
+        return plot_influence(res, slab=slab, **kwargs)
+    if name in ("permutest", "permutation"):
+        # plot(x, which="permutest") == metafor's plot(permutest(x))
+        if getattr(x, "zval_perm", None) is None:
+            from .diagnostics import permutest as _permutest
+
+            # permutest()'s own arguments are forwarded; whatever is left goes
+            # to the plotting routine.
+            perm_keys = ("exact", "iter", "permci", "seed", "alternative",
+                         "stat", "p2defn")
+            perm_kw = {k: kwargs.pop(k) for k in perm_keys if k in kwargs}
+            perm_btt = kwargs.pop("btt", None)
+            x = _permutest(x, btt=perm_btt, **perm_kw)
+            kwargs["btt"] = perm_btt
+        return plotting.plot_permutest(x, **kwargs)
     raise ValueError(f"unknown 'which' value: {which!r}")

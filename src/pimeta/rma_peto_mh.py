@@ -46,6 +46,15 @@ class RmaPetoResult:
     measure: str         # "PETO"
     method: str          # "FE"
     level: float         # alpha
+    # raw tables, kept so that metafor's cumul()/leave1out()/rstudent()/
+    # weights()/confint()/qqnorm() methods can recompute the estimator.
+    ai: list[float] | None = None
+    bi: list[float] | None = None
+    ci: list[float] | None = None
+    di: list[float] | None = None
+    slab: list[str] | None = None
+    add: float = 0.5
+    drop00: bool = True
 
 
 @dataclass
@@ -76,6 +85,28 @@ class RmaMhResult:
     TAp: float | None
     k_pos: int | None
     level: float         # alpha
+    # raw tables, kept so that metafor's cumul()/leave1out()/rstudent()/
+    # weights()/confint()/qqnorm() methods can recompute the estimator.
+    ai: list[float] | None = None
+    bi: list[float] | None = None
+    ci: list[float] | None = None
+    di: list[float] | None = None
+    slab: list[str] | None = None
+    add: float = 0.5
+    drop00: bool = True
+    correct: bool = True
+
+
+def _slab(slab, k):
+    """Study labels, defaulting to ``Study 1..k``."""
+    if slab is None:
+        return [f"Study {i + 1}" for i in range(k)]
+    slab = [str(v) for v in slab]
+    if len(slab) != k:
+        raise ValueError(
+            f"length of 'slab' ({len(slab)}) does not match the number of "
+            f"studies ({k})")
+    return slab
 
 
 def _fe_heterogeneity(qe: float, k: int) -> tuple[float, float, float, float]:
@@ -100,6 +131,7 @@ def rma_peto(
     add: float = 0.5,
     drop00: bool = True,
     level: float = 0.05,
+    slab=None,
 ) -> RmaPetoResult:
     """Peto's one-step odds-ratio meta-analysis (``metafor::rma.peto``).
 
@@ -145,6 +177,9 @@ def rma_peto(
         beta=beta, se=se, zval=zval, pval=pval, ci_lb=ci_lb, ci_ub=ci_ub,
         tau2=0.0, I2=i2, H2=h2, QE=qe, QEp=qep, k=k, k_pos=k_pos,
         measure="PETO", method="FE", level=level,
+        ai=[float(v) for v in a], bi=[float(v) for v in b],
+        ci=[float(v) for v in c], di=[float(v) for v in d],
+        slab=_slab(slab, k), add=float(add), drop00=bool(drop00),
     )
 
 
@@ -159,6 +194,7 @@ def rma_mh(
     drop00: bool = True,
     correct: bool = True,
     level: float = 0.05,
+    slab=None,
 ) -> RmaMhResult:
     """Mantel-Haenszel meta-analysis (``metafor::rma.mh``).
 
@@ -268,4 +304,297 @@ def rma_mh(
         tau2=0.0, I2=i2, H2=h2, QE=qe, QEp=qep, k=k_yi, measure=measure,
         method="FE", CO=CO, COp=COp, MH=MH, MHp=MHp, BD=BD, BDp=BDp,
         TA=TA, TAp=TAp, k_pos=k_pos, level=level,
+        ai=[float(v) for v in a], bi=[float(v) for v in b],
+        ci=[float(v) for v in c], di=[float(v) for v in d],
+        slab=_slab(slab, k_yi), add=float(add), drop00=bool(drop00),
+        correct=bool(correct),
     )
+
+
+
+# --------------------------------------------------------------------------- #
+# metafor's rma.mh / rma.peto methods
+# --------------------------------------------------------------------------- #
+#
+# metafor gives both models their own cumul(), leave1out(), rstandard(),
+# rstudent(), weights(), confint() and qqnorm() implementations; each simply
+# refits the (very cheap, closed-form) estimator on subsets of the 2x2 tables.
+# They are transcribed here and wired up through the package's generic
+# dispatch, so ``weights(mh)``, ``cumul(mh)``, ``leave1out(mh)``, ... work
+# exactly as they do in R.
+
+_MH_RESULTS = (RmaPetoResult, RmaMhResult)
+
+
+def is_mh_result(x) -> bool:
+    """True for the ``rma.mh`` / ``rma.peto`` result objects."""
+    return isinstance(x, _MH_RESULTS)
+
+
+def _mh_tables(x):
+    """``(a, b, c, d)`` as float arrays."""
+    return (np.asarray(x.ai, dtype=float), np.asarray(x.bi, dtype=float),
+            np.asarray(x.ci, dtype=float), np.asarray(x.di, dtype=float))
+
+
+def _mh_refit(x, keep):
+    """Refit ``rma.peto`` / ``rma.mh`` on the tables selected by ``keep``."""
+    a, b, c, d = _mh_tables(x)
+    a, b, c, d = a[keep], b[keep], c[keep], d[keep]
+    if isinstance(x, RmaPetoResult):
+        return rma_peto(a, b, c, d, add=x.add, drop00=x.drop00, level=x.level)
+    return rma_mh(a, b, c, d, measure=x.measure, add=x.add, drop00=x.drop00,
+                  correct=x.correct, level=x.level)
+
+
+def _mh_yi_vi(x):
+    """The ``yi``/``vi`` that ``rma.peto`` / ``rma.mh`` actually pool.
+
+    For Peto's method these are the *per-study one-step* log odds ratios
+    ``(a - E) / V`` with variance ``1 / V`` (hypergeometric ``V``), not the
+    ``a - E`` differences themselves.
+    """
+    a, b, c, d = _mh_tables(x)
+    if isinstance(x, RmaPetoResult):
+        n1 = a + b
+        n2 = c + d
+        N = a + b + c + d
+        xt = a + c
+        yt = b + d
+        E = xt * n1 / N
+        V = xt * yt * (n1 / N) * (n2 / N) / (N - 1.0)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            return (a - E) / V, 1.0 / V
+    esc = escalc(x.measure, ai=list(a), bi=list(b), ci=list(c), di=list(d),
+                 add=x.add, drop00=x.drop00)
+    return np.asarray(esc.yi, dtype=float), np.asarray(esc.vi, dtype=float)
+
+
+def _mh_wi(x):
+    """metafor's per-study weights ``wi`` (``weights.rma.mh`` / ``.peto``)."""
+    a, b, c, d = _mh_tables(x)
+    n1 = a + b
+    n2 = c + d
+    N = a + b + c + d
+    if isinstance(x, RmaPetoResult):
+        xt = a + c
+        yt = b + d
+        return xt * yt * (n1 / N) * (n2 / N) / (N - 1.0)
+    measure = str(x.measure).upper()
+    if measure == "OR":
+        return (b / N) * c
+    if measure == "RR":
+        return (c / N) * n1
+    if measure == "RD":
+        return (n1 / N) * n2
+    raise ValueError(f"rma.mh measure {measure!r} has no weight formula")
+
+
+def mh_weights(x, type="diagonal"):
+    """``weights.rma.mh`` / ``weights.rma.peto``.
+
+    ``type="diagonal"`` returns the weights as percentages of their sum,
+    ``type="matrix"`` the diagonal weight matrix as a ``numpy`` array.
+    """
+    if not is_mh_result(x):
+        raise TypeError(f"weights() is not defined for {type(x).__name__}")
+    wi = _mh_wi(x)
+    kind = str(type).lower()
+    if kind.startswith("diag"):
+        return [float(v) for v in wi / np.sum(wi) * 100.0]
+    if kind == "matrix":
+        return np.diag(wi)
+    raise ValueError("'type' must be 'diagonal' or 'matrix'")
+
+
+def mh_confint(x, level=None, transf=None):
+    """``confint.rma.mh`` / ``confint.rma.peto`` — estimate plus Wald CI.
+
+    ``level`` accepts ``95``, ``0.95`` or ``0.05``; ``transf=True`` applies
+    ``exp()`` for the ratio measures, exactly like R.
+    """
+    if not is_mh_result(x):
+        raise TypeError(f"confint() is not defined for {type(x).__name__}")
+    if level is None:
+        alpha = float(x.level)
+    else:
+        lv = float(level)
+        if lv > 1.0:
+            lv = lv / 100.0
+        alpha = 1.0 - lv if lv >= 0.5 else lv
+    crit = float(stats.norm.isf(alpha / 2.0))
+    beta = float(x.beta)
+    lo = beta - crit * float(x.se)
+    hi = beta + crit * float(x.se)
+    if transf is True:
+        transf = (math.exp if str(x.measure).upper() in ("OR", "RR", "IRR")
+                  else None)
+    if callable(transf):
+        beta, lo, hi = float(transf(beta)), float(transf(lo)), float(transf(hi))
+    return {"estimate": beta, "ci.lb": min(lo, hi), "ci.ub": max(lo, hi)}
+
+
+def mh_rstandard(x):
+    """``rstandard.rma.mh`` / ``rstandard.rma.peto`` — standardised residuals."""
+    if not is_mh_result(x):
+        raise TypeError(f"rstandard() is not defined for {type(x).__name__}")
+    yi, vi = _mh_yi_vi(x)
+    resid = yi - float(x.beta)
+    resid[np.abs(resid) < 100 * 2.220446049250313e-16] = 0.0
+    se = np.sqrt(vi)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        z = resid / se
+    return {"resid": [float(v) for v in resid],
+            "se": [float(v) for v in se],
+            "z": [float(v) for v in z],
+            "slab": list(x.slab)}
+
+
+def mh_rstudent(x):
+    """``rstudent.rma.mh`` / ``rstudent.rma.peto`` — deleted residuals.
+
+    Every table is dropped in turn, the estimator is refitted on the rest, and
+    the deleted residual ``yi - beta(-i)`` is divided by
+    ``sqrt(vi + var(beta(-i)))``.
+    """
+    if not is_mh_result(x):
+        raise TypeError(f"rstudent() is not defined for {type(x).__name__}")
+    yi, vi = _mh_yi_vi(x)
+    k = int(x.k)
+    delpred = np.full(k, np.nan)
+    vdelpred = np.full(k, np.nan)
+    for i in range(k):
+        try:
+            res = _mh_refit(x, np.arange(k) != i)
+        except (ValueError, ZeroDivisionError, FloatingPointError):
+            continue
+        delpred[i] = float(res.beta)
+        vdelpred[i] = float(res.se) ** 2
+    resid = yi - delpred
+    resid[np.abs(resid) < 100 * 2.220446049250313e-16] = 0.0
+    se = np.sqrt(vi + vdelpred)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        z = resid / se
+    return {"resid": [float(v) for v in resid],
+            "se": [float(v) for v in se],
+            "z": [float(v) for v in z],
+            "slab": list(x.slab)}
+
+
+def mh_leave1out(x, cluster=None):
+    """``leave1out.rma.mh`` / ``leave1out.rma.peto``.
+
+    Refits the estimator once per study (or once per ``cluster``) and returns a
+    :class:`~pimeta.sensitivity.LeaveOneOutResult`; the ``slab`` attribute holds
+    R's ``"-study"`` labels.
+    """
+    from .sensitivity import LeaveOneOutResult
+
+    if not is_mh_result(x):
+        raise TypeError(f"leave1out() is not defined for {type(x).__name__}")
+    k = int(x.k)
+    if k == 1:
+        raise ValueError("Stopped because k = 1.")
+    labels = list(x.slab)
+    if cluster is None:
+        groups = [[i] for i in range(k)]
+        names = [f"-{labels[i]}" for i in range(k)]
+    else:
+        cl = list(cluster)
+        if len(cl) != k:
+            raise ValueError(
+                f"Length of the variable specified via 'cluster' ({len(cl)}) "
+                f"does not match the length of the data ({k}).")
+        if any(v is None for v in cl):
+            raise ValueError("No missing values allowed in 'cluster' variable.")
+        order = list(dict.fromkeys(cl))
+        groups = [[i for i in range(k) if cl[i] == g] for g in order]
+        names = [f"-{g}" for g in order]
+
+    est, se, z, p, lo, hi, q, qp, i2, h2 = ([] for _ in range(10))
+    for grp in groups:
+        keep = np.ones(k, dtype=bool)
+        keep[grp] = False
+        try:
+            res = _mh_refit(x, keep)
+        except (ValueError, ZeroDivisionError, FloatingPointError):
+            for lst in (est, se, z, p, lo, hi, q, qp, i2, h2):
+                lst.append(float("nan"))
+            continue
+        est.append(float(res.beta))
+        se.append(float(res.se))
+        z.append(float(res.zval))
+        p.append(float(res.pval))
+        lo.append(float(res.ci_lb))
+        hi.append(float(res.ci_ub))
+        q.append(float(res.QE))
+        qp.append(float(res.QEp))
+        i2.append(float(res.I2))
+        h2.append(float(res.H2))
+    out = LeaveOneOutResult(
+        estimate=est, se=se, z=z, p=p, ci_lower=lo, ci_upper=hi,
+        QE=q, QE_p=qp, tau2=[0.0] * len(est), I2=i2, H2=h2,
+    )
+    out.slab = names
+    return out
+
+
+def mh_cumul(x, order=None, decreasing=False, collapse=False):
+    """``cumul.rma.mh`` / ``cumul.rma.peto`` — cumulative estimates.
+
+    ``order`` supplies the ordering; consecutive tables are added one at a
+    time, or one distinct ``order`` value at a time when ``collapse=True``.
+    """
+    from .cumul import CumulResult
+
+    if not is_mh_result(x):
+        raise TypeError(f"cumul() is not defined for {type(x).__name__}")
+    k = int(x.k)
+    labels = list(x.slab)
+    if order is None:
+        orvar = list(range(k))
+        collapse = False
+    else:
+        orvar = list(order)
+        if len(orvar) != k:
+            raise ValueError(
+                f"Length of the 'order' argument ({len(orvar)}) does not "
+                f"correspond to the size of the original dataset ({k}).")
+    idx = sorted(range(k), key=lambda i: orvar[i], reverse=bool(decreasing))
+    uor = list(dict.fromkeys(orvar[i] for i in idx))
+    steps = len(uor) if collapse else len(idx)
+
+    kk, est, se, z, p, lo, hi, q, qp, i2, h2, used = ([] for _ in range(12))
+    for pos in range(steps):
+        if collapse:
+            keep = np.array([orvar[i] in uor[:pos + 1] for i in range(k)])
+            label = str(uor[pos])
+        else:
+            keep = np.zeros(k, dtype=bool)
+            keep[idx[:pos + 1]] = True
+            label = str(labels[idx[pos]])
+        try:
+            res = _mh_refit(x, keep)
+        except (ValueError, ZeroDivisionError, FloatingPointError):
+            for lst in (kk, est, se, z, p, lo, hi, q, qp, i2, h2):
+                lst.append(float("nan"))
+            used.append("")
+            continue
+        kk.append(int(np.sum(keep)))
+        est.append(float(res.beta))
+        se.append(float(res.se))
+        z.append(float(res.zval))
+        p.append(float(res.pval))
+        lo.append(float(res.ci_lb))
+        hi.append(float(res.ci_ub))
+        q.append(float(res.QE))
+        qp.append(float(res.QEp))
+        i2.append(float(res.I2))
+        h2.append(float(res.H2))
+        used.append(label)
+    out = CumulResult(
+        estimate=est, se=se, z=z, p=p, ci_lower=lo, ci_upper=hi,
+        q=q, q_p=qp, tau2=[0.0] * len(est), i2=i2, h2=h2, k=kk,
+    )
+    out.slab = used
+    return out

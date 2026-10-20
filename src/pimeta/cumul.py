@@ -14,12 +14,13 @@ import numpy as np
 from scipy import stats
 
 from .pooling import PooledResult, pool_yv
+from .rma_list import RowSlicable
 
 Z_975 = stats.norm.ppf(0.975)
 
 
 @dataclass
-class CumulResult:
+class CumulResult(RowSlicable):
     """Cumulative meta-analysis: one row per prefix of studies."""
 
     estimate: list[float]
@@ -81,11 +82,14 @@ def _single_study(y: float, v: float, alpha: float) -> PooledResult:
 
 def cumul(
     yi,
-    vi,
+    vi=None,
     n=None,
     effect_type: str = "MD",
     method: str = "DL",
     alpha: float = 0.05,
+    order=None,
+    decreasing: bool = False,
+    collapse: bool = False,
 ) -> CumulResult:
     """Cumulative (sequential) meta-analysis (mirrors ``meta::cumul``).
 
@@ -94,7 +98,16 @@ def cumul(
         n: per-study sample size (for the HS tau2 estimator).
         effect_type: passed through to pooling (for back-transformation).
         method: tau-squared estimator (default DL).
+
+    An ``rma.mh`` / ``rma.peto`` result can be passed as ``yi``, in which case
+    metafor's ``cumul.rma.mh`` / ``.peto`` is used (``order``, ``decreasing``
+    and ``collapse`` then control the ordering).
     """
+    from .rma_peto_mh import is_mh_result, mh_cumul
+
+    if is_mh_result(yi):
+        return mh_cumul(yi, order=order, decreasing=decreasing,
+                        collapse=collapse)
     yi = np.asarray(yi, dtype=float)
     vi = np.asarray(vi, dtype=float)
     k = len(yi)

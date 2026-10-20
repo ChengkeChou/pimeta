@@ -645,6 +645,13 @@ class PermutestResult:
     se: list[float] | None = None
     ci_lb: list[float] | None = None
     ci_ub: list[float] | None = None
+    # observed statistics and their permutation distributions, kept so that
+    # ``plot(x, which="permutest")`` can draw them (metafor stores the same
+    # arrays on the ``permutest.rma.uni`` object).
+    zval: list[float] | None = None
+    zval_perm: list[list[float]] | None = None
+    QM_perm: list[float] | None = None
+    coefnames: list[str] | None = None
 
 
 #: metafor's ``comptol = .Machine$double.eps^0.5``
@@ -943,4 +950,22 @@ def permutest(result, exact=False, iter=1000, btt=None, permci=False,
         se=[float(v) for v in result.se],
         ci_lb=ci_lb,
         ci_ub=ci_ub,
+        zval=[float(v) for v in zval_obs],
+        zval_perm=np.asarray(zval_perm, dtype=float).tolist(),
+        QM_perm=np.asarray(QM_perm, dtype=float).tolist(),
+        coefnames=_perm_coef_names(result),
     )
+
+
+def _perm_coef_names(result) -> list[str]:
+    """Coefficient labels for a ``permutest`` result (metafor's ``btt`` names)."""
+    from .utils import _coef_names
+
+    try:
+        names = list(_coef_names(result))
+    except Exception:  # pragma: no cover - defensive
+        names = []
+    p = int(np.asarray(result.X, dtype=float).shape[1])
+    if len(names) != p:
+        names = [f"b{i + 1}" for i in range(p)]
+    return names

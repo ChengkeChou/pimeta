@@ -103,6 +103,21 @@ def conv_delta(yi, vi, transf):
     return ConvDeltaResult(yi_new, (d ** 2) * vi)
 
 
+def _level_pct(level):
+    """Normalise a confidence level to a percentage.
+
+    metafor's ``chklevel()`` accepts both 95 and 0.95 and rescales the latter.
+    Without this, ``conv_wald(..., level=0.95)`` silently interpreted 0.95 as
+    "0.95 percent" and returned a variance three orders of magnitude too
+    large.
+    """
+    level = float(level)
+    if not (0.0 < level < 100.0):
+        raise ValueError(
+            "argument 'level' must be a confidence level, e.g. 95 or 0.95")
+    return level * 100.0 if level < 1.0 else level
+
+
 def conv_wald(out, ci_lb, ci_ub, level=95.0, transf=None):
     """``metafor::conv.wald`` — recover ``yi``/``vi`` from an estimate and its CI.
 
@@ -123,6 +138,7 @@ def conv_wald(out, ci_lb, ci_ub, level=95.0, transf=None):
     hi = np.asarray(ci_ub, dtype=float).ravel()
     if not (out.size == lo.size == hi.size):
         raise ValueError("'out', 'ci.lb' and 'ci.ub' must have the same length")
+    level = _level_pct(level)
     crit = stats.norm.isf((1.0 - level / 100.0) / 2.0)
     vi = ((hi - lo) / (2.0 * crit)) ** 2
     yi = out if transf is None else np.asarray(transf(out), dtype=float).ravel()

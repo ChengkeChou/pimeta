@@ -347,6 +347,66 @@ def test_netcontrib_randomwalk_agrees_with_shortestpath_on_complete_network():
     assert rw == pytest.approx(sp, abs=1e-8)
 
 
+# An incomplete network: the DrugC:Placebo comparison has no direct evidence.
+INC_TE = [0.10, -0.20, 0.05, -0.15, 0.30]
+INC_SE = [0.10, 0.12, 0.11, 0.13, 0.14]
+INC_T1 = ["Placebo", "Placebo", "DrugA", "DrugA", "DrugB"]
+INC_T2 = ["DrugA", "DrugB", "DrugB", "DrugC", "DrugC"]
+
+# netcontrib(nm, method = "randomwalk")$common / $random  (R 4.6.1 / netmeta 3.7-0)
+R_RW_INC_COMMON = [
+    [0.54722302441182, 0.0907040903477, 0.1356843974464, 0.0907040903477,
+     0.1356843974464],
+    [0.12668587825425, 0.6209807740754, 0.0418824898054, 0.1685683680596,
+     0.0418824898054],
+    [0.11213586565816, 0.0247825383464, 0.7013806536446, 0.0247825383464,
+     0.1369184040045],
+    [0.14692563395167, 0.1954994091106, 0.0485737751589, 0.5604274066200,
+     0.0485737751589],
+    [0.16147564654775, 0.0356868552188, 0.1971625017665, 0.0356868552188,
+     0.5699881412482],
+    [0.00970000839739, 0.2733165795182, 0.2830165879155, 0.2218334162831,
+     0.2121334078858],
+]
+R_RW_INC_RANDOM = [
+    [0.51581015179598, 0.1134287149704, 0.1286662091316, 0.1134287149704,
+     0.1286662091316],
+    [0.12554486949029, 0.6236441538908, 0.0417553690429, 0.1673002385332,
+     0.0417553690429],
+    [0.12265330396571, 0.0359626026676, 0.6468055840658, 0.0359626026676,
+     0.1586159066333],
+    [0.13236020640770, 0.1763823101192, 0.0440221037115, 0.6032132760501,
+     0.0440221037115],
+    [0.13525177193228, 0.0396565406460, 0.1749083125783, 0.0396565406460,
+     0.6105268341973],
+    [0.00192771034972, 0.2578781729440, 0.2598058832937, 0.2411579718811,
+     0.2392302615314],
+]
+
+
+def _nma_incomplete():
+    return ma.netmeta(
+        TE=INC_TE, seTE=INC_SE, treat1=INC_T1, treat2=INC_T2,
+        studlab=[f"s{i}" for i in range(1, 6)], sm="MD",
+        reference_group="Placebo",
+    )
+
+
+def test_netcontrib_randomwalk_incomplete_network_matches_r():
+    nc = ma.netcontrib(_nma_incomplete(), method="randomwalk")
+    assert nc.directs == [
+        "DrugA:DrugB", "DrugA:DrugC", "DrugA:Placebo",
+        "DrugB:DrugC", "DrugB:Placebo",
+    ]
+    assert np.asarray(nc.common, dtype=float) == pytest.approx(
+        np.asarray(R_RW_INC_COMMON), abs=1e-10
+    )
+    got = np.asarray(nc.random, dtype=float)
+    assert got.shape == (6, 5)
+    assert got == pytest.approx(np.asarray(R_RW_INC_RANDOM), abs=1e-10)
+    assert np.allclose(got.sum(axis=1), 1.0)
+
+
 # =========================================================================
 # netmeta(method_tau = "ML" / "REML") — metafor::rma.mv on the star design
 # =========================================================================

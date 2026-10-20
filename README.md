@@ -3,7 +3,7 @@
 [![PyPI](https://img.shields.io/pypi/v/pimeta.svg)](https://pypi.org/project/pimeta/)
 [![Python versions](https://img.shields.io/pypi/pyversions/pimeta.svg)](https://pypi.org/project/pimeta/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-203%20passing-brightgreen.svg)](https://github.com/ChengkeChou/pimeta/actions/workflows/publish.yml)
+[![Tests](https://img.shields.io/badge/tests-1050%20passing-brightgreen.svg)](https://github.com/ChengkeChou/pimeta/actions/workflows/publish.yml)
 
 **Pure-Python meta-analysis — a faithful, numerically verified port of R's
 [`metafor`](https://cran.r-project.org/package=metafor),
@@ -35,7 +35,7 @@ print(r.b, r.se, r.tau2, r.I2)     # pooled estimate, SE, tau^2, I^2
 | Integration | subprocess / rpy2 | native Python objects |
 | Output | R list-like S3 objects | dataclasses with the **same field names** |
 | Plots | base graphics / grid | matplotlib `Axes` you can further style |
-| Reproducibility | reference implementation | 351 functions verified against R |
+| Reproducibility | reference implementation | 375 exported functions verified against R |
 
 Every result object exposes the **same attribute names as the R object's `$`
 fields**, so code and documentation written for R translate almost one-to-one:
@@ -66,11 +66,26 @@ continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
 
 ### High-level drivers (R-function parity)
 `rma()`, `rma.uni` (`rma_uni`), `rma.mv` (`rma_mv`), `rma.glmm` (`rma_glmm`),
-`rma.peto`, `rma.mh`, `rma.uni.selmodel`, `metagen`, `metabin`, `metacont`,
+`rma.peto`, `rma.mh`, `rma.uni.selmodel`, `rma.ls` (`rma(..., scale=~z)`),
+`metagen`, `metabin`, `metacont`,
 `metacor`, `metainc`, `metaprop`, `metarate`, `metamean`, `metacum`, `metainf`,
-`metareg`, `trimfill`, `regtest`, `begg_test`, `funnel`, `forest`, `labbe`,
-`radial`, `baujat`, `leave1out`, `influence`, `cooks_distance`, `rstudent`,
-`hatvalues`, `gosh`, `fsn`, `permutest`, `tes`, `vif`, `profile_rma`.
+`metareg`, `trimfill`, `regtest`, `metabias`, `begg_test`, `funnel`, `forest`,
+`labbe`, `radial`, `baujat`, `leave1out`, `influence`, `cooks_distance`,
+`rstudent`, `hatvalues`, `gosh`, `fsn`, `permutest`, `tes`, `vif`,
+`profile_rma`, `profile_rmamv`, `profile_rma_ls`, `confint_rma_ls`.
+
+`leave1out` / `influence` / `confint` results support R's ``x[i]``,
+`head(x)` and `tail(x)` idioms natively: `x[0:3]`, `x[2]`, `x[[1, 3]]` and
+`ma.head(x, 6)` / `ma.tail(x, 6)`.  R's `generic.class` method names
+(`print.rma.uni`, `cooks.distance.rma.mv`, `[.list.rma`, ...) are not valid
+Python identifiers, but `getattr(ma, "cooks.distance.rma.mv")` resolves to the
+implementing callable — see `ma.r_methods()` for the full 66-entry map.
+
+`rma.peto` / `rma.mh` carry metafor's own methods: `weights`, `cumul`,
+`leave1out`, `rstandard`, `rstudent`, `confint` and `qqnorm` all accept the
+fitted object, and `rma.mv` fits support `hatvalues`, `weights`, `rstandard`,
+`cooks_distance`, `dfbetas`, `rstudent`, `ranef`, `robust`, `confint`,
+`predict`, `qqnorm` and `profile_rmamv` (metafor's `profile.rma.mv`).
 
 ### Network meta-analysis (`netmeta`)
 `netmeta`, `netmetabin`, `netcomb`, `discomb`, `netcomplex`, `netmetareg`,
@@ -81,8 +96,10 @@ continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
 `treats`, `vikor`, `subgroup`, `crossnma2netmeta`, `gemtc2netmeta`, `createC`.
 
 ### Publication bias & sensitivity
-`regtest` (Egger), `begg_test` (Begg rank test), `trimfill` (L0 / R0 / Q0), `fsn`,
-`funnel`, `gosh`, `influence`, `baujat`, `leave1out`, `permutest`.
+`regtest` (Egger), `begg_test` (Begg rank test), `metabias` — all nine `meta`
+tests: `Begg`, `Egger`, `Thompson`, `Schwarzer`, `Harbord`, `Peters`, `Deeks`,
+`Pustejovsky`, `Macaskill` — `trimfill` (L0 / R0 / Q0), `fsn`, `funnel`,
+`gosh`, `influence`, `baujat`, `leave1out`, `permutest`.
 
 ### Reporting helpers (`meta` package parity)
 `cidprop`, `cilayout`, `format_ci`, `forest_dims`, `longarm`, `addpoly`,
@@ -92,8 +109,20 @@ continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
 ### S3-style generics
 `coef`, `vcov`, `fitted`, `residuals`, `logLik`, `deviance`, `nobs`, `formula`,
 `AIC`, `BIC`, `weights`, `sigma`, `df_residual`, `model_matrix`, `simulate`,
-`confint`, `predict`, `hatvalues`, `hatvalues_rma`, `dfbetas_rma`,
-`rstandard_rma`, `ranef`, `summary`, `summary_text`, `print_summary`, `plot`.
+`confint`, `predict`, `hatvalues`, `hatvalues_rma`, `dfbetas`, `dfbetas_rma`,
+`rstandard`, `rstandard_rma`, `ranef`, `summary`, `summary_text`,
+`print_summary`, `plot`.
+
+### Figures
+`forest`, `funnel`, `radial`, `labbe`, `llplot`, `bubble`, `drapery`,
+`qqnorm_rma`, `plot_baujat`, `plot_gosh`, `plot_influence` (metafor's
+`plot.infl.rma.uni`), `plot_permutest` (metafor's `plot.permutest.rma.uni`),
+`plot_selprofile` (metafor's `plot.profile.rma`), `plot_mv_profile`
+(metafor's `plot.profile.rma` for `rma.mv` variance components), `heatplot`,
+`regplot`,
+`netgraph`, `netheat`, `rankogram`, `hasse`,
+`netposet`, `traffic_light` — plus `plot(x, which=...)` to reach all of them
+from a fitted object.
 
 ### Readers
 `read_rm5`, `read_cdir`, `read_mtv` — parse Cochrane RevMan `.rm5` files and
@@ -223,6 +252,155 @@ deliberate: it matches the R object being mirrored.
 
 ---
 
+## Differences from R
+
+Nothing in the analytic surface is missing. Every deviation below is either
+forced by Python's grammar or is a place where an R quirk was deliberately not
+reproduced. Everything else is verified against R — see
+[Numerical validation](#numerical-validation).
+
+### 1. Names that cannot exist in Python
+
+R encodes the class inside the function name (`print.rma.uni`,
+`cooks.distance.rma.mv`). In Python `.` is attribute access, so those strings
+are not identifiers; and `[`, `$`, `[<-` are operators, not names at all. The
+behaviour is fully implemented — only the spelling changes.
+
+| R | pimeta |
+|---|---|
+| `print(x)` / `summary(x)` | `print(x)` / `x.summary()`; `str(x)` and `summary_text(x)` give the text block |
+| `cooks.distance(x)`, `ranktest(x)`, `hc(x)` | `ma.cooks_distance(x)`, `ma.begg_test(x)`, `ma.hc_rma(x)` |
+| `x[1:3]`, `x[[1,3]]`, `head(x)`, `tail(x)` | `x[0:3]`, `x[[1, 3]]`, `ma.head(x)`, `ma.tail(x)` |
+| `x$ci.lb`, `x$tau2` | `x.ci_lb`, `x.tau2` |
+| `x$b <- 0` | `x.b = np.array([0.0])` — result objects are plain mutable objects |
+| `update(x, mods = ~z)` | `ma.update_rma(x, mods=z)` — refits, like R |
+| `as.data.frame(x)` | `ma.as_data_frame_rma_list(x)` or `x.to_dict()` |
+
+If you are mechanically translating R code, `ma.r_methods()` returns the full
+66-entry map from R method name to pimeta callable, and a module-level
+`__getattr__` resolves the R spelling directly:
+
+```python
+import pimeta as ma
+
+getattr(ma, "cooks.distance.rma.mv")   # -> ma.cooks_distance
+getattr(ma, "print.rma.uni")           # -> ma.summary
+getattr(ma, "profile.rma.ls")          # -> ma.profile_rma_ls
+getattr(ma, "[.list.rma")              # -> ma.slice_rma
+
+getattr(ma, "cooks.distance.rma.mv") is ma.cooks_distance   # True
+hasattr(ma, "no.such.method")                                # False
+```
+
+Unknown names still raise `AttributeError`, so `hasattr()` and star-imports
+behave normally. Two families resist a literal mapping: the R replacement
+functions (`$<-`, `[<-`) have no Python call syntax — attribute assignment
+(`x.b = ...`) works because results are ordinary mutable objects, but there is no
+in-place item assignment, so rebuild the object instead; and `print.*` maps to
+`summary` / `print_summary` — the multi-block R console layout is not reproduced
+byte-for-byte.
+
+### 2. Where numbers can differ
+
+| Family | Agreement with R | Why |
+|---|---|---|
+| `escalc` / effect sizes | bit-identical | closed-form arithmetic |
+| `rma`, `rma.uni`, τ² estimators | < 1e-12 | same iterative schemes |
+| `rma.mv`, `rma.glmm` | < 1e-6 | different optimiser (`scipy.optimize` vs `optim`), same objective |
+| `rma.ls` coefficients | ~1e-5 | see below |
+| `rma.mv` diagnostics / profile | ~1e-8 | finite-difference Hessian and grid refits |
+| `netmeta`, `netmetareg`, `netmeasures` | < 1e-6 … 1e-8 | same algebra, different linear-algebra backend |
+| `transf.*`, `fmt.*` | < 1e-10 | closed form |
+
+**`rma.ls` is the one place pimeta reports a *better* optimum than R.** metafor
+stops `optim()` on a relative *function* tolerance, so the gradient at its
+reported estimate sits around $10^{-4}$ (log link) to $10^{-3}$ (identity link).
+pimeta adds a damped Newton polish on the free scale parameters and drives the
+gradient to about $10^{-9}$. Our log-likelihood is therefore always
+$\ge$ R's, and the scale coefficients $\alpha$ can differ in the fifth
+significant digit. Both are valid local optima; ours is the more converged one.
+The suite pins this as `r.ll >= ref.ll - 1e-9` instead of exact equality.
+
+### 3. Deliberate non-portings
+
+| R behaviour | pimeta |
+|---|---|
+| `metabias(..., plotit=TRUE)` draws a radial plot as a side effect | `plotit` is accepted for signature parity but draws nothing — call `ma.radial()` / `ma.regplot()` yourself. Fitting and testing are unaffected. |
+| `netmeta::pairwise(TE=, seTE=)` passes contrast-level data straight through | not implemented; arm-level `treat` / `n` / `event` / `mean` / `sd` input is fully supported |
+| `netmatrix(..., ties.method=)` tie handling | fixed at `"first"`; only matters when reference selection hits an exact tie |
+| `dfround()` returns an R `data.frame` | returns a `dict` of columns, or a pandas `DataFrame` when pandas is installed |
+| `print.*` reproduce the multi-block R console layout | `str(x)` / `summary_text(x)` return a compact block; the exact R layout is not reproduced |
+| `options()`, `metafor::setmfopt()`, `meta::setvals()` are global state | `ma.setvals()` / `ma.gs()` exist for API parity, but every function also takes its options as explicit arguments — no silent carry-over between calls |
+| `set.seed()` seeds a global RNG | pass `seed=` to the routines that actually draw random numbers: `gosh`, `permutest`, `hettest`, `simulate`, `regplot`, and `netmatrix(ties_method="random")` |
+| `profile.rma.uni.selmodel` fixes τ² at the full-model estimate on every grid point | τ² is re-estimated at each point, which is the proper profile likelihood; the curve can differ in the third or fourth digit |
+| `metafor::news()` (changelog viewer) | not implemented — no analytic content |
+
+---
+
+## Where pimeta goes beyond R
+
+A faithful port is the floor, not the ceiling. These are places where the
+Python version is genuinely better suited to the task than the R original.
+
+**No runtime to install.** `pip install pimeta` pulls only NumPy, SciPy and
+matplotlib. No R, no rpy2 bridge, no compilation step — the same code runs on a
+laptop, in CI, in a container, in AWS Lambda, and inside Pyodide/WASM in a
+browser.
+
+**Results are plain Python objects.** Every fitted model is a dataclass with the
+R field names, so `vars(x)`, `x.to_dict()` and `json.dumps(x.to_dict())` all
+work. Shipping a meta-analysis to a web front end is a one-liner, not an
+S3-marshalling exercise.
+
+```python
+r = ma.rma(yi, vi, method="REML")
+payload = r.to_dict()          # plain dict of scalars / arrays
+```
+
+**Plots are `matplotlib.Axes`, not side effects.** Every figure function returns
+the `Axes` it drew on, so you can compose panels with `plt.subplots`, restyle
+any artist, or hand the figure to `savefig`, `FigureCanvasAgg`, a notebook, or a
+report builder. Pass `filename=` only when you want a file written.
+
+```python
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+ma.forest(yi, vi, ax=axes[0])          # composition instead of a global device
+ma.funnel(yi, vi, ax=axes[1])
+```
+
+**List-like results slice natively.** `leave1out`, `influence`, `cumul` and
+`metacum` results implement `__getitem__`, so R's `x[i]` / `head()` / `tail()`
+idioms work directly on every per-study vector at once, with R's semantics
+(`x[2]` returns a length-1 *result*, not a bare scalar):
+
+```python
+loo = ma.leave1out(yi, vi)
+loo[0:3]          # first three rows, all vectors sliced together
+loo[[1, 3]]       # arbitrary rows
+loo[mask]         # boolean selection
+ma.head(loo, 6)
+```
+
+**Tighter convergence, reported honestly.** Where metafor's optimiser stops early
+(`rma.ls`), pimeta keeps polishing and lands on a higher likelihood — and the
+test suite asserts the inequality rather than papering over the difference.
+
+**Numerical care where R relies on doubles being enough.** The Schwarzer
+hypergeometric mean/variance is evaluated in log space with `gammaln`, so
+large-table binary tests do not overflow; several profile and grid routines are
+written in log-likelihood space for the same reason.
+
+**Explicit randomness.** Stochastic procedures accept `seed=` (an integer or a
+`numpy.random.Generator`) and draw from a local generator instead of mutating a
+process-global stream, so two analyses can run concurrently without stepping on
+each other.
+
+**R names still work when you need them.** The `r_methods()` map plus the
+module-level `__getattr__` mean a script translated line-by-line from R keeps
+running, without giving up idiomatic Python names for everyone else.
+
+---
+
 ## Examples
 
 `examples/bcg_meta_analysis.py` is a complete runnable script. It writes the 13
@@ -329,3 +507,125 @@ print(ma.trimfill(d.yi, d.vi).k0)   # 剪补法
 
 覆盖范围：`meta` 59/59、`netmeta` 38/38、`metafor` 278/279 个导出函数
 （唯一未实现的是 `metafor.news()`，它只是查看更新日志，不含分析功能）。
+
+### 和 R 不一样的地方
+
+**分析功能没有缺口。** 下面每一条差异，要么是 Python 语法强制的，要么是我们
+故意没有照抄的 R 怪癖。其余部分全部与 R 对拍过（见上表）。
+
+#### 一、写不出来的名字
+
+R 把类名编进函数名（`print.rma.uni`、`cooks.distance.rma.mv`）。Python 里
+`.` 是属性访问，这些字符串**不是合法标识符**；`[`、`$`、`[<-` 更是运算符，
+连标识符都构不成。功能全在，只是写法变了。
+
+```python
+import numpy as np
+import pimeta as ma
+
+yi, vi = [0.20, 0.40, 0.10, 0.50], [0.04, 0.05, 0.03, 0.06]   # 任意一组数据
+z = [1, 2, 3, 4]                                               # 任意调节变量
+
+# 1) R 的 generic.class 名字 → 可直接解析
+getattr(ma, "cooks.distance.rma.mv")   # -> ma.cooks_distance
+getattr(ma, "print.rma.uni")           # -> ma.summary
+getattr(ma, "profile.rma.ls")          # -> ma.profile_rma_ls
+getattr(ma, "[.list.rma")              # -> ma.slice_rma
+ma.r_methods()                         # 完整的 66 条映射表
+
+# 2) R 的 x[i] / head / tail → 原生切片
+loo = ma.leave1out(yi, vi)
+loo[0:3]      # 所有逐研究向量同步切
+loo[2]        # 长度 1 的结果（R 语义，不是裸标量）
+loo[[1, 3]]   # 指定行
+loo[mask]     # 布尔掩码
+ma.head(loo, 6); ma.tail(loo, 6)
+
+# 3) R 的 x$b <- 0 → 直接属性赋值（结果对象是普通的可变对象）
+x = ma.rma(yi, vi)
+x.b = np.array([0.0])
+
+# 4) R 的 update(x, mods = ~z) → 重新拟合
+x = ma.update_rma(ma.rma(yi, vi), mods=z)
+```
+
+未映射的名字仍然抛 `AttributeError`，`hasattr()` 和 `from pimeta import *`
+行为正常。只有两类无法字面对应：R 的替换函数（`$<-`、`[<-`）在 Python 里没有
+调用语法——属性赋值（`x.b = ...`）可用，因为结果是普通的可变对象，但没有原地
+下标赋值，需要重建对象；`print.*` 映射到 `summary` / `print_summary`，R 那个
+多段式控制台排版没有逐字节照抄。
+
+#### 二、数值可能不同的地方
+
+| 系列 | 与 R 的差异 | 原因 |
+|---|---|---|
+| `escalc` / 效应量 | 逐位相同 | 闭式算术 |
+| `rma`、`rma.uni`、τ² 估计 | < 1e-12 | 同一套迭代格式 |
+| `rma.mv`、`rma.glmm` | < 1e-6 | 优化器不同（`scipy.optimize` vs `optim`），目标函数相同 |
+| `rma.ls` 的 α 系数 | ~1e-5 | 见下 |
+| `rma.mv` 诊断量 / profile | ~1e-8 | 数值 Hessian 与网格重拟合 |
+| `netmeta`、`netmetareg`、`netmeasures` | < 1e-6 … 1e-8 | 同一套代数，线性代数后端不同 |
+| `transf.*`、`fmt.*` | < 1e-10 | 闭式 |
+
+**`rma.ls` 是唯一一处我们的解比 R 更收敛。** metafor 用相对**函数值**
+容差停 `optim()`，所以它报告的估计处梯度在 $10^{-4}$（log 连接）到
+$10^{-3}$（identity 连接）量级。pimeta 额外做了一步阻尼牛顿抛光，把梯度压到
+$10^{-9}$ 左右。因此我们的对数似然**恒 ≥ R**，α 系数可能在第五位有效数字上
+不同。两者都是合法的局部最优，我们的是收敛更彻底的那个。测试里钉的是
+`r.ll >= ref.ll - 1e-9`，而不是精确相等。
+
+#### 三、故意不移植的部分
+
+| R 的行为 | pimeta 的处理 |
+|---|---|
+| `metabias(..., plotit=TRUE)` 顺带画 radial 图 | `plotit` 为签名兼容而保留，但不画图；请自己调 `ma.radial()` / `ma.regplot()`。拟合与检验不受影响 |
+| `netmeta::pairwise(TE=, seTE=)` 直接透传对照级数据 | 未实现；臂级 `treat` / `n` / `event` / `mean` / `sd` 输入完整支持 |
+| `netmatrix(..., ties.method=)` 的并列处理 | 固定为 `"first"`；只在参照选择出现精确并列时才有影响 |
+| `dfround()` 返回 R `data.frame` | 返回列的 `dict`；装了 pandas 时返回 `DataFrame` |
+| `print.*` 复刻多段式 R 控制台排版 | `str(x)` / `summary_text(x)` 给出紧凑排版；R 的原样版式未复刻 |
+| `options()`、`setmfopt()`、`setvals()` 是全局状态 | `ma.setvals()` / `ma.gs()` 为 API 兼容而存在，但每个函数同时也接受显式参数——调用之间不会有隐式状态串味 |
+| `set.seed()` 种的是全局随机流 | 随机过程用 `seed=` 参数 + 局部 `Generator` |
+| `profile.rma.uni.selmodel` 在每个格点固定 τ² | 每个格点**重新估计** τ²，这是标准的 profile 似然；曲线可能有三、四位小数的差异 |
+| `metafor::news()`（看更新日志） | 未实现——不含分析功能 |
+
+### 比 R 更好的地方
+
+**1. 零运行时依赖。** `pip install pimeta` 只拉 NumPy / SciPy / matplotlib。
+不装 R、不架 rpy2、不需要编译——笔记本、CI、容器、AWS Lambda、甚至浏览器里的
+Pyodide/WASM 跑的都是同一份代码。
+
+**2. 结果是普通的 Python 对象。** 每个拟合结果都是 dataclass，字段名照抄 R，
+所以 `vars(x)`、`x.to_dict()`、`json.dumps(x.to_dict())` 直接可用。把一次
+meta 分析接到 Web 前端是一行代码，而不是一场 S3 对象封送。
+
+```python
+r = ma.rma(yi, vi, method="REML")
+payload = r.to_dict()          # 标量/数组组成的普通 dict
+```
+
+**3. 画图返回 `matplotlib.Axes`，而不是副作用。** 每个绘图函数都把画布返回，
+于是你可以用 `plt.subplots` 拼版、改任何 artist、交给 `savefig` / 报告生成器 /
+notebook。只有想落盘时才传 `filename=`。
+
+```python
+fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+ma.forest(yi, vi, ax=axes[0])
+ma.funnel(yi, vi, ax=axes[1])
+```
+
+**4. 列表型结果原生可切片。** `leave1out` / `influence` / `cumul` / `metacum`
+实现了 `__getitem__`，R 的 `x[i]`、`head()`、`tail()` 直接可用，且保持 R 的语义
+（`x[2]` 返回长度 1 的**结果对象**，不是裸标量）。
+
+**5. 收敛更彻底，而且如实报告。** metafor 提前停下的地方（`rma.ls`），pimeta
+继续抛光、落到更高的似然上——测试断言的是不等式，而不是把差异掩盖过去。
+
+**6. 在 R 靠 double 硬扛的地方做了数值处理。** Schwarzer 检验的超几何均值/方差
+在对数空间用 `gammaln` 计算，大表二分类数据不会溢出；若干 profile 与网格过程
+同样在对数似然空间里写。
+
+**7. 随机性显式化。** 随机过程接受 `seed=`（整数或 `numpy.random.Generator`），
+用局部生成器抽随机数，不改进程全局随机流，两个分析可以并发跑而互不干扰。
+
+**8. 需要时 R 名字照样能用。** `r_methods()` + 模块级 `__getattr__` 让逐行翻译
+过来的 R 脚本继续跑，同时不妨碍其他人用 Pythonic 的名字。

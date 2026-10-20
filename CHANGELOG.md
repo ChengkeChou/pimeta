@@ -6,8 +6,156 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Location-scale models — the last missing model family.** metafor has no
+  `rma.ls()` function: the model is fitted by passing `scale = ~ z` to
+  `rma()`.  `pimeta.rma()` now does the same and returns an `RmaLsResult`, so
+  `rma(yi, vi, mods=~x, scale=~z)` works like R.  The fit maximises
+  τ²_i = g(z_i'α) with τ²_i = v_i + τ²_i in the weights, `link="log"`
+  (τ² = exp(z'α), default) or `"identity"`, `method="ML"/"REML"` only (as in
+  metafor), and the location coefficients profiled out (or estimated jointly
+  with `optbeta=True`).  Standard errors of α come from the numerical Hessian
+  of the negative log-likelihood, exactly as `numDeriv::hessian` does.
+  Everything metafor reports is there: `b`/`se`/`zval`/`pval`/`ci`/`vb`, the
+  per-study `tau2` vector, `alpha`/`se_alpha`/`zval_alpha`/`pval_alpha`/`ci`,
+  `va`, `QS`/`QSdf`/`QSp`, `QM`/`QMdf`/`QMp`, `QE`/`QEp`, the per-study
+  `I2`/`H2`, `parms = p + q`, `R2 = None`, and the full `fit.stats` matrix.
+  Coefficients and standard errors agree with metafor to 1e-7 on the log link
+  and the log-likelihood to 1e-6 on both links; α itself agrees to ~1e-5
+  because metafor stops on a relative function tolerance on a very flat
+  surface (its gradient there is ~1e-4, ours ~1e-9 — we reach the *better*
+  optimum, which is pinned by a test).
+- **`profile_rma_ls()` (`profile.rma.ls`)** profiles the log-likelihood over
+  one scale coefficient, refitting with that coefficient pinned while the
+  others stay free, over metafor's default window
+  `vc ± qnorm(0.995) * se.alpha`.  On an explicit grid the log-likelihood
+  matches R to 4e-14 and the coefficients to 1e-10.  `plot_mv_profile()` and
+  `plot(x, which="profile")` draw it.  `confint_rma_ls()` gives the Wald
+  intervals for the scale coefficients.
+- **`[`, `head()` and `tail()` for `list.rma`-style results.** metafor's
+  `[.list.rma`, `head.list.rma` and `tail.list.rma` slice every per-study
+  vector of a `leave1out()` / `influence()` / `confint()` result at once so
+  the rows stay aligned.  `InfluenceResult`, `LeaveOneOutResult`,
+  `CumulResult` and `MetacumResult` now inherit a `RowSlicable` mixin, so the
+  R idiom works as real Python slicing: `x[0:3]`, `x[2]` (still a length-1
+  result, as in R), `x[[1, 3]]` and `x[mask]`.  `rma_list.py` also provides
+  the explicit `slice_rma(x, index)`, `head_rma(x, n=6)`, `tail_rma(x, n=6)`
+  and `as_data_frame_rma_list(x)`, exported as `pimeta.head` / `pimeta.tail` /
+  `pimeta.slice_rma` for classes that do not opt in.  Scalars and the pooled
+  summary are left alone and the input is never mutated.
+- **R's `generic.class` method names resolve as aliases.** R spells its
+  methods `print.rma.uni`, `cooks.distance.rma.mv`, `[.list.rma`, ... which
+  can never be Python identifiers.  `pimeta.r_methods()` returns the
+  66-entry `R name -> pimeta callable` map and a module-level `__getattr__`
+  makes `getattr(pimeta, "cooks.distance.rma.mv")` resolve to
+  `cooks_distance`, so a mechanical R -> Python translation works.  The map is
+  filtered at import, so it can never point at a missing name, and unknown
+  names still raise `AttributeError` (so `hasattr` keeps working).
+- **`metabias()` — every small-study-effect test `meta` offers.** The whole
+  function was missing, so `Begg`, `Egger`, `Thompson` and the six binary-data
+  variants had no counterpart. All nine are now implemented as transcriptions
+  of `meta:::metabias.meta` / `linregcore` / `kentau`:
+  - `Begg` — rank correlation of the standardised effects with their variances,
+    with meta's tie-corrected `kentau` (and the optional continuity
+    correction);
+  - `Egger` / `Thompson` — the multiplicative (`lm`) and additive
+    (random-effects) regressions;
+  - `Schwarzer` — the hypergeometric variant, including meta's **noncentral**
+    hypergeometric null moments (`P(x) ∝ C(n1,x)C(n2,m1-x)psi^x`) driven by
+    the MH common odds ratio;
+  - `Harbord` — the 2x2 score test with separate OR and RR variance formulas;
+  - `Peters`, `Deeks`, `Pustejovsky`, `Macaskill` — the four variance /
+    sample-size predictors, with `n_e`/`n_c` taken from the fit or supplied.
+
+  Defaults follow R exactly (`Harbord` for a binary odds-ratio analysis,
+  `Egger` otherwise), the `k < k_min | k < 3` short circuit returns only
+  `k`/`k_min`, the "all studies have the same precision" error is raised, and
+  the pre-8.x aliases (`rank`, `linreg`, `mm`, `count`, `score`) are accepted.
+  Every statistic, df, p-value, bias, SE, intercept, its SE and `tau` matches
+  R 4.6.1 / meta 8.5-0 to every printed digit on a 10-study odds-ratio
+  analysis, on the same data restricted to six studies, on a 10-study
+  continuous (`metacont`) analysis, on a 10-study single-arm (`metaprop`)
+  analysis, and on a generic `(TE, seTE)` vector.
+  `metabin()` now also keeps the raw 2x2 counts
+  (`event_e`, `n_e`, `event_c`, `n_c`) so the binary tests can run from the
+  object, and `metacont()` keeps `n_e`/`n_c`/`method_tau` for the
+  Macaskill/Pustejovsky variants, while `metaprop()` keeps `event`/`n` for the
+  single-arm `Peters` variance `sqrt(1/event + 1/(n - event))` — mirroring R's
+  `x$event.e`, `x$n.e`, `x$event`, `x$n` and `x$method.tau`. `metagen()` /
+  `metacum()` results (which name their columns `TE`/`seTE`) are accepted too.
+- **`profile_rmamv()` (`profile.rma.mv`).** Profiles the log-likelihood over
+  one variance component of an `rma_mv` fit while re-estimating the others —
+  exactly what metafor's `.profile.rma.mv` does — and returns
+  `MvProfileResult` with the grid, the log-likelihood, the coefficients and
+  their CIs at each point, plus metafor's default window
+  `[max(0, vc/4), max(0.1, vc*4)]`. `plot_mv_profile` /
+  `plot(x, which="profile")` draw it. To support this `rma_mv(sigma2=)` now
+  accepts `NaN` entries, which pins the named components while the rest stay
+  free (R's `sigma2 = c(NA, ..., v, ..., NA)`). On an explicit grid the
+  profile matches R to 3e-15; with an auto-generated grid it agrees to ~1e-8,
+  the accuracy limit of the variance-component optimiser.
+- **The 14 `rma.mh` / `rma.peto` methods.** `weights()`, `cumul()`,
+  `leave1out()`, `rstandard()`, `rstudent()`, `confint()` and `qqnorm()` were
+  unavailable on those result objects (every one raised `TypeError`); they now
+  work as they do in R. `rma_mh()`/`rma_peto()` keep their 2x2 tables and take
+  a `slab=` argument, `weights(mh, pct=True)` returns R's percentages and
+  `weights(mh)` the raw `diag(wi)`, `leave1out(mh, cluster=)` collapses studies
+  into clusters, `cumul(mh, order=, decreasing=, collapse=)` reproduces
+  `cumul.rma.mh`'s ordering (and labels the rows with the reordered `slab`),
+  and `confint(mh, level=, transf=True)` back-transforms the ratio measures.
+  All pinned against R 4.6.1 / metafor 5.2-1: residuals, standardised and
+  deleted residuals, weights, CIs, `leave1out` (estimate/SE/z/p/CI/Q/Qp/I²/H²)
+  and `cumul` match to every printed digit.
+- **The `rma.mv` diagnostics.** New `mv_diagnostics.py` implements
+  `hatvalues.rma.mv` (diagonal or the full hat matrix), `weights.rma.mv`
+  (diagonal / matrix / row sums), `rstandard.rma.mv` (with the optional
+  per-cluster `X2`), `cooks.distance.rma.mv`, `dfbetas.rma.mv` and
+  `rstudent.rma.mv`, and `qqnorm_rma()` now accepts ``rma.mv`` fits. To support
+  them `rma_mv()` gained `sigma2=` (fix the variance components like R),
+  `slab=` and `cluster=`, and keeps `V`/`mods`/`struct`/`dfs`/`test` on the
+  result.
+- **`profile_selmodel()`** (`profile.rma.uni.selmodel`) profiles the
+  log-likelihood over the selection parameter ``delta`` and returns
+  ``SelProfileResult`` with the profile limits; `plot(sm, which="profile")` and
+  `plot_selprofile()` draw it. `profile_rma()` routes a ``SelModelResult``
+  there.
+- **`robust()`** now falls back to the `cluster` stored on the fit and raises
+  R's `Argument 'cluster' must be specified.` when there is none.
+
 ### Fixed
 
+- **`matreg()` was not metafor's `matreg`.** It pooled the y–x correlations in
+  an intercept-only fixed-effect model instead of solving the standardised
+  path model, so every number it returned differed from R — and the object
+  carried fields (`QE`, `QM`) that `matreg` does not have. It is now a
+  transcription of `metafor::matreg`, both branches:
+  - `n` supplied (`test="t"`): `b = R[x,x]^-1 R[x,y]`, `sse = 1 - b'R[x,y]`,
+    `vb = (sse/df) R[x,x]^-1` for the coefficients but
+    `sigma^2 = sdy^2 (n-1)(1-R2)/df` for the fit statistics, `R2`, `R2adj`,
+    `F`, `parms`, `deviance` and metafor's `fit.stats` matrix.
+  - `V` supplied (`test="z"`): metafor's delta-method Jacobian `A` over the
+    unique elements of `R` (column-major lower triangle, `p(p+1)/2` of them
+    when `cov=True`), `vb = A V A'` and the Wald `QM`.
+
+  Also new: `cov=`, `means=`, `ztor=`, `nearpd=`, `level=` (95/0.95/0.05, and
+  the result stores the tail area like R), `names=` so `y`/`x` can be variable
+  names, and the validations R performs (`V` xor `n`, `cov && ztor`, duplicated
+  / out-of-range indices, `|R| > 1`, `n <= m`, `V` dimensions).
+
+  On a 4-variable correlation matrix every printed digit now agrees with
+  R 4.6.1 / metafor 5.2-1: coefficients, SEs, t/z values, p-values, CIs
+  (including `level=90`), `vb`, `R2`/`R2adj`, `F`/`Fp`, `sigma2.ml`,
+  `sigma2.reml`, `deviance`, all five `fit.stats` rows and `QM`.
+  `fitstats()`, `aic_rma()`, `bic_rma()` and `sigma_matreg()` were rewired to
+  read those fields (`AIC`/`BIC` default to the ML column, as in R).
+- **`fitstats()` blew up on a saturated model.** With `k == p` the REML `BIC`
+  evaluated `log(0)` and raised `ValueError`; R returns `-Inf` there, so
+  `_fitstats_core()` now does the same.
+- **`as_data_frame_confint()` silently returned an empty list** for any object
+  whose point estimate is not called `estimate` (e.g. a `matreg` fit, which
+  uses `beta`). It now maps `beta`/`coef`/`tau2` to metafor's `estimate` and
+  `ci_lb`/`ci_ub` to `ci.lb`/`ci.ub`.
 - **`method="HE"` returned the DerSimonian-Laird estimate.** The HE slot in the
   τ² dispatch table was literally an alias for `_dl`, on the assumption that
   Hedges' estimator equals DL for intercept-only models. It does not:
@@ -104,6 +252,45 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `negexppow`); it never makes the fit worse and it beats metafor's own
   `optim()` result on `truncest` (13.7243 vs 13.5676) and `negexppow`
   (29.3369 vs 29.3326).
+- **`plot(x, which="baujat")` and `plot(x, which="gosh")` raised
+  `KeyError: 1`.** They handed the fitted `RmaResult` straight to
+  `plot_baujat()`/`plot_gosh()`, which consume a `BaujatResult`/`GoshResult`;
+  the diagnostic is now computed first, matching metafor's
+  `plot(baujat(x))` / `plot(gosh(x))` idiom.
+- **`gosh(subsets=<n>)` crashed with `AttributeError: 'numpy.int64' object has
+  no attribute 'upper'`.** The random-subset loop reused `m` as its loop
+  variable, clobbering the effect-measure string that is stored on the result.
+- **`rma_glmm()` gave a bare `TypeError` for a mismatched measure.** Passing
+  `xi`/`ni` with `measure="OR"` died inside the raw-data block with
+  `'NoneType' object is not iterable`; it now explains which arguments the
+  chosen measure needs.
+- **`rcalc()` dropped the caller's variable names on the formula-style path.**
+  Every pair came back labelled `x1`/`x2`/`x3` even when `var1`/`var2` named
+  the real variables; the per-study dimension names are threaded through now.
+  `rtoz`/`upper` are also validated instead of accepting any truthy value.
+- **`conv_wald(..., level=0.95)` returned a variance three orders of magnitude
+  too large.** `level` is a *percentage* here, so 0.95 was read as "0.95%".
+  Both conventions are accepted now (`95` and `0.95` agree), mirroring
+  metafor's `chklevel()`, and an impossible level raises instead of silently
+  producing nonsense.
+- **`confint_tau2()`, `hc_rma()` and `predict_rma()` took `level` as an alpha
+  while everything else takes a confidence level**, so `level=0.95` quietly
+  produced a 5%-confidence interval. They accept `0.05`, `0.95` and `95`
+  interchangeably now (values `>= 0.5` are read as a confidence level, below
+  that as a tail probability), and an impossible level raises.
+- **`rma_mv()` accepted an unknown `struct` silently** and died with
+  `TypeError: 'NoneType' object is not subscriptable` when `random` named a
+  grouping variable that was not supplied. An invalid `struct` raises, and a
+  missing/unknown grouping variable names itself.
+- **`blsplit()`'s `cluster` and `pairwise()`'s `treat` had no default**, so the
+  documented `ValueError("Must specify the 'cluster' variable.")` was
+  unreachable and `pairwise(data=...)` could not be called on its own.
+- **`_coef_names()` labelled the moderator `V2` instead of `mod1`.** A single
+  moderator stored as a `(k, 1)` array appended `n_mods - 1 = 0` names and then
+  fell through to the `V2` fallback, and two moderators produced
+  `['intrcpt', 'mod1', 'V3']`. Coefficients are now `intrcpt, mod1, mod2, ...`
+  exactly like `rma()`'s row names, and `intrcpt` is dropped when there is no
+  intercept.
 
 ### Added
 
@@ -116,7 +303,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   `time*` are supplied. Agrees with R to 2.6e-15 (DL), 6e-8 (ML), 8e-9 (REML).
 - **`netcontrib(method="randomwalk")`** — Davies' random-walk contribution
   matrix, transcribed from `netmeta:::contribution.matrix.davies`. Matches R to
-  5e-10 (limited by the printed reference).
+  5e-10 (limited by the printed reference). Incomplete networks work too: the
+  `type="full"` hat matrix is `n(n-1)/2` square with a zero column for every
+  pair that has no direct evidence, so comparisons known only indirectly are
+  dropped from the result exactly as R drops them (verified against R on a
+  5-edge, 4-treatment network to 5e-14).
 - **`netmetabin(method="NCH")`** — the conditional (non-central hypergeometric)
   likelihood, maximised over the identifiable treatment contrasts with the
   covariance taken from the analytic observed information rather than `optim`'s
@@ -150,6 +341,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   general `P = W - W X (X'WX)^-1 X'W` and `vt = (k - p)/tr(P)`.
   `type="HT"` now raises the same error metafor does for moderator models
   instead of silently returning a wrong interval.
+- **`plot_influence()` and `plot_permutest()`** — the last two `metafor` plots
+  that had no equivalent (`plot.infl.rma.uni`, `plot.permutest.rma.uni`).
+  `plot_influence` draws the eight panels of `plot.infl.rma.uni` with the same
+  reference lines (`±qnorm(0.975)` for the residuals, `±3√(p/(k−p))` for
+  DFFITS, `qchisq(0.5, p)` for Cook's distance, `1` for the covariance ratio,
+  the full-model τ²/QE for the deletion panels, `p/k` and `3p/k` for the hat
+  values and `100/k` for the weights), the covariance ratio on a log scale,
+  `plotinf` as a logical or a vector of panel indices, and `plotdfbs` for the
+  per-coefficient DFBETAS panels. `plot_permutest` draws the permutation
+  distribution of each coefficient's test statistic with the observed value
+  marked. `plot(x, which="influence")` and `plot(x, which="permutest")` route
+  to them and compute the diagnostic first, like `plot(influence(x))` /
+  `plot(permutest(x))`. `permutest()` now keeps `zval`, `zval_perm`, `QM_perm`
+  and `coefnames` so the figure can be redrawn without repeating the fit.
+- **`dfbetas()` / `rstandard()`** aliases for `dfbetas_rma()` / `rstandard_rma()`,
+  matching the short names `metafor` exports next to `hatvalues`/`ranef`.
 - **`permutest(permci=True)`** is computed instead of merely accepted: each
   bound is a root search on the permutation p-value of the shifted null model
   `yi - val * X[, j]`. The permutation set is drawn once and reused for the whole
@@ -195,6 +402,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   types, both alternative hypotheses, `prec`, fixed `delta`, `subset`,
   `control` overrides and the `LRT` against the plain model. The fits are
   memoised because each one costs seconds.
+- `tests/test_diagnostics_extra.py` — 44 tests for the second- and third-order
+  delta method, every `tes()` variant (`alternative`, `test`, `correct`,
+  `theta`, `tau2`, `find_lim`), the `vif()` `btt` specifications (indices,
+  names, joint sets, `intercept=True`) and `permutest()` with moderators
+  (row permutations, `exact=True`, `permci=True`).
+- `tests/test_s3_pooling.py` — 24 tests dispatching `plot(x, which=...)` to all
+  eleven figures, `predict(newmods=)`, `confint()`, the `confint_tau2()`
+  bounds, `hc_rma()` and `predict_rma()`.
+- `tests/test_utils_rcalc.py` — 29 tests for every `rcalc()` input form, the
+  `fitstats()` REML/ML split, `sigma_matreg()`, and `conv_wald` /
+  `conv_delta` / `conv_fivenum`.
+- `tests/test_last_public_api.py` — 30 tests for the last public functions that
+  had none: `gosh(subsets=)`, `rma_glmm()` argument checking, `peters_test`,
+  `lrp_common`, `metaadd` and `points_regplot`.
+- `tests/test_utils_diag_netmatrix_mv.py` — 36 tests for the remaining
+  `utils`/`diagnostics` branches (`blsplit`, `as_data_frame_*`), the `tes`
+  integral path with `tau2 > 0`, `permutest` one-sided alternatives and exact
+  sign flips, the six `netmatrix` summarisers, level recoding and tie-breaking,
+  and the `rma_mv` variance structures.
+- `tests/test_plots_influence_permutest.py` — 20 tests for the two new
+  figures and for the coefficient labels.
+- `tests/test_matreg_r_parity.py` — 19 tests pinning every printed digit of
+  `matreg()`'s two branches against R, plus its validations and the
+  `fitstats`/`AIC`/`BIC`/`sigma` methods.
+- `tests/test_mh_peto_methods.py` — 36 tests for the `rma.mh` / `rma.peto`
+  methods, pinned against R.
+- `tests/test_rma_mv_methods.py` — 24 tests for the `rma.mv` diagnostics,
+  pinned against R (tolerances reflect the ~5e-8 agreement of the
+  variance-component optimiser).
+- `tests/test_selmodel_profile.py` — 11 tests for `profile_selmodel()` and its
+  figure (small grids, because every grid point is a full `selmodel` fit).
+- `tests/test_utils_diagnostics_fill.py` — 36 tests for the `rcalc()` row
+  reordering and `dnames`, the coefficient-label forms, `fitstats()`
+  column selection and the saturated-model edge case, the unit conversions,
+  `as_data_frame_confint()`'s renaming and every `tes`/`permutest` variant.
+- **R argument parity**: `netmeta::comps()` gained its `trts` reference
+  argument (components are validated against it and returned in that order) and
+  `netmeta::pairwise()` gained `data=` (a dict / DataFrame carrying the same
+  column names as the parameters; an explicit argument still wins). R's
+  `TE`/`seTE` inputs remain unsupported and are documented as such.
 - `[tool.mypy]` configuration so contributors get a reproducible
   `mypy src/pimeta` run.
 
@@ -221,8 +468,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 ### Not implemented
 
 - Nothing from `meta` / `metafor` / `netmeta` that `pimeta` advertises any
-  more. `metabin`/`netmetabin` `method="LRP"` used to be the last gap and now
-  works without `brglm2`.
+  more. There is no `NotImplementedError` left anywhere in `src/pimeta`.
+  `metabin`/`netmetabin` `method="LRP"` used to be the last gap and now works
+  without `brglm2`; `netcontrib(method="randomwalk")` used to reject incomplete
+  networks and now handles them.
+- Still *deliberately* different from R, and documented at the call site:
+  - `pairwise()` does not take `TE`/`seTE` inputs. R's `pairwise` is not
+    exported by `netmeta` or `metafor` (it is only reachable through the
+    attached search path), so its handling of pre-computed effects could not be
+    verified against the source.
+  - `netmatrix()` keeps `ties_method="first"` as the default instead of R's
+    `"random"`, so results are reproducible.
+  - `dfround(drop0=True)` returns numbers where R returns strings.
 
 ### Fixed
 

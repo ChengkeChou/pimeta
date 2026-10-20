@@ -17,12 +17,13 @@ import numpy as np
 from scipy import stats
 
 from .metareg import _dl_tau2, _i2_h2, _likelihood_tau2, _wls
+from .rma_list import RowSlicable
 
 Z_975 = stats.norm.ppf(0.975)
 
 
 @dataclass
-class InfluenceResult:
+class InfluenceResult(RowSlicable):
     """Leave-one-out / influence diagnostics (metafor::influence)."""
 
     rstudent: list[float]        # externally standardized (deleted) residuals
@@ -66,7 +67,7 @@ class InfluenceResult:
 
 
 @dataclass
-class LeaveOneOutResult:
+class LeaveOneOutResult(RowSlicable):
     """Leave-one-out pooled estimates (metafor::leave1out)."""
 
     estimate: list[float]
@@ -262,16 +263,23 @@ def influence(
 
 def leave1out(
     y,
-    v,
+    v=None,
     method: str = "REML",
     tau2: float | None = None,
     alpha: float = 0.05,
+    cluster=None,
 ) -> LeaveOneOutResult:
     """Leave-one-out analysis for an intercept-only model (metafor::leave1out).
 
     For each study, refits the model without it and records the pooled
-    estimate, SE, z, p, CI, QE and tau^2 / I^2 / H^2.
+    estimate, SE, z, p, CI, QE and tau^2 / I^2 / H^2.  An ``rma.mh`` /
+    ``rma.peto`` result can be passed directly, in which case metafor's
+    ``leave1out.rma.mh`` / ``.peto`` is used (``cluster`` collapses studies).
     """
+    from .rma_peto_mh import is_mh_result, mh_leave1out
+
+    if is_mh_result(y):
+        return mh_leave1out(y, cluster=cluster)
     y = np.asarray(y, dtype=float).ravel()
     v = np.asarray(v, dtype=float).ravel()
     k = len(y)
@@ -321,8 +329,20 @@ def leave1out(
     )
 
 
-def hatvalues(y, v, X=None, method: str = "REML", tau2: float | None = None) -> list[float]:
-    """Diagonal of the hat matrix (metafor::hatvalues)."""
+def hatvalues(y, v=None, X=None, method: str = "REML",
+              tau2: float | None = None, type="diagonal"):
+    """Diagonal of the hat matrix (metafor::hatvalues).
+
+    An ``rma.mv`` fit can be passed instead of ``(y, v)``, in which case
+    metafor's ``hatvalues.rma.mv`` is used and ``type="matrix"`` returns the
+    full hat matrix.
+    """
+    from .rma_mv import RmaMvResult
+
+    if isinstance(y, RmaMvResult):
+        from .mv_diagnostics import mv_hatvalues
+
+        return mv_hatvalues(y, type=type)
     y = np.asarray(y, dtype=float).ravel()
     v = np.asarray(v, dtype=float).ravel()
     k = len(y)
@@ -335,17 +355,45 @@ def hatvalues(y, v, X=None, method: str = "REML", tau2: float | None = None) -> 
 
 
 def cooks_distance(
-    y, v, X=None, method: str = "REML", tau2: float | None = None
-) -> list[float]:
-    """Cook's distances (metafor::cooks.distance)."""
+    y, v=None, X=None, method: str = "REML", tau2: float | None = None,
+    cluster=None,
+):
+    """Cook's distances (metafor::cooks.distance).
+
+    An ``rma.mv`` fit can be passed instead of ``(y, v)``, in which case
+    metafor's ``cooks.distance.rma.mv`` is used (``cluster`` collapses the
+    studies into groups).
+    """
+    from .rma_mv import RmaMvResult
+
+    if isinstance(y, RmaMvResult):
+        from .mv_diagnostics import mv_cooks_distance
+
+        return mv_cooks_distance(y, cluster=cluster)
     inf = influence(y, v, X=X, method=method, tau2=tau2)
     return inf.cook_d
 
 
 def rstudent(
-    y, v, X=None, method: str = "REML", tau2: float | None = None
-) -> list[float]:
-    """Externally standardized (deleted) residuals (metafor::rstudent)."""
+    y, v=None, X=None, method: str = "REML", tau2: float | None = None,
+    cluster=None,
+):
+    """Externally standardized (deleted) residuals (metafor::rstudent).
+
+    Accepts ``(y, v, ...)``, an ``rma.mh`` / ``rma.peto`` result or an
+    ``rma.mv`` fit; the latter two use metafor's own methods and return a dict
+    (``resid``/``se``/``z``/``slab`` for mh/peto, ``delresid``/``sedelresid``/
+    ``z``/``X2``/``slab`` for rma.mv).
+    """
+    from .rma_mv import RmaMvResult
+    from .rma_peto_mh import is_mh_result, mh_rstudent
+
+    if is_mh_result(y):
+        return mh_rstudent(y)
+    if isinstance(y, RmaMvResult):
+        from .mv_diagnostics import mv_rstudent
+
+        return mv_rstudent(y, cluster=cluster)
     inf = influence(y, v, X=X, method=method, tau2=tau2)
     return inf.rstudent
 

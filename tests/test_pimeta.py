@@ -2556,9 +2556,12 @@ def test_simulate_rma_shape():
 def test_matreg_runs():
     R = [[1.0, 0.5, 0.3], [0.5, 1.0, 0.2], [0.3, 0.2, 1.0]]
     m = matreg(1, [2, 3], R, n=100)
-    assert len(m.beta) == 1
+    # metafor: b = R[x,x]^-1 R[x,y], one coefficient per predictor
+    assert len(m.beta) == 2
     assert m.k == 2
-    assert m.se[0] > 0
+    assert m.p == 2 and m.parms == 3
+    assert m.test == "t"
+    assert all(v > 0 for v in m.se)
 
 
 # ---------------------------------------------------------------------------

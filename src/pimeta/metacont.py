@@ -24,6 +24,11 @@ class MetacontResult:
     random: PooledResult | None
     yi: list[float]
     vi: list[float]
+    # arm sizes and the tau^2 estimator, kept because R exposes x$n.e / x$n.c /
+    # x$method.tau (metabias' Macaskill and Pustejovsky variants read them).
+    n_e: list[float] | None = None
+    n_c: list[float] | None = None
+    method_tau: str = "REML"
 
     def to_dict(self) -> dict:
         return {
@@ -33,6 +38,9 @@ class MetacontResult:
             "random": _result_dict(self.random) if self.random else None,
             "yi": self.yi,
             "vi": self.vi,
+            "n_e": self.n_e,
+            "n_c": self.n_c,
+            "method_tau": self.method_tau,
         }
 
 
@@ -73,4 +81,8 @@ def metacont(
         if random
         else None
     )
-    return MetacontResult(sm, len(yi), fixed, random_result, yi, vi)
+    return MetacontResult(
+        sm, len(yi), fixed, random_result, yi, vi,
+        n_e=[float(v) for v in n_e], n_c=[float(v) for v in n_c],
+        method_tau=str(method_tau).upper(),
+    )

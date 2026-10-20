@@ -2380,18 +2380,19 @@ def _contribution_matrix_randomwalk(
         result.seTE_adj_random if model == "random" else result.seTE_adj_common,
         dtype=float,
     )
-    # hatmatrix.aggr(type="full") equals the long form whenever every treatment
-    # pair has direct evidence, which is the only case R's randomwalk handles
-    # without first collapsing duplicate edges.
-    h_full, _hpairs = _hatmatrix_aggr_long(
+    # hatmatrix.aggr(x, model, type = "full") is c x c with c = n(n-1)/2: the
+    # column of a pair with direct evidence receives the matching column of the
+    # "long" hat matrix, every other column stays zero (so a comparison that is
+    # only ever indirect contributes nothing and is dropped below).
+    h_long, hpairs = _hatmatrix_aggr_long(
         treat1_pos, treat2_pos, b_full_m, se_adj, n
     )
-    if h_full.shape[1] != n * (n - 1) // 2:
-        raise NotImplementedError(
-            "netcontrib(method='randomwalk') on an incomplete network is not "
-            "supported yet; every treatment pair must have direct evidence"
-        )
     comps = n * (n - 1) // 2
+    pairs_all = [(i, j) for i in range(n) for j in range(i + 1, n)]
+    col_of = {pair: k for k, pair in enumerate(pairs_all)}
+    h_full = np.zeros((comps, comps), dtype=float)
+    for l, pair in enumerate(hpairs):
+        h_full[:, col_of[pair]] = h_long[:, l]
     ep = 2.220446049250313e-16 * 1000.0  # R's is_zero(x, n = 1000)
 
     weights = np.zeros((comps, comps), dtype=float)
@@ -2452,7 +2453,6 @@ def _contribution_matrix_randomwalk(
     keep = weights.sum(axis=0) > 0.0
     # R labels the columns with hatmatrix.aggr's row names (ascending pair
     # order) while the values were filled in upper-triangle column-major order.
-    pairs_all = [(i, j) for i in range(n) for j in range(i + 1, n)]
     kept_pairs = [pair for pair, k in zip(pairs_all, keep) if k]
     return weights[:, keep], kept_pairs
 
@@ -3547,7 +3547,7 @@ def netpairwise(
 # ---------------------------------------------------------------------------
 
 def pairwise(
-    treat,
+    treat=None,
     n=None,
     event=None,
     mean=None,
@@ -3566,9 +3566,41 @@ def pairwise(
     Supports binary (``event`` / ``n``; sm OR/RR/RD) and continuous
     (``mean`` / ``sd`` / ``n``; sm MD/SMD) data. Each study with ``a`` arms
     contributes ``a(a-1)/2`` pairwise comparisons (treat1 vs treat2).
+
+    ``data`` may be a dict / ``DataFrame`` whose columns carry the same names
+    as the arguments (``treat``, ``n``, ``event``, ``mean``, ``sd``,
+    ``studlab``); an explicitly passed argument wins over the column.
+
+    Not supported: R's ``TE``/``seTE`` arguments, which feed contrast-level data
+    straight through instead of deriving it from the arms.
     """
     if data is not None:
-        raise NotImplementedError("data-frame input not supported; pass vectors")
+        # metafor's ``data=`` just evaluates the remaining arguments inside the
+        # data frame.  Accept the same column names as the parameter names.
+        if hasattr(data, "to_dict"):
+            cols = data.to_dict(orient="list")
+        elif isinstance(data, dict):
+            cols = data
+        elif hasattr(data, "__dict__") and not isinstance(data, type):
+            cols = {k: v for k, v in vars(data).items()
+                    if not k.startswith("_")}
+        else:
+            raise TypeError("argument 'data' must be a dict or a DataFrame")
+
+        def _from(name, cur):
+            if cur is not None:
+                return cur
+            return cols.get(name)
+
+        treat = _from("treat", None)
+        if treat is None:
+            raise ValueError("'data' must contain a 'treat' column")
+        n = _from("n", n)
+        event = _from("event", event)
+        mean = _from("mean", mean)
+        sd = _from("sd", sd)
+        time = _from("time", time)
+        studlab = _from("studlab", studlab)
 
     def _vec(v):
         """Accept a scalar or a sequence; R vectors are per-arm."""
@@ -7367,13 +7399,35 @@ def hatmatrix(x, method="Ruecker", type="full", common=None, random=None):
     raise ValueError("method must be 'Ruecker', 'Krahn' or 'Davies'")
 
 
-def comps(x, sep_comps="+"):
-    """``netmeta::comps`` — split treatment names into components."""
+def comps(x, trts=None, sep_comps="+"):
+    """``netmeta::comps`` — split treatment names into components.
+
+    Args:
+        x: a treatment label, or a sequence of them.
+        trts: optional reference list of *components*.  When given, every
+            component found in ``x`` must appear there (netmeta's ``setref``
+            check) and the components are returned in ``trts`` order, which is
+            what ``netmeta:::comps`` does with its ``trts`` argument.
+        sep_comps: component separator.
+
+    Returns:
+        The component list for a single label, or a list of component lists.
+    """
+    def _norm(parts):
+        if trts is None:
+            return parts
+        ref = [str(v) for v in trts]
+        for p in parts:
+            if p not in ref:
+                raise ValueError(
+                    f"component {p!r} is not in 'trts' ({ref})")
+        return [c for c in ref if c in parts]
+
     if isinstance(x, str):
-        return _compsplit(x, sep_comps)
+        return _norm(_compsplit(x, sep_comps))
     out = []
     for t in np.asarray(x, dtype=object).ravel():
-        out.append(_compsplit(str(t), sep_comps))
+        out.append(_norm(_compsplit(str(t), sep_comps)))
     return out
 
 

@@ -53,12 +53,18 @@ class MetapropResult:
     # underlying PooledResult objects (analysis scale, with heterogeneity)
     fixed: PooledResult
     random: PooledResult | None
+    # event counts and the tau^2 estimator, kept because R exposes x$event /
+    # x$method.tau (metabias' Peters variant reads them for single-arm data)
+    event: list[float] | None = None
+    method_tau: str = "REML"
 
     def to_dict(self) -> dict:
         return {
             "sm": self.sm,
             "k": self.k,
             "n": self.n,
+            "event": self.event,
+            "method_tau": self.method_tau,
             "fixed_prop": self.fixed_prop,
             "fixed_lower": self.fixed_lower,
             "fixed_upper": self.fixed_upper,
@@ -244,4 +250,6 @@ def metaprop(
         vi=vi,
         fixed=fixed,
         random=random_res,
+        event=[float(v) for v in event],
+        method_tau=str(method_tau).upper(),
     )

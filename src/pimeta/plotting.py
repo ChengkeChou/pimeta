@@ -27,6 +27,7 @@ matplotlib.use("Agg")  # headless-safe before importing pyplot
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Polygon
+from scipy import stats as _stats
 
 __all__ = [
     "forest",
@@ -47,6 +48,10 @@ __all__ = [
     "traffic_light",
     "heatplot",
     "regplot",
+    "plot_influence",
+    "plot_permutest",
+    "plot_selprofile",
+    "plot_mv_profile",
     "PlotResult",
 ]
 
@@ -663,8 +668,12 @@ def qqnorm_rma(
 ):
     """``metafor::qqnorm.rma.uni`` — normal Q-Q plot of residuals or effects.
 
+    ``qqnorm.rma.mh`` / ``qqnorm.rma.peto`` are covered too: pass an
+    ``rma.mh`` / ``rma.peto`` result and the matching residuals are computed
+    first.
+
     Args:
-        result: fitted :class:`RmaResult`.
+        result: fitted :class:`RmaResult` (or an ``rma.mh``/``rma.peto`` fit).
         type: ``"resid"`` (raw residuals), ``"rstandard"`` (standardized) or
             ``"rstudent"`` (studentized).
 
@@ -674,19 +683,55 @@ def qqnorm_rma(
     from .rma_uni import RmaResult
     from scipy import stats as _st
 
+    if str(type) not in ("resid", "rstandard", "rstudent"):
+        raise ValueError("'type' must be 'resid', 'rstandard' or 'rstudent'")
+    from .rma_peto_mh import is_mh_result, mh_rstandard, mh_rstudent
+
+    if is_mh_result(result):
+        slab = list(result.slab)
+        if str(type) == "rstudent":
+            resid = np.asarray(mh_rstudent(result)["z"], dtype=float)
+        elif str(type) == "rstandard":
+            resid = np.asarray(mh_rstandard(result)["z"], dtype=float)
+        else:
+            resid = np.asarray(mh_rstandard(result)["resid"], dtype=float)
+        return _qq_panel(resid, slab, filename, figsize, title, ax)
+    from .rma_mv import RmaMvResult
+
+    if isinstance(result, RmaMvResult):
+        from .mv_diagnostics import mv_rstandard, mv_rstudent
+
+        if str(type) == "rstudent":
+            resid = np.asarray(mv_rstudent(result)["z"], dtype=float)
+        elif str(type) == "rstandard":
+            resid = np.asarray(mv_rstandard(result)["z"], dtype=float)
+        else:
+            resid = np.asarray(mv_rstandard(result)["resid"], dtype=float)
+        return _qq_panel(resid, list(result.slab), filename, figsize, title, ax)
     if not isinstance(result, RmaResult):
         raise TypeError("argument 'result' must be an RmaResult")
     resid = np.asarray(result.residuals, dtype=float)
     if type == "rstandard":
         resid = resid / np.sqrt(np.asarray(result.vi, dtype=float) + float(result.tau2))
     elif type == "rstudent":
-        from scipy import stats as _s2
         vi = np.asarray(result.vi, dtype=float)
         tau2 = float(result.tau2)
         resid = resid / np.sqrt(np.maximum(vi + tau2 - np.diag(np.asarray(result.vb, dtype=float))[0], 0.0))
-    elif type != "resid":
-        raise ValueError("'type' must be 'resid', 'rstandard' or 'rstudent'")
+    else:
+        pass
 
+    n = resid.size
+    return _qq_panel(resid, None, filename, figsize, title, ax)
+
+
+def _qq_panel(resid, slab=None, filename=None, figsize=None, title=None,
+              ax=None):
+    """Draw the normal Q-Q panel shared by the ``qqnorm`` methods."""
+    from scipy import stats as _st
+
+    resid = np.asarray(resid, dtype=float)
+    ok = np.isfinite(resid)
+    resid = resid[ok]
     n = resid.size
     p = (np.arange(1, n + 1) - 0.5) / n
     theo = _st.norm.ppf(p)
@@ -698,6 +743,102 @@ def qqnorm_rma(
     ax.plot(theo, intercept + slope * theo, color="C3", lw=1.3)
     ax.set_xlabel("Theoretical quantiles")
     ax.set_ylabel("Sample quantiles")
+    if title:
+        ax.set_title(title)
+    ax.grid(alpha=0.25)
+    _save(fig, filename)
+    return PlotResult(ax=ax, figure=fig, filename=filename)
+
+
+def plot_selprofile(profile, filename=None, figsize=None,
+                    title="Profile log-likelihood",
+                    xlab="delta", ylab="Log-likelihood", ax=None):
+    """``metafor::plot.profile.rma`` for a selection model.
+
+    Draws the profiled log-likelihood against the selection parameter
+    ``delta``, marks the maximum, and shades the profile-likelihood interval.
+
+    Args:
+        profile: a :class:`~.selmodel.SelProfileResult` (or anything with
+            ``delta``/``ll``/``maxll``/``ci_lb``/``ci_ub``).
+
+    Returns:
+        :class:`PlotResult`.
+    """
+    d = np.asarray(getattr(profile, "delta"), dtype=float)
+    ll = np.asarray(getattr(profile, "ll"), dtype=float)
+    ok = np.isfinite(ll)
+    if not ok.any():
+        raise ValueError("the profile contains no finite log-likelihood")
+    d, ll = d[ok], ll[ok]
+    order = np.argsort(d)
+    d, ll = d[order], ll[order]
+    maxll = float(getattr(profile, "maxll", np.max(ll)))
+
+    fig, ax = _new_ax(ax, figsize)
+    lo = getattr(profile, "ci_lb", float("nan"))
+    hi = getattr(profile, "ci_ub", float("nan"))
+    if np.isfinite(lo) and np.isfinite(hi):
+        ax.axvspan(lo, hi, color="0.9", zorder=0)
+    ax.plot(d, ll, color="C0", linewidth=1.6, zorder=3)
+    ax.axhline(maxll, color="0.5", linewidth=0.8, linestyle="--", zorder=1)
+    hat = getattr(profile, "delta_hat", None)
+    if hat is not None and np.isfinite(float(hat)):
+        ax.axvline(float(hat), color="C3", linewidth=1.0, zorder=2)
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    if title:
+        ax.set_title(title)
+    ax.grid(alpha=0.25)
+    _save(fig, filename)
+    return PlotResult(ax=ax, figure=fig, filename=filename)
+
+
+def plot_mv_profile(profile, filename=None, figsize=None,
+                    title=None, xlab=None, ylab="Log-likelihood",
+                    ylim=None, ax=None):
+    """``metafor::plot.profile.rma`` for a profiled parameter.
+
+    Used for the variance components of an ``rma.mv`` fit
+    (:func:`~.mv_diagnostics.profile_rmamv`) and for the scale coefficients of
+    a location-scale model (:func:`~.rma_ls.profile_rma_ls`); the x grid is
+    read from ``profile.sigma2`` or, failing that, ``profile.alpha``.
+
+    Args:
+        profile: anything exposing ``sigma2`` or ``alpha``, plus ``ll``,
+            ``maxll``, ``vc``, ``xlab`` and ``title``.
+
+    Returns:
+        :class:`PlotResult`.
+    """
+    grid = getattr(profile, "sigma2", None)
+    if grid is None:
+        grid = getattr(profile, "alpha", None)
+    vc = np.asarray(grid, dtype=float)
+    ll = np.asarray(getattr(profile, "ll"), dtype=float)
+    ok = np.isfinite(ll)
+    if not ok.any():
+        raise ValueError("the profile contains no finite log-likelihood")
+    vc, ll = vc[ok], ll[ok]
+    order = np.argsort(vc)
+    vc, ll = vc[order], ll[order]
+    maxll = float(getattr(profile, "maxll", np.max(ll)))
+
+    fig, ax = _new_ax(ax, figsize)
+    ax.plot(vc, ll, color="C0", linewidth=1.6, zorder=3)
+    ax.axhline(maxll, color="0.5", linewidth=0.8, linestyle="--", zorder=1)
+    hat = getattr(profile, "vc", None)
+    if hat is not None and np.isfinite(float(hat)):
+        ax.axvline(float(hat), color="C3", linewidth=1.0, zorder=2)
+
+    if xlab is None:
+        xlab = getattr(profile, "xlab", None) or r"$\sigma^2$ Value"
+    if title is None:
+        title = getattr(profile, "title", None) or "Profile Plot"
+    ax.set_xlabel(xlab)
+    ax.set_ylabel(ylab)
+    if ylim is not None:
+        ax.set_ylim(*np.sort(np.asarray(ylim, dtype=float)))
     if title:
         ax.set_title(title)
     ax.grid(alpha=0.25)
@@ -1100,8 +1241,6 @@ def regplot(result, mod=None, labels=None, xlab="Moderator",
     Returns:
         :class:`PlotResult`.
     """
-    from scipy import stats as _stats
-
     x = np.asarray(result.X, dtype=float)
     if x.shape[1] < 2:
         raise ValueError(
@@ -1177,3 +1316,218 @@ def regplot(result, mod=None, labels=None, xlab="Moderator",
     if filename:
         fig.savefig(filename)
     return PlotResult(ax=ax, figure=fig, filename=filename)
+
+
+#: metafor's influence panels, in ``plot.infl.rma.uni``'s order.
+_INFL_PANELS = (
+    ("rstudent", "rstudent"),
+    ("dffits", "dffits"),
+    ("cook_d", "cook.d"),
+    ("cov_r", "cov.r"),
+    ("tau2_del", "tau2.del"),
+    ("qe_del", "QE.del"),
+    ("hat", "hat"),
+    ("weight", "weight"),
+)
+
+
+def _infl_refs(key, x, crit):
+    """Horizontal reference lines R draws in each influence panel."""
+    k, p = int(x.k), int(x.p)
+    if key == "rstudent":
+        return [(0.0, "--"), (crit, ":"), (-crit, ":")]
+    if key == "dffits":
+        lim = 3.0 * math.sqrt(p / max(k - p, 1))
+        return [(0.0, "--"), (lim, ":"), (-lim, ":")]
+    if key == "cook_d":
+        return [(_stats.chi2.ppf(0.5, p), ":")]
+    if key == "cov_r":
+        return [(1.0, "--")]
+    if key == "tau2_del":
+        return [(float(x.tau2), "--")]
+    if key == "qe_del":
+        return [(float(x.QE), "--")]
+    if key == "hat":
+        return [(float(k - p), ":"), (p / k, "--"), (3.0 * p / k, ":")]
+    if key == "weight":
+        return [(100.0 / k, "--")]
+    return []
+
+
+def _infl_ylim(key, vals, x, crit):
+    """Per-panel y limits, following ``zi.max`` in ``plot.infl.rma.uni``."""
+    k, p = int(x.k), int(x.p)
+    a = np.abs(np.asarray(vals, dtype=float))
+    a = a[np.isfinite(a)]
+    top = float(a.max()) if a.size else 1.0
+    pad = 1.05
+    if key == "rstudent":
+        return (-pad * max(top, 2.0), pad * max(top, 2.0))
+    if key == "dffits":
+        lim = pad * max(top, 3.0 * math.sqrt(p / max(k - p, 1)))
+        return (-lim, lim)
+    if key == "cov_r":
+        return (None, pad * max(top, 1.0))
+    if key == "hat":
+        return (None, pad * max(top, 3.0 * p / k))
+    return (None, pad * top if top > 0 else None)
+
+
+def plot_influence(x, plotinf=True, plotdfbs=False, logcov=True, crit=None,
+                   ncol=4, figsize=None, psize=None, col="black",
+                   col_infl="red", slab=None, filename=None):
+    """Influence diagnostics as a panel grid (``metafor::plot.infl.rma.uni``).
+
+    R draws eight panels against the study index: the externally standardized
+    residuals, DFFITS, Cook's distance, the covariance ratio, the leave-one-out
+    tau^2, the leave-one-out QE, the hat value and the weight, each with the
+    reference lines ``plot.infl.rma.uni`` adds (``+/- qnorm(0.975)`` for the
+    residuals, ``+/- 3 sqrt(p/(k-p))`` for DFFITS, ``qchisq(0.5, p)`` for Cook,
+    ``1`` for the covariance ratio, the full-model tau^2 and QE for the deletion
+    panels, ``p/k`` and ``3p/k`` for the hat values and ``100/k`` for the
+    weights).  Studies metafor flags as influential are drawn in red.
+
+    Args:
+        x: an :class:`~pimeta.sensitivity.InfluenceResult`.
+        plotinf: ``True`` for all eight panels, or a list of 1-based panel
+            indices (1 rstudent, 2 dffits, 3 cook.d, 4 cov.r, 5 tau2.del,
+            6 QE.del, 7 hat, 8 weight).
+        plotdfbs: also draw one panel per coefficient holding its DFBETAS.
+        logcov: put the covariance-ratio panel on a log scale (R's default).
+        crit: residual reference value (default ``qnorm(0.975)``).
+        filename: optional path to save the figure to.
+
+    Returns:
+        :class:`PlotResult`.
+    """
+    if plotinf is True:
+        wanted = list(range(1, 9))
+    elif plotinf is False:
+        wanted = []
+    else:
+        wanted = [int(v) for v in np.atleast_1d(plotinf)]
+        wanted = [v for v in dict.fromkeys(wanted) if 1 <= v <= 8]
+        if not wanted:
+            raise ValueError("'plotinf' must be TRUE or index the 8 panels 1..8")
+    if not plotdfbs and not wanted:
+        raise ValueError("at least one of 'plotinf'/'plotdfbs' must be true")
+
+    crit = float(_stats.norm.isf(0.025)) if crit is None else float(crit)
+    panels = [_INFL_PANELS[i - 1] for i in wanted]
+    dfbs = np.asarray(x.dfbs, dtype=float) if plotdfbs else None
+    if dfbs is not None and dfbs.ndim == 2:
+        # InfluenceResult.names holds the *coefficient* names (metafor's
+        # x$dfbs columns), which is exactly what the DFBETAS panels are titled
+        # with in plot.infl.rma.uni.
+        coef_names = list(x.names or [])
+        if len(coef_names) != dfbs.shape[1]:
+            coef_names = [f"b{j + 1}" for j in range(dfbs.shape[1])]
+        panels += [(f"__dfbs{j}", f"dfbs: {coef_names[j]}")
+                   for j in range(dfbs.shape[1])]
+
+    n = len(panels)
+    ncol = max(1, min(int(ncol), n))
+    nrow = int(math.ceil(n / ncol))
+    if figsize is None:
+        figsize = (3.2 * ncol, 2.4 * nrow)
+    fig, axes = plt.subplots(nrow, ncol, figsize=figsize, squeeze=False)
+    flat = axes.ravel()
+
+    k = int(x.k)
+    idx = np.arange(1, k + 1)
+    labels = list(slab) if slab is not None else [str(i) for i in idx]
+    if len(labels) != k:
+        labels = [str(i) for i in idx]
+    infl = np.asarray(x.is_infl, dtype=bool) if x.is_infl else np.zeros(k, bool)
+
+    for ax, (key, label) in zip(flat, panels):
+        if key.startswith("__dfbs"):
+            j = int(key[6:])
+            vals = dfbs[:, j]
+            refs = [(0.0, "--"), (1.0, ":"), (-1.0, ":")]
+            ylim = (None, 1.05 * max(float(np.nanmax(np.abs(vals))), 1.0)
+                    if np.isfinite(vals).any() else None)
+        else:
+            vals = np.asarray(getattr(x, key), dtype=float).ravel()
+            refs = _infl_refs(key, x, crit)
+            ylim = _infl_ylim(key, vals, x, crit)
+        for h, style in refs:
+            ax.axhline(h, color="0.4", linewidth=0.8, linestyle=style, zorder=0)
+        ax.vlines(idx, 0.0, vals, color="0.75", linewidth=0.6, zorder=1)
+        ax.scatter(idx[~infl], vals[~infl], s=psize or 22, color=col,
+                   zorder=3, linewidths=0.4, edgecolors="0.3")
+        if infl.any():
+            ax.scatter(idx[infl], vals[infl], s=psize or 22, color=col_infl,
+                       zorder=4, linewidths=0.4, edgecolors="0.3")
+        if key == "cov_r" and logcov:
+            ax.set_yscale("log")
+        if ylim != (None, None):
+            ax.set_ylim(*ylim)
+        ax.set_title(label, fontsize=8)
+        ax.set_xticks(idx)
+        ax.set_xticklabels(labels, rotation=90, fontsize=6)
+        ax.tick_params(axis="y", labelsize=7)
+        ax.grid(axis="y", color="0.92", linewidth=0.5)
+
+    for ax in flat[n:]:
+        ax.set_visible(False)
+
+    fig.tight_layout()
+    if filename:
+        fig.savefig(filename)
+    return PlotResult(ax=flat[0], figure=fig, filename=filename)
+
+
+def plot_permutest(x, btt=None, nbin=None, figsize=None, col="0.8",
+                   col_obs="blue", filename=None):
+    """Permutation distributions (``metafor::plot.permutest.rma.uni``).
+
+    One panel per coefficient: a histogram of the permutation distribution of
+    the test statistic with the observed value marked, which is the picture
+    R draws for ``plot(permutest(res))``.
+
+    Args:
+        x: a :class:`~pimeta.diagnostics.PermutestResult`.
+        btt: 1-based indices of the coefficients to draw (default all).
+        nbin: number of histogram bins (default ``ceiling(sqrt(nperm))``).
+
+    Returns:
+        :class:`PlotResult`.
+    """
+    if getattr(x, "zval_perm", None) is None:
+        raise TypeError(
+            "plot(x, which='permutest') needs the permutation distributions; "
+            "the result was not produced by permutest()"
+        )
+    zperm = np.asarray(x.zval_perm, dtype=float)
+    zobs = np.asarray(x.zval if x.zval is not None else x.beta, dtype=float)
+    p = zperm.shape[1]
+    coefs = list(range(p)) if btt is None else [int(b) - 1 for b in np.atleast_1d(btt)]
+    n = len(coefs)
+    fig, axes = plt.subplots(1, n, figsize=figsize or (3.4 * n, 3.0),
+                             squeeze=False)
+    flat = axes.ravel()
+    names = list(x.coefnames or [f"b{j + 1}" for j in range(p)])
+    if len(names) != p:
+        names = [f"b{j + 1}" for j in range(p)]
+    nb = int(nbin) if nbin is not None else max(5, int(math.ceil(math.sqrt(x.nperm))))
+
+    for ax, j in zip(flat, coefs):
+        arr = zperm[:, j]
+        arr = arr[np.isfinite(arr)]
+        if arr.size:
+            ax.hist(arr, bins=nb, color=col, edgecolor="0.5", linewidth=0.4,
+                    zorder=1)
+        ax.axvline(zobs[j], color=col_obs, linewidth=1.4, zorder=3)
+        pv = x.pval[j] if j < len(x.pval) else float("nan")
+        ax.set_title(f"{names[j]}  (p = {pv:.4g})", fontsize=8)
+        ax.set_xlabel("Test statistic", fontsize=7)
+        ax.set_ylabel("Frequency", fontsize=7)
+        ax.tick_params(labelsize=7)
+
+    for ax in flat[n:]:
+        ax.set_visible(False)
+    fig.tight_layout()
+    if filename:
+        fig.savefig(filename)
+    return PlotResult(ax=flat[0], figure=fig, filename=filename)

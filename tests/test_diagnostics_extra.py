@@ -275,15 +275,20 @@ def test_permutest_with_moderators_runs(reg):
 
 
 def test_permutest_exact_with_moderators():
-    r = ma.rma(YI8, vi=VI8, mods=MODS[:, 0])
+    # exact = TRUE enumerates all k! row permutations, so keep k small
+    k = 5
+    r = ma.rma(YI8[:k], vi=VI8[:k], mods=MODS[:k, 0])
     res = ma.permutest(r, exact=True)
     assert res.exact is True
+    assert res.nperm == math.factorial(k)
     assert 0.0 < res.pval[1] <= 1.0
 
 
 def test_permutest_permci_with_moderators():
-    r = ma.rma(YI8, vi=VI8, mods=MODS[:, 0])
-    res = ma.permutest(r, iter=199, permci=True, seed=7)
+    # permci() re-draws the permutation set at every root-search step, so the
+    # iteration count is kept small here.
+    r = ma.rma(YI8[:6], vi=VI8[:6], mods=MODS[:6, 0])
+    res = ma.permutest(r, iter=99, permci=True, seed=7)
     assert res.ci_lb is not None and res.ci_ub is not None
     assert res.ci_lb[1] < res.ci_ub[1]
 

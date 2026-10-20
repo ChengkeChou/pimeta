@@ -372,6 +372,11 @@ def rma(
     level: float = 0.95,
     btt=None,
     digits: int = 4,
+    scale=None,
+    scale_intercept: bool = True,
+    link: str = "log",
+    optbeta: bool = False,
+    alpha=None,
 ) -> RmaResult:
     """Fit a univariate meta-analysis model (``metafor::rma``).
 
@@ -390,7 +395,21 @@ def rma(
             (default: the intercept for intercept-only models, otherwise all
             moderator coefficients).
         digits: printing precision (recorded only).
+        scale, scale_intercept, link, optbeta, alpha: when ``scale`` is given
+            a location-scale model is fitted instead (``rma(yi, vi, mods=~x,
+            scale=~z)`` in R, class ``rma.ls``); the fit is delegated to
+            :func:`pimeta.rma_ls` and an :class:`~pimeta.RmaLsResult` is
+            returned.
     """
+    if scale is not None:
+        from .rma_ls import rma_ls
+
+        return rma_ls(
+            yi, vi=vi, sei=sei, mods=mods, scale=scale, data=data,
+            slab=slab, measure=measure, method=method, test=test,
+            level=level, scale_intercept=scale_intercept, link=link,
+            optbeta=optbeta, alpha=alpha, btt=btt,
+        )
     yi = np.asarray(yi, dtype=float).ravel()
     if vi is None:
         if sei is None:

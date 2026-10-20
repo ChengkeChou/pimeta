@@ -44,6 +44,15 @@ class MetabResult:
     yi: list[float]               # per-study effect (analysis scale)
     vi: list[float]               # per-study sampling variance (analysis scale)
     phi: float = 1.0              # dispersion factor (method="LRP" only)
+    # tau^2 estimator actually used (R's x$method.tau; metabias' Thompson
+    # variant reuses it)
+    method_tau: str = "REML"
+    # raw 2x2 counts, kept so that metabias() can run the tests that need them
+    # (Harbord, Peters, Deeks, Schwarzer).
+    event_e: list[float] | None = None
+    n_e: list[float] | None = None
+    event_c: list[float] | None = None
+    n_c: list[float] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -51,6 +60,7 @@ class MetabResult:
             "method": self.method,
             "k": self.k,
             "phi": self.phi,
+            "method_tau": self.method_tau,
             "fixed": _result_dict(self.fixed),
             "random": _result_dict(self.random) if self.random else None,
             "yi": self.yi,
@@ -357,6 +367,11 @@ def metabin(
 
     if k == 0:
         raise ValueError("no studies supplied")
+    counts = dict(
+        event_e=[float(v) for v in a], n_e=[float(v) for v in n1],
+        event_c=[float(v) for v in c], n_c=[float(v) for v in n2],
+        method_tau=str(method_tau).upper(),
+    )
 
     # Study-level effect sizes (inverse-variance estimates; also used for
     # the random-effects tau^2 and the Cochran Q).
@@ -386,7 +401,8 @@ def metabin(
         q, q_p = _cochran_q(yi, vi)
         lrp_fixed = _fixed_result(lrp_est, lrp_se, sm, k, q, q_p, tau2=math.nan)
         if not random:
-            return MetabResult(sm, method, k, lrp_fixed, None, yi, vi, phi_lrp)
+            return MetabResult(sm, method, k, lrp_fixed, None, yi, vi, phi_lrp,
+                               **counts)
         # "Random" for LRP is the common estimate with the SE inflated by phi.
         random_result = _fixed_result(
             lrp_est, lrp_se * phi_lrp, sm, k, q, q_p, tau2=math.nan
@@ -394,7 +410,7 @@ def metabin(
         random_result.model = "random"
         random_result.method = "LRP"
         return MetabResult(sm, method, k, lrp_fixed, random_result, yi, vi,
-                           phi_lrp)
+                           phi_lrp, **counts)
     else:  # Peto
         if sm != "OR":
             raise ValueError("Peto method supports OR only")
@@ -412,4 +428,5 @@ def metabin(
     else:
         random_result = None
 
-    return MetabResult(sm, method, k, fixed, random_result, yi, vi)
+    return MetabResult(sm, method, k, fixed, random_result, yi, vi, 1.0,
+                       **counts)

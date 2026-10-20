@@ -45,10 +45,16 @@ def test_plot_dispatch_needs_only_yi(fit, which):
     assert out is not None
 
 
-@pytest.mark.parametrize("which", ["baujat", "gosh", "profile"])
+@pytest.mark.parametrize("which", ["baujat", "profile"])
 def test_plot_dispatch_for_diagnostic_figures(fit, which):
     out = ma.plot(fit, which=which)
     assert out is not None
+
+
+def test_plot_dispatch_for_the_gosh_plot():
+    """GOSH enumerates 2^k - 1 subsets, so keep k small."""
+    small = ma.rma(YI[:5], vi=VI[:5], method="REML")
+    assert ma.plot(small, which="gosh") is not None
 
 
 @pytest.mark.parametrize("which", ["bubble", "drapery", "regplot"])
@@ -140,10 +146,34 @@ def test_confint_tau2_brackets_the_reml_estimate():
     assert ci.h2_lb <= ci.h2 <= ci.h2_ub
 
 
+def test_confint_tau2_accepts_alpha_level_and_percentage_alike():
+    """0.05 (tail), 0.95 (confidence) and 95 (percent) all mean the same."""
+    yi = [0.1, 0.4, 0.2, 0.55, 0.05]
+    vi = [0.01, 0.02, 0.015, 0.03, 0.012]
+    r = ma.rma(yi, vi=vi, method="REML")
+    ref = ma.confint_tau2(yi, vi, r.tau2, level=0.05)
+    for spec in (0.95, 95):
+        got = ma.confint_tau2(yi, vi, r.tau2, level=spec)
+        assert got.tau2_ub == pytest.approx(ref.tau2_ub, abs=1e-9)
+
+
+def test_confint_tau2_rejects_an_impossible_level():
+    with pytest.raises(ValueError, match="level"):
+        ma.confint_tau2([0.1, 0.2, 0.3], [0.01, 0.02, 0.03], 0.01, level=0.0)
+
+
 def test_hc_rma_returns_robust_intervals():
     res = ma.hc_rma(YI, VI)
     assert np.isfinite(res.beta) and np.isfinite(res.se)
     assert res.ci_lb < res.beta < res.ci_ub
+
+
+def test_hc_rma_accepts_the_level_conventions():
+    ref = ma.hc_rma(YI, VI, level=0.05)
+    for spec in (0.95, 95):
+        got = ma.hc_rma(YI, VI, level=spec)
+        assert got.ci_lb == pytest.approx(ref.ci_lb, abs=1e-10)
+        assert got.ci_ub == pytest.approx(ref.ci_ub, abs=1e-10)
 
 
 def test_hc_rma_rejects_a_single_study():

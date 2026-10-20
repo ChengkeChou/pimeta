@@ -42,10 +42,13 @@ from .metareg import MetaregResult, metareg
 from .publication_bias import (
     BeggResult,
     EggerResult,
+    MetabiasResult,
     RegtestResult,
     TrimfillResult,
     begg_test,
     egger_test,
+    metabias,
+    peters_test,
     regtest,
     trimfill,
 )
@@ -132,9 +135,27 @@ from .rma_peto_mh import RmaMhResult, RmaPetoResult, rma_mh, rma_peto
 from .rma_glmm import RmaGlmmResult, rma_glmm
 from .rma_uni import RmaResult, rma
 from .selmodel import SelModelResult, selmodel
+from .selmodel import SelProfileResult, profile_selmodel
+from .mv_diagnostics import MvProfileResult, profile_rmamv
+from .rma_ls import (
+    RmaLsProfileResult,
+    RmaLsResult,
+    confint_rma_ls,
+    profile_rma_ls,
+    rma_ls,
+)
+from .rma_list import (
+    as_data_frame_rma_list,
+    head,
+    head_rma,
+    slice_rma,
+    tail,
+    tail_rma,
+)
 from .plotting import (
     PlotResult, bubble, drapery, forest, funnel, hasse, labbe, llplot,
-    netgraph, netheat, netposet, plot_baujat, plot_gosh, qqnorm_rma, radial,
+    netgraph, netheat, netposet, plot_baujat, plot_gosh, plot_influence,
+    plot_mv_profile, plot_permutest, plot_selprofile, qqnorm_rma, radial,
     rankogram, traffic_light,
     heatplot,
     regplot,)
@@ -203,6 +224,118 @@ from .transforms import (
     transf_r2toz, transf_rpbtod, transf_rpbtorbis, transf_rtod, transf_rtorpb,
     transf_rtoz, transf_ztor, transf_ztor_int, transf_ztor_mode, transf_ztor2,
 )
+
+# metafor exposes ``dfbetas``/``rstandard`` as S3 generics that pick up a model
+# object; the same short names are handy here.
+dfbetas = dfbetas_rma
+rstandard = rstandard_rma
+
+
+# --------------------------------------------------------------------------- #
+# R's S3 method names
+# --------------------------------------------------------------------------- #
+# R spells its methods ``generic.class`` (``print.rma.uni``,
+# ``cooks.distance.rma.mv``, ``[.list.rma``, ...).  Those strings can never be
+# written as Python *identifiers* (``.`` would be attribute access, ``[``/``$``
+# are syntax), so pimeta uses the R-independent names on the left of this map.
+# The map lets ``getattr(pimeta, "cooks.distance.rma.mv")`` - which is what a
+# mechanical R -> Python translation produces - and `pimeta.r_methods()` resolve
+# to the implementing callable.
+_R_METHODS = {
+    # printing / summaries
+    "print.rma.uni": "summary",
+    "print.rma.mv": "summary",
+    "print.rma.mh": "summary",
+    "print.rma.peto": "summary",
+    "print.rma.glmm": "summary",
+    "print.rma.ls": "summary",
+    "print.summary.rma": "print_summary",
+    "print.anova.rma": "print_summary",
+    "print.confint.rma": "as_data_frame_confint",
+    "print.confint.matreg": "as_data_frame_confint",
+    "print.list.rma": "print_summary",
+    "print.list.confint.rma": "as_data_frame_list_confint",
+    "print.list.anova.rma": "as_data_frame_list_anova",
+    "print.matreg": "summary",
+    "print.escalc": "print_summary",
+    "print.regtest": "print_summary",
+    "print.ranktest": "print_summary",
+    "print.fsn": "print_summary",
+    "print.gosh.rma": "print_summary",
+    "print.hc.rma.uni": "print_summary",
+    "print.hettest": "print_summary",
+    "print.infl.rma.uni": "print_summary",
+    "print.permutest.rma.uni": "print_summary",
+    "print.profile.rma": "print_summary",
+    "print.tes": "print_summary",
+    "print.vcovmat": "print_summary",
+    "print.vif.rma": "as_data_frame_vif",
+    "print.deltamethod": "print_summary",
+    # diagnostics that live under a different module in pimeta
+    "cooks.distance.rma.mv": "cooks_distance",
+    "hc.rma.uni": "hc_rma",
+    "profile.rma.mv": "profile_rmamv",
+    "profile.rma.ls": "profile_rma_ls",
+    "profile.rma.uni.selmodel": "profile_selmodel",
+    "profile.rma.uni": "profile_rma",
+    "qqnorm.rma.mv": "qqnorm_rma",
+    "qqnorm.rma.mh": "qqnorm_rma",
+    "qqnorm.rma.peto": "qqnorm_rma",
+    "qqnorm.rma.glmm": "qqnorm_rma",
+    "qqnorm.rma.uni": "qqnorm_rma",
+    "confint.rma.ls": "confint_rma_ls",
+    "confint.rma.mv": "confint",
+    "confint.rma.mh": "confint",
+    "confint.rma.peto": "confint",
+    "confint.rma.uni": "confint",
+    # list-like results ([, head, tail, as.data.frame, $<-)
+    "[.list.rma": "slice_rma",
+    "[.escalc": "slice_rma",
+    "head.list.rma": "head_rma",
+    "tail.list.rma": "tail_rma",
+    "$<-.list.rma": "update_rma",
+    "$<-.escalc": "update_rma",
+    "as.data.frame.list.rma": "as_data_frame_list_rma",
+    "as.data.frame.confint.rma": "as_data_frame_confint",
+    "as.data.frame.list.confint.rma": "as_data_frame_list_confint",
+    "as.data.frame.list.anova.rma": "as_data_frame_list_anova",
+    "as.data.frame.vif.rma": "as_data_frame_vif",
+    # generics
+    "ranktest.rma": "begg_test",
+    "regtest.rma": "regtest",
+    "anova.rma.uni": "anova_rma",
+    "anova.rma.mv": "anova_rma",
+    "permutest.rma.uni": "permutest",
+    "permutest.rma.ls": "permutest",
+    "predict.rma.uni": "predict_rma",
+    "predict.rma.ls": "predict_rma",
+    "blup.rma.uni": "blup",
+    "ranef.rma.uni": "ranef",
+    "robust.rma.mv": "robust",
+}
+
+# Only advertise entries whose target really exists, so the map can never
+# silently point at a name that was renamed later.
+_R_METHODS = {k: v for k, v in _R_METHODS.items() if v in globals()}
+
+
+def r_methods() -> dict:
+    """Return the ``R S3 method name -> pimeta callable`` map.
+
+    R writes its methods as ``generic.class`` (``print.rma.uni``,
+    ``cooks.distance.rma.mv``, ``[.list.rma``).  Those strings are not valid
+    Python identifiers, so pimeta exports the R-independent names (``summary``,
+    ``cooks_distance``, ``slice_rma``).  This map bridges the two, and
+    ``getattr(pimeta, "<r name>")`` resolves through :func:`__getattr__`.
+    """
+    return dict(_R_METHODS)
+
+
+def __getattr__(name):
+    target = _R_METHODS.get(name)
+    if target is not None:
+        return globals()[target]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 __all__ = [
     "StudyEffect",
@@ -292,6 +425,9 @@ __all__ = [
     "MetacumResult",
     "regtest",
     "RegtestResult",
+    "metabias",
+    "MetabiasResult",
+    "peters_test",
     "baujat",
     "BaujatResult",
     "rma_mv",
@@ -307,11 +443,30 @@ __all__ = [
     "RmaResult",
     "selmodel",
     "SelModelResult",
+    "SelProfileResult",
+    "profile_selmodel",
+    "MvProfileResult",
+    "profile_rmamv",
+    "plot_mv_profile",
+    "rma_ls",
+    "RmaLsResult",
+    "profile_rma_ls",
+    "RmaLsProfileResult",
+    "confint_rma_ls",
+    "slice_rma",
+    "head_rma",
+    "tail_rma",
+    "head",
+    "tail",
+    "as_data_frame_rma_list",
     "forest",
     "funnel",
     "netgraph",
     "plot_baujat",
     "plot_gosh",
+    "plot_influence",
+    "plot_permutest",
+    "plot_selprofile",
     "PlotResult",
     "RATIO_TYPES",
     "DIFF_TYPES",
@@ -380,6 +535,9 @@ __all__ = [
     "df_residual", "model_matrix", "simulate", "confint", "predict",
     "hatvalues_rma", "dfbetas_rma", "rstandard_rma", "ranef_rma",
     "summary", "summary_text", "print_summary", "plot",
+    # metafor names these generics without the "_rma" suffix once a model is
+    # given; the aliases below make ``pimeta.dfbetas(res)`` work like R.
+    "dfbetas", "rstandard",
     # settings
     "gs", "setvals", "settings_meta", "settings_netmeta",
     "META_DEFAULTS", "NETMETA_DEFAULTS",
