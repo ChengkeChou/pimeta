@@ -11,6 +11,7 @@ Sections already moved:
 :mod:`.pairwise`            ``netmeta::pairwise`` — arm-level to comparison-level
 :mod:`.measures`            ``netmeta::netmeasures`` — direct evidence share
 :mod:`.impact`              ``netmeta::netimpact`` — study influence
+:mod:`.binary`              ``netmeta::netmetabin`` — binary (2x2) networks
 =========================  ===============================================
 
 Sections still in ``pimeta/netmeta.py`` (in file order), each a contiguous,
@@ -26,7 +27,6 @@ league                      ``netleague``
 distance / connectivity     ``netdistance``, ``netconnection``
 pairwise ranking            ``netpairwise``
 combination                 ``netcomb``, ``discomb``
-binary networks             ``netmetabin``
 simplification              ``netcomplexity``, ``netcomplex``
 meta-regression             ``netmetareg``
 network paths               ``netpath`` and its path helpers
@@ -38,6 +38,7 @@ ranking and graphics        ``netrank`` plots, ``netheat``, ``netposet``, …
 
 from __future__ import annotations
 
+from .binary import NetmetabinResult, netmetabin
 from .impact import NetimpactResult, netimpact
 from .measures import NetmeasuresResult, netmeasures
 from .pairwise import PairwiseData, pairwise
@@ -45,8 +46,10 @@ from .pairwise import PairwiseData, pairwise
 __all__ = [
     "NetimpactResult",
     "NetmeasuresResult",
+    "NetmetabinResult",
     "PairwiseData",
     "netimpact",
     "netmeasures",
+    "netmetabin",
     "pairwise",
 ]
