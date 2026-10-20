@@ -912,7 +912,14 @@ def netheat(
     if mat is None:
         mat = getattr(result, "Q_inc_design", None)
     if mat is None:
-        raise ValueError("result does not expose an inconsistency contribution matrix")
+        raise ValueError(
+            "netheat needs a design-by-treatment decomposition, which "
+            "netmeta() does not compute yet: the result carries no "
+            "`heat_matrix`/`Q_inc_design` field.  R's netheat derives it from "
+            "the inconsistency model; until that is implemented, use "
+            "`netsplit()` for direct-versus-indirect evidence or plot "
+            "`Q_decomp` (per-comparison Q) yourself."
+        )
     mat = np.asarray(mat, dtype=float)
     if mat.ndim == 1:
         mat = mat.reshape(1, -1)

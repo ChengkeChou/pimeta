@@ -492,6 +492,22 @@ meta-analysis — checking the numbers against the values R returns for
 python examples/bcg_meta_analysis.py
 ```
 
+### Notebooks (already executed)
+
+Four Jupyter notebooks ship with their outputs and figures baked in, so they
+read like a tutorial on GitHub without running anything:
+
+| Notebook | What it shows |
+|---|---|
+| [`01-quickstart.ipynb`](examples/01-quickstart.ipynb) | 2×2 counts → `escalc()` → `rma()` → heterogeneity → prediction interval → forest plot → `tidy()` table |
+| [`02-meta-regression.ipynb`](examples/02-meta-regression.ipynb) | moderator, subgroup split, Egger's test, trim-and-fill, funnel and Baujat plots |
+| [`03-network-meta-analysis.ipynb`](examples/03-network-meta-analysis.ipynb) | `netmeta()`: n×n effect matrix, P-score ranking, league table, direct vs indirect |
+| [`04-ecosystem.ipynb`](examples/04-ecosystem.ipynb) | pandas in/out, scikit-learn `Pipeline` + `GridSearchCV`, xarray and networkx export |
+
+They are generated and really run by `tools/build_example_notebooks.py` (no
+Jupyter needed), and `tests/test_example_notebooks.py` re-executes every cell so
+they cannot go stale.
+
 ---
 
 ## Documentation
@@ -593,9 +609,20 @@ print(ma.trimfill(d.yi, d.vi).k0)   # 剪补法
 | `escalc()` 对 RR/OR/IRR 返回**对数尺度** | 要报告比值本身请用 `math.exp()` |
 | 画图返回 matplotlib `Axes` | 加 `filename="x.png"` 才会落盘；后端强制 `Agg`，脚本里不会弹窗卡住 |
 
-完整可运行示例见 [`examples/bcg_meta_analysis.py`](examples/bcg_meta_analysis.py)：
-从 CSV 读入 13 个卡介苗试验 → 算效应量 → 合并 → 森林图 → Egger / 剪补法 →
+完整可运行示例见 [`examples/bcg_meta_analysis.py`](examples/bcg_meta_analysis.py)：从 CSV 读入 13 个卡介苗试验 → 算效应量 → 合并 → 森林图 → Egger / 剪补法 →
 元回归 → 网状 meta 分析，每一步都和 R 的 `metafor::dat.bcg` 结果对拍。
+
+#### 已经跑好的 notebook（打开就能看结果和图）
+
+| Notebook | 内容 |
+|---|---|
+| [`01-quickstart.ipynb`](examples/01-quickstart.ipynb) | 2×2 计数 → `escalc()` → `rma()` → 异质性 → 预测区间 → 森林图 → `tidy()` 表 |
+| [`02-meta-regression.ipynb`](examples/02-meta-regression.ipynb) | 调节变量、亚组、Egger 检验、剪补法、漏斗图与 Baujat 图 |
+| [`03-network-meta-analysis.ipynb`](examples/03-network-meta-analysis.ipynb) | `netmeta()`：n×n 效应矩阵、P-score 排名、联赛表、直接 vs 间接证据 |
+| [`04-ecosystem.ipynb`](examples/04-ecosystem.ipynb) | pandas 进出、scikit-learn `Pipeline` + `GridSearchCV`、xarray / networkx 导出 |
+
+由 `tools/build_example_notebooks.py` 真实执行后生成（不需要装 Jupyter），
+`tests/test_example_notebooks.py` 会重跑每个单元格，保证示例不会过期。
 
 覆盖范围：`meta` 59/59、`netmeta` 38/38、`metafor` 278/279 个导出函数
 （唯一未实现的是 `metafor.news()`，它只是查看更新日志，不含分析功能）。

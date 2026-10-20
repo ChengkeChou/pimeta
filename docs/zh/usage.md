@@ -8,6 +8,12 @@
     下面所有示例共享同一个 Python 命名空间，后面的例子可以直接用前面定义的数据和结果对象。
     想单独跑某一段，把前面初始化 `import pimeta as ma` 和数据的几行一起复制即可。
 
+!!! tip "想直接看结果？"
+    [`examples/`](https://github.com/ChengkeChou/pimeta/tree/main/examples) 里有 4 个**已经跑好**的
+    notebook，输出和图都嵌在里面，在 GitHub 上直接可读：
+    `01-quickstart`（合并到森林图）、`02-meta-regression`（元回归与发表偏倚）、
+    `03-network-meta-analysis`（网状 meta）、`04-ecosystem`（pandas / scikit-learn / xarray）。
+
 ## 1. 第一次合并
 
 最常用的入口是 `rma()`：给它效应量 `yi` 和方差 `vi`，它按随机效应模型合并。
