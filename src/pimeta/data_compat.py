@@ -522,7 +522,7 @@ def to_dataframe(obj, rows=None):
         A ``pandas.DataFrame`` when pandas is importable, otherwise a plain
         ``dict`` of columns (so the function never hard-requires pandas).
     """
-    from .rma_list import as_data_frame_rma_list, _row_lengths
+    from .rma_list import _row_lengths, as_data_frame_rma_list
 
     k = getattr(obj, "k", None)
     names = _row_lengths(obj, int(k) if isinstance(k, int) else None)
@@ -600,6 +600,8 @@ def install_repr_html(namespace) -> int:
             continue
         if "_repr_html_" in vars(obj):
             continue
-        setattr(obj, "_repr_html_", _repr_html_)
+        # `obj` is any class found in the namespace; setattr is the only
+        # way to patch a foreign type.
+        setattr(obj, "_repr_html_", _repr_html_)  # noqa: B010
         count += 1
     return count

@@ -437,15 +437,21 @@ def to_wide(data, study="study", group="group", event="event", n="n"):
         i1 = row.get(grp_levels[0])
         i2 = row.get(grp_levels[1]) if len(grp_levels) > 1 else None
         if i1 is None or i2 is None:
-            ai.append(np.nan); ci.append(np.nan)
-            bi.append(np.nan); di.append(np.nan)
-            n1i.append(np.nan); n2i.append(np.nan)
+            ai.append(np.nan)
+            ci.append(np.nan)
+            bi.append(np.nan)
+            di.append(np.nan)
+            n1i.append(np.nan)
+            n2i.append(np.nan)
             continue
         e1, n_1 = ev[i1], nn[i1]
         e2, n_2 = ev[i2], nn[i2]
-        ai.append(e1); n1i.append(n_1)
-        ci.append(e2); n2i.append(n_2)
-        bi.append(n_1 - e1); di.append(n_2 - e2)
+        ai.append(e1)
+        n1i.append(n_1)
+        ci.append(e2)
+        n2i.append(n_2)
+        bi.append(n_1 - e1)
+        di.append(n_2 - e2)
 
     return {
         "study": order,

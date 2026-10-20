@@ -98,6 +98,7 @@ def install_methods(namespace, *, overwrite: bool = False) -> int:
                            ("augment", _m_augment), ("to_table", _m_to_table)):
             if overwrite or name not in vars(obj):
                 setattr(obj, name, func)
-        setattr(obj, "_interop_installed", True)
+        # `obj` is a user result class, so the marker goes on via setattr.
+        setattr(obj, "_interop_installed", True)  # noqa: B010
         count += 1
     return count

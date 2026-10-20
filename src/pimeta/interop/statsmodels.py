@@ -173,7 +173,7 @@ class MetaResults:
         """
         from scipy import stats
 
-        level = 1.0 - float(alpha)
+        1.0 - float(alpha)
         if str(getattr(self.result, "test", "z")) in ("knha", "adhoc", "t") and getattr(self.result, "ddf", None):
             crit = float(stats.t.isf(alpha / 2.0, float(self.result.ddf)))
         else:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import json
 
-import numpy as np
 import pytest
 
 from pimeta.cli import build_parser, main, read_table

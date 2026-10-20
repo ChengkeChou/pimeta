@@ -6,7 +6,6 @@ input, so the assertions pin full-precision parity rather than approximations.
 
 import math
 
-import numpy as np
 import pytest
 
 import pimeta as ma

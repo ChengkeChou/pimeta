@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence, cast
+from typing import cast
 
 import matplotlib
 
@@ -249,7 +249,6 @@ def funnel(
 
     se = np.sqrt(vi)
     ratio = _is_ratio(effect_type)
-    labels = _studlab(studlab, k)
 
     fig, ax = _new_ax(ax, figsize)
 
@@ -618,8 +617,9 @@ def drapery(
     Returns:
         :class:`PlotResult`.
     """
-    from .rma_uni import RmaResult
     from scipy import stats as _st
+
+    from .rma_uni import RmaResult
 
     if not isinstance(result, RmaResult):
         raise TypeError("argument 'result' must be an RmaResult")
@@ -680,8 +680,8 @@ def qqnorm_rma(
     Returns:
         :class:`PlotResult`.
     """
+
     from .rma_uni import RmaResult
-    from scipy import stats as _st
 
     if str(type) not in ("resid", "rstandard", "rstudent"):
         raise ValueError("'type' must be 'resid', 'rstandard' or 'rstudent'")
@@ -720,7 +720,6 @@ def qqnorm_rma(
     else:
         pass
 
-    n = resid.size
     return _qq_panel(resid, None, filename, figsize, title, ax)
 
 
@@ -765,8 +764,8 @@ def plot_selprofile(profile, filename=None, figsize=None,
     Returns:
         :class:`PlotResult`.
     """
-    d = np.asarray(getattr(profile, "delta"), dtype=float)
-    ll = np.asarray(getattr(profile, "ll"), dtype=float)
+    d = np.asarray(profile.delta, dtype=float)
+    ll = np.asarray(profile.ll, dtype=float)
     ok = np.isfinite(ll)
     if not ok.any():
         raise ValueError("the profile contains no finite log-likelihood")
@@ -815,7 +814,7 @@ def plot_mv_profile(profile, filename=None, figsize=None,
     if grid is None:
         grid = getattr(profile, "alpha", None)
     vc = np.asarray(grid, dtype=float)
-    ll = np.asarray(getattr(profile, "ll"), dtype=float)
+    ll = np.asarray(profile.ll, dtype=float)
     ok = np.isfinite(ll)
     if not ok.any():
         raise ValueError("the profile contains no finite log-likelihood")

@@ -2,8 +2,9 @@
 #
 #     pip install pre-commit && pre-commit install
 #
-# `ruff-check` and `ruff-format` need the ruff binary; if it is unavailable the
-# hook is skipped and CI still enforces both.
+# `ruff` needs the ruff binary; if it is unavailable the hook is skipped and CI
+# still enforces the lint.  There is no formatter hook: the source is hand
+# formatted in a consistent house style (see pyproject.toml [tool.ruff.lint]).
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
@@ -19,11 +20,10 @@ repos:
       - id: check-merge-conflict
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.10
+    rev: v0.17.1
     hooks:
       - id: ruff
         args: ["--fix", "--exit-non-zero-on-fix"]
-      - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.10.0

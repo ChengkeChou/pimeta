@@ -32,7 +32,7 @@ from scipy import stats
 from .data_compat import resolve
 from .missing import complete_cases
 from .nma.impact import (  # noqa: F401  (re-export; _comparison_list is shared
-    NetimpactResult,          # with _hatmatrix_aggr further down this module)
+    NetimpactResult,  # with _hatmatrix_aggr further down this module)
     _comparison_list,
     netimpact,
 )
@@ -142,7 +142,7 @@ def _adjusted_variances(se_arr, tau2, treat1_pos, treat2_pos, studlab):
     for i, s in enumerate(studlab):
         by_study.setdefault(s, []).append(i)
 
-    for s, inds in by_study.items():
+    for inds in by_study.values():
         if len(inds) <= 1:
             continue
         # Order this study's comparisons as (1,2),(1,3),...,(k-1,k).
@@ -675,7 +675,7 @@ def _nma_krahn_full(te_raw, se_raw, treat1_raw, treat2_raw, studlab_raw,
     else:
         trts = [reference_group] + [t for t in trts_sorted
                                     if t != reference_group]
-    idx_new = {t: i for i, t in enumerate(trts)}
+    {t: i for i, t in enumerate(trts)}
 
     # --- studies.pre: TE = -x$TE, seTE = sqrt(se^2 + tau.preset^2) ---
     studies = []
@@ -852,8 +852,6 @@ def _nma_krahn_full(te_raw, se_raw, treat1_raw, treat2_raw, studlab_raw,
     cov_net = list(np.diag(cov_net_base)) + co
     se_net_full = np.sqrt(np.asarray(cov_net))
 
-    network = {"TE": te_net_full, "seTE": se_net_full,
-               "names": trts_poss}
     net_by_name = {nm: (te_net_full[k], se_net_full[k])
                    for k, nm in enumerate(trts_poss)}
 
@@ -2977,7 +2975,7 @@ def netleague(
     else:
         seq = list(seq)
     idx = [x.trts.index(t) for t in seq]
-    n = len(seq)
+    len(seq)
 
     def _pick(mat: np.ndarray) -> np.ndarray:
         return mat[np.ix_(idx, idx)]
@@ -3225,7 +3223,7 @@ def netconnection(
     # Sort D / A / L by the hclust order.
     d_sorted = d_mat[np.ix_(order, order)]
     a_sorted = a_mat[np.ix_(order, order)]
-    l_sorted = l_mat[np.ix_(order, order)]
+    l_mat[np.ix_(order, order)]
     order_labels = [labels[i] for i in order]
 
     # Walk through the sorted distance matrix to carve out the subnetworks.
@@ -4980,8 +4978,10 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
     TE_per = []
     seTE_per = []
     for k in range(m):
-        a = event1[k]; b = n1[k] - event1[k]
-        c = event2[k]; dd = n2[k] - event2[k]
+        a = event1[k]
+        b = n1[k] - event1[k]
+        c = event2[k]
+        dd = n2[k] - event2[k]
         TE_per.append(math.log(a * dd / (b * c)))
         seTE_per.append(math.sqrt(1.0 / a + 1.0 / b + 1.0 / c + 1.0 / dd))
 
@@ -5174,8 +5174,8 @@ def netcomplexity(result) -> int:
     Returns:
         The network complexity as an ``int``.
     """
-    m = int(getattr(result, "m"))
-    n = int(getattr(result, "n"))
+    m = int(result.m)
+    n = int(result.n)
     ns = getattr(result, "n_subnets", None)
     if ns is None:
         ns = getattr(result, "nsubnets", 1)
@@ -5438,8 +5438,8 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
         raise ValueError("assumption must be 'independent' or 'common'")
 
     trts = list(result.trts)
-    n_trts = len(trts)
-    t_index = {t: i for i, t in enumerate(trts)}
+    len(trts)
+    {t: i for i, t in enumerate(trts)}
 
     te = np.asarray(result.TE_raw, dtype=float)
     se = np.asarray(result.seTE_raw, dtype=float)
@@ -6082,7 +6082,7 @@ def netcomparison(result, treat1=None, treat2=None, common=True, random=True,
         raise TypeError("argument 'result' must be a NetcombResult")
 
     trts = list(result.trts)
-    comps = list(result.comps)
+    list(result.comps)
     inactive = list(result.inactive or [])
     sep_comps = result.sep_comps or "+"
     ref = result.reference_group or ""
@@ -6888,12 +6888,12 @@ def nettable(result, level=0.95):
     trts = list(result.trts)
     t1 = [str(v) for v in result.treat1_raw]
     t2 = [str(v) for v in result.treat2_raw]
-    tev = np.asarray(result.TE_raw, dtype=float)
-    sev = np.asarray(result.seTE_raw, dtype=float)
+    np.asarray(result.TE_raw, dtype=float)
+    np.asarray(result.seTE_raw, dtype=float)
     stud = [str(v) for v in result.studlab_raw]
     narms = np.asarray(result.narms_raw, dtype=float)
 
-    pos = {t: i for i, t in enumerate(trts)}
+    {t: i for i, t in enumerate(trts)}
     groups = {}
     for i in range(len(t1)):
         key = tuple(sorted([str(t1[i]), str(t2[i])]))
@@ -6931,7 +6931,7 @@ def nettable(result, level=0.95):
 
 def createC(trts, inactive=None, sep_comps="+"):
     """``netmeta::createC`` — component incidence matrix ``(C, comps, names)``."""
-    return _create_c_matrix(trls if False else trts, inactive, sep_comps)[:3]
+    return _create_c_matrix(trts, inactive, sep_comps)[:3]
 
 
 def invmat(x):

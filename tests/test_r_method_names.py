@@ -16,7 +16,7 @@ import pimeta as ma
 def test_r_methods_is_a_non_empty_map_of_callables():
     m = ma.r_methods()
     assert isinstance(m, dict) and len(m) >= 60
-    for r_name, py_name in m.items():
+    for r_name, _py_name in m.items():
         assert "." in r_name or "[" in r_name or "$" in r_name
         assert callable(getattr(ma, r_name))
 

@@ -44,7 +44,9 @@ def test_deltamethod_accepts_a_vector_valued_function():
 
 def test_deltamethod_orders_agree_for_a_linear_function():
     """A linear transformation has no curvature, so every order coincides."""
-    f = lambda a, b: 2.0 * a + 3.0 * b
+    def f(a, b):
+        return 2.0 * a + 3.0 * b
+
     r1 = ma.deltamethod(COEF, VCOV, f, order=1)
     r2 = ma.deltamethod(COEF, VCOV, f, order=2)
     r3 = ma.deltamethod(COEF, VCOV, f, order=3)

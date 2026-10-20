@@ -21,15 +21,15 @@ Effect scale:
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 import numpy as np
 from numpy.typing import ArrayLike
 from scipy import integrate, stats
 
-from .tau2 import estimate_tau2
 from ._numeric import zeroin as _zeroin
+from .tau2 import estimate_tau2
 
 # 95% CI z-quantile, equivalent to R's qnorm(0.975).
 Z_975 = stats.norm.ppf(0.975)  # 1.95996398454...

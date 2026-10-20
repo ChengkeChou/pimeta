@@ -68,10 +68,11 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: python -m pip install --upgrade ruff
-      - name: Check formatting and lint
-        run: |
-          ruff check src tests tools
-          ruff format --check src tests tools
+      - name: Lint
+        # `ruff format --check` is deliberately not run: the source is hand
+        # formatted in a consistent house style and the formatter would rewrite
+        # all 88 files.  See the note in pyproject.toml [tool.ruff.lint].
+        run: ruff check src tests tools
 
   typecheck:
     name: mypy

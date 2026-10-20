@@ -242,7 +242,7 @@ def test_profile_mv_to_dict_and_repr():
 def test_profile_mv_plot(tmp_path):
     res = _mv()
     out = tmp_path / "prof.png"
-    got = plot(res, which="profile", filename=str(out), steps=8)
+    plot(res, which="profile", filename=str(out), steps=8)
     assert out.exists() and out.stat().st_size > 0
 
     prof = ma.profile_rmamv(res, steps=8)

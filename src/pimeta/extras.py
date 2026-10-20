@@ -674,8 +674,8 @@ def profile_rma(result, n_points=20, level=0.05):
         return profile_selmodel(result, n_points=n_points,
                                 level=1.0 - level if level < 0.5 else level)
 
-    from .rma_uni import RmaResult
     from .pooling import confint_tau2
+    from .rma_uni import RmaResult
 
     if not isinstance(result, RmaResult):
         raise TypeError("argument 'result' must be an RmaResult")

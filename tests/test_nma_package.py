@@ -52,8 +52,6 @@ def test_moved_pairwise_keeps_the_continuous_path():
 
 
 def test_moved_sections_stay_identity_equal():
-    import pimeta.netmeta as netmeta_mod
-
     netmeta_mod = sys.modules["pimeta.netmeta"]
     for name in ("netmeasures", "NetmeasuresResult", "netimpact",
                  "NetimpactResult"):

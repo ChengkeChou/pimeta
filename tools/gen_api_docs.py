@@ -319,7 +319,7 @@ def build_pages() -> dict[Path, str]:
                 if text:
                     body.extend([text, ""])
             else:
-                body.extend([render_value(obj), ""]);
+                body.extend([render_value(obj), ""])
         pages[OUT / "api" / f"{slug}.md"] = "\n".join(head + [""] + body).rstrip() + "\n"
 
         for name, obj in entries:

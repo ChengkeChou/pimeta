@@ -262,7 +262,7 @@ class _InterceptComp:
         self._ZZ = Z @ Z.T
 
     def contain_groups(self) -> list[np.ndarray]:
-        """Group label vectors used for ``dfs="contain"``.""" 
+        """Group label vectors used for ``dfs="contain"``."""
         return [np.argmax(self.Z, axis=1)]
 
     def blup(self, p: np.ndarray, W: np.ndarray, r: np.ndarray,
@@ -1230,7 +1230,11 @@ def rma_mv(
     ll_qe = -0.5 * k * math.log(2 * math.pi) - 0.5 * logdetV  # V-only model
     ll_ml = -_mv_loglik(D_list, Y, V, X, "ML")
     ll_reml = -_mv_loglik(D_list, Y, V, X, "REML")
-    _aicc = lambda n, lp: -2 * lp + 2 * parms * max(n, parms + 2) / (max(n, parms + 2) - parms - 1)
+
+    def _aicc(n, lp):
+        denom = max(n, parms + 2) - parms - 1
+        return -2 * lp + 2 * parms * max(n, parms + 2) / denom
+
     fit_stats = {
         "ML": {
             "ll": ll_ml,
@@ -1383,7 +1387,7 @@ def _cluster_groups(cluster: np.ndarray) -> list[np.ndarray]:
     """Member indices per cluster, in first-seen order (R ``factor`` levels)."""
     seen: list = []
     idx: dict = {}
-    for i, c in enumerate(cluster):
+    for c in cluster:
         if c not in idx:
             idx[c] = len(seen)
             seen.append(c)

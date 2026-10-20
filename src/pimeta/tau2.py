@@ -22,7 +22,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import numpy as np
-from scipy import optimize
 
 from ._numeric import (
     TAU2_MAX,

@@ -112,7 +112,20 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # line length is handled by the formatter, not by the linter
+    # zip() here always pairs parallel arrays (yi/vi, TE/seTE, study arms)
+    # that are built to the same length; adding strict=False at ~120 call
+    # sites would be noise that says nothing about intent.
+    "B905",
+    # O / I / l are the notation of the field (observed counts, inertia,
+    # and the R source these functions were ported from).
+    "E741",
+]
+
+# The source is hand-formatted in a consistent house style; `ruff format`
+# would rewrite all 88 files (it disagrees with the `a ** 2` spacing and the
+# multi-entry __all__ blocks), so CI runs the linter only.
 
 # The package ships py.typed (PEP 561): `mypy src/pimeta` is clean, and CI
 # enforces that it stays that way.

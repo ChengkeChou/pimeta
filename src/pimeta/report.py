@@ -250,7 +250,6 @@ def addpoly(result=None, yi=None, vi=None, ci_lb=None, ci_ub=None,
     import matplotlib.pyplot as plt
     from matplotlib.patches import Polygon
 
-    from .plotting import PlotResult
 
     if result is not None:
         est = float(result.TE_random if getattr(result, "random", False)
@@ -632,8 +631,10 @@ def rob(labels, judgements, domains=None, weights=None, ax=None,
         mat = [list(row) for row in judgements]
         dom_names = domains or [f"Domain {i + 1}" for i in range(len(mat))]
 
+    # NB: no `True`/`False` keys here — they hash to 1 and 0, so they would
+    # silently overwrite the integer mappings below.
     norm = {"low": 0, "unclear": 1, "high": 2,
-            0: 0, 1: 1, 2: 2, "0": 0, "1": 1, "2": 2, True: 0, False: 2}
+            0: 0, 1: 1, 2: 2, "0": 0, "1": 1, "2": 2}
     w = (np.ones(len(labels)) if weights is None
          else np.asarray(weights, dtype=float))
     w = w / w.sum()
@@ -691,8 +692,8 @@ class CidpropResult:
 
 _RELATIVE = {"RR", "OR", "HR", "IRR", "ROM", "PETO", "PLN", "IRLN", "VR",
              "CVR", "SDLN", "MNLN", "CVLN", "REH"}
-_SINGLE = {"PLO", "PLN", "PR", "IR", "IRLN", "IRS", "IRFT", "PFT", "PLN",
-           "MRAW", "MLN", "MNLN", "PRAW", "PLOGIT", "PAS", "PFT"}
+_SINGLE = {"PLO", "PLN", "PR", "IR", "IRLN", "IRS", "IRFT", "PFT",
+           "MRAW", "MLN", "MNLN", "PRAW", "PLOGIT", "PAS"}
 
 
 def cidprop(result, cid=None, cid_below_null=None, cid_above_null=None,

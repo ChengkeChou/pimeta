@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from scipy import special, stats
+from scipy import special
 
 __all__ = [
     "asin2ir", "asin2p", "p2asin", "cor2z", "z2cor", "logit2p", "p2logit",

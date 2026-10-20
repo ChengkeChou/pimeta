@@ -17,7 +17,6 @@ the fixed effects, exactly as metafor's ``.cooks.distance.rma.mv`` /
 from __future__ import annotations
 
 import numpy as np
-from scipy import stats
 
 __all__ = [
     "mv_hatvalues", "mv_weights", "mv_rstandard", "mv_cooks_distance",
@@ -237,14 +236,14 @@ def mv_rstudent(x, cluster=None):
     x = _check(x)
     yi = np.asarray(x.yi, dtype=float).ravel()
     X = np.asarray(x.X, dtype=float)
-    M = np.asarray(x.M, dtype=float)
+    np.asarray(x.M, dtype=float)
     delresid = np.full(int(x.k), np.nan)
     sedel = np.full(int(x.k), np.nan)
     groups = _groups(x, cluster)
     labels = ([f"-{x.slab[i]}" for i in range(int(x.k))] if cluster is None
               else [f"-{g}" for g in list(dict.fromkeys(list(cluster)))])
     x2 = []
-    for grp, lab in zip(groups, labels):
+    for grp, _lab in zip(groups, labels):
         keep = np.ones(int(x.k), dtype=bool)
         keep[grp] = False
         try:

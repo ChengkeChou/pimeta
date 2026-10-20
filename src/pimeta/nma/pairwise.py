@@ -37,7 +37,7 @@ def pairwise(
     allincr: bool = False,
     addincr: bool = False,
     allstudies: bool = False,
-) -> "PairwiseData":
+) -> PairwiseData:
     """Convert arm-level data to comparison-level data (netmeta::pairwise).
 
     Supports binary (``event`` / ``n``; sm OR/RR/RD) and continuous

@@ -15,8 +15,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
-from .pooling import PooledResult, pool_yv
 from .metaprop import _pool_dict
+from .pooling import PooledResult, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 

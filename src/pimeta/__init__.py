@@ -19,6 +19,178 @@ try:
 except PackageNotFoundError:  # importing straight from a source tree
     __version__ = "0.0.0+unknown"
 
+from .conv import (
+    Conv2x2Result,
+    ConvDeltaResult,
+    ConvFivenumResult,
+    ConvWaldResult,
+    conv_2x2,
+    conv_delta,
+    conv_fivenum,
+    conv_wald,
+    to_long,
+    to_table,
+    to_wide,
+)
+from .cumul import CumulResult, cumul
+from .data_compat import (
+    FormulaSpec,
+    as_columns,
+    column_names,
+    design_matrix,
+    install_repr_html,
+    lookup,
+    model_frame,
+    parse_formula,
+    resolve,
+    resolve_mods,
+    to_dataframe,
+    to_html,
+)
+from .diagnostics import (
+    DeltaMethodResult,
+    PermutestResult,
+    TesResult,
+    VifResult,
+    deltamethod,
+    permutest,
+    tes,
+    vif,
+)
+from .escalc import EscalcResult, escalc
+from .extras import (
+    HettestResult,
+    MatregResult,
+    ProfileResult,
+    hettest,
+    matreg,
+    profile_rma,
+    simulate_rma,
+    vcalc,
+)
+from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
+from .fsn import FsnResult, fsn
+from .gosh import GoshResult, gosh
+from .measures import (
+    NntResult,
+    RdResult,
+    VE2logVR,
+    asin2ir,
+    asin2p,
+    cor2z,
+    logit2p,
+    logVR2VE,
+    nnt,
+    or2smd,
+    p2asin,
+    p2logit,
+    rd,
+    smd2or,
+    z2cor,
+)
+from .meta_compose import (
+    MetaaddResult,
+    MetabindResult,
+    MetacrResult,
+    metaadd,
+    metabind,
+    metacr,
+    metamerge,
+)
+from .metabin import MetabResult, metabin
+from .metacont import MetacontResult, metacont
+from .metacor import MetacorResult, metacor
+from .metagen import MetagenResult, backtransf, metagen, transf
+from .metainc import MetaincResult, metainc
+from .metainf import MetacumResult, MetainfResult, metacum, metainf
+from .metamean import MetameanResult, metamean
+from .metaprop import MetapropResult, metaprop
+from .metarate import MetarateResult, metarate
+from .metareg import MetaregResult, metareg
+from .missing import MissingDataWarning, complete_cases, is_missing
+from .mv_diagnostics import MvProfileResult, profile_rmamv
+from .netmeta import (
+    DecompDesignResult,
+    NetbindResult,
+    NetcombResult,
+    NetcomparisonResult,
+    NetcomplexResult,
+    NetconnectionResult,
+    NetcontribResult,
+    NetdistanceResult,
+    NetimpactResult,
+    NetleagueResult,
+    NetmatrixResult,
+    NetmeasuresResult,
+    NetmetabinResult,
+    NetmetaregResult,
+    NetmetaResult,
+    NetpairwiseResult,
+    NetrankResult,
+    NetsplitResult,
+    NetsubgroupResult,
+    NettableResult,
+    PairwiseData,
+    VikorResult,
+    combinations,
+    comps,
+    createC,
+    crossnma2netmeta,
+    decomp_design,
+    discomb,
+    gemtc2netmeta,
+    hatmatrix,
+    invmat,
+    netbind,
+    netcomb,
+    netcomparison,
+    netcomplex,
+    netcomplexity,
+    netconnection,
+    netcontrib,
+    netdistance,
+    netimpact,
+    netleague,
+    netmatrix,
+    netmeasures,
+    netmeta,
+    netmetabin,
+    netmetareg,
+    netpairwise,
+    netpath,
+    netrank,
+    netsplit,
+    nettable,
+    pairwise,
+    subgroup,
+    treats,
+    vikor,
+)
+from .plotting import (
+    PlotResult,
+    bubble,
+    drapery,
+    forest,
+    funnel,
+    hasse,
+    heatplot,
+    labbe,
+    llplot,
+    netgraph,
+    netheat,
+    netposet,
+    plot_baujat,
+    plot_gosh,
+    plot_influence,
+    plot_mv_profile,
+    plot_permutest,
+    plot_selprofile,
+    qqnorm_rma,
+    radial,
+    rankogram,
+    regplot,
+    traffic_light,
+)
 from .pooling import (
     DIFF_TYPES,
     RATIO_TYPES,
@@ -34,11 +206,6 @@ from .pooling import (
     result_to_dict,
     run_meta,
 )
-from .escalc import EscalcResult, escalc
-from .tau2 import estimate_tau2
-from .metabin import MetabResult, metabin
-from .metacont import MetacontResult, metacont
-from .metareg import MetaregResult, metareg
 from .publication_bias import (
     BeggResult,
     EggerResult,
@@ -52,6 +219,72 @@ from .publication_bias import (
     regtest,
     trimfill,
 )
+from .readers import REVIEW_COLUMNS, ReviewDataResult, read_cdir, read_mtv, read_rm5
+from .report import (
+    CidpropResult,
+    LongarmResult,
+    ReportResult,
+    addpoly,
+    aggregate_escalc,
+    cbind_escalc,
+    cidprop,
+    cilayout,
+    emmprep,
+    forest_dims,
+    format_ci,
+    longarm,
+    points_regplot,
+    rbind_escalc,
+    reporter,
+    rob,
+)
+from .rma_glmm import RmaGlmmResult, rma_glmm
+from .rma_list import (
+    as_data_frame_rma_list,
+    head,
+    head_rma,
+    slice_rma,
+    tail,
+    tail_rma,
+)
+from .rma_ls import (
+    RmaLsProfileResult,
+    RmaLsResult,
+    confint_rma_ls,
+    profile_rma_ls,
+    rma_ls,
+)
+from .rma_mv import RmaMvResult, anova_rma, ranef, rma_mv, robust
+from .rma_peto_mh import RmaMhResult, RmaPetoResult, rma_mh, rma_peto
+from .rma_uni import RmaResult, rma
+from .s3 import (
+    AIC,
+    BIC,
+    coef,
+    confint,
+    deviance,
+    df_residual,
+    dfbetas_rma,
+    fitted,
+    formula,
+    hatvalues_rma,
+    logLik,
+    model_matrix,
+    nobs,
+    plot,
+    predict,
+    print_summary,
+    ranef_rma,
+    residuals,
+    rstandard_rma,
+    sigma,
+    simulate,
+    summary,
+    summary_text,
+    vcov,
+    weights,
+)
+from .selmodel import SelModelResult, SelProfileResult, profile_selmodel, selmodel
 from .sensitivity import (
     BaujatResult,
     InfluenceResult,
@@ -63,181 +296,113 @@ from .sensitivity import (
     leave1out,
     rstudent,
 )
-from .netmeta import (
-    DecompDesignResult,
-    NetcombResult,
-    NetcomplexResult,
-    NetconnectionResult,
-    NetcontribResult,
-    NetdistanceResult,
-    NetleagueResult,
-    NetmetaResult,
-    NetmetabinResult,
-    NetpairwiseResult,
-    NetrankResult,
-    NetsplitResult,
-    PairwiseData,
-    decomp_design,
-    discomb,
-    netcomb,
-    netcomplex,
-    netcomplexity,
-    netmetareg,
-    netmeasures,
-    netmatrix,
-    NetmatrixResult,
-    netcomparison,
-    NetcomparisonResult,
-    netbind,
-    crossnma2netmeta,
-    gemtc2netmeta,
-    treats,
-    vikor,
-    VikorResult,
-    subgroup,
-    NetsubgroupResult,
-    nettable,
-    NettableResult,
-    createC,
-    invmat,
-    hatmatrix,
-    comps,
-    combinations,
-    NetbindResult,
-    netimpact,
-    netpath,
-    NetmetaregResult,
-    NetmeasuresResult,
-    NetimpactResult,
-    netconnection,
-    netcontrib,
-    netdistance,
-    netleague,
-    netmeta,
-    netmetabin,
-    netpairwise,
-    netrank,
-    netsplit,
-    pairwise,
-)
-from .cumul import CumulResult, cumul
-from .fsn import FsnResult, fsn
-from .gosh import GoshResult, gosh
-from .metacor import MetacorResult, metacor
-from .metainc import MetaincResult, metainc
-from .metagen import MetagenResult, backtransf, metagen, transf
-from .metamean import MetameanResult, metamean
-from .metaprop import MetapropResult, metaprop
-from .metarate import MetarateResult, metarate
-from .metainf import MetacumResult, MetainfResult, metacum, metainf
-from .rma_mv import RmaMvResult, anova_rma, rma_mv, ranef, robust
-from .rma_peto_mh import RmaMhResult, RmaPetoResult, rma_mh, rma_peto
-from .rma_glmm import RmaGlmmResult, rma_glmm
-from .rma_uni import RmaResult, rma
-from .selmodel import SelModelResult, selmodel
-from .selmodel import SelProfileResult, profile_selmodel
-from .mv_diagnostics import MvProfileResult, profile_rmamv
-from .rma_ls import (
-    RmaLsProfileResult,
-    RmaLsResult,
-    confint_rma_ls,
-    profile_rma_ls,
-    rma_ls,
-)
-from .rma_list import (
-    as_data_frame_rma_list,
-    head,
-    head_rma,
-    slice_rma,
-    tail,
-    tail_rma,
-)
-from .data_compat import (
-    FormulaSpec,
-    as_columns,
-    column_names,
-    design_matrix,
-    install_repr_html,
-    lookup,
-    model_frame,
-    parse_formula,
-    resolve,
-    resolve_mods,
-    to_dataframe,
-    to_html,
-)
-from .missing import MissingDataWarning, complete_cases, is_missing
-from .plotting import (
-    PlotResult, bubble, drapery, forest, funnel, hasse, labbe, llplot,
-    netgraph, netheat, netposet, plot_baujat, plot_gosh, plot_influence,
-    plot_mv_profile, plot_permutest, plot_selprofile, qqnorm_rma, radial,
-    rankogram, traffic_light,
-    heatplot,
-    regplot,)
-from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
-from .diagnostics import (
-    DeltaMethodResult, PermutestResult, TesResult, VifResult,
-    deltamethod, permutest, tes, vif,
-)
-from .measures import (
-    NntResult, RdResult, asin2ir, asin2p, cor2z, logVR2VE, logit2p, nnt,
-    or2smd, p2asin, p2logit, rd, smd2or, VE2logVR, z2cor,
-)
-from .extras import (
-    HettestResult, MatregResult, ProfileResult, hettest, matreg, profile_rma,
-    simulate_rma, vcalc,
-)
-from .conv import (
-    ConvDeltaResult, ConvFivenumResult, ConvWaldResult, conv_delta,
-    conv_fivenum, conv_wald, conv_2x2, Conv2x2Result,
-    to_long, to_table, to_wide,
-)
-from .s3 import (
-    coef, vcov, fitted, residuals, logLik, deviance, nobs, formula,
-    AIC, BIC, weights, sigma, df_residual, model_matrix, simulate,
-    confint, predict, hatvalues_rma, dfbetas_rma, rstandard_rma,
-    ranef_rma, summary, summary_text, print_summary, plot,
-)
-from .report import (
-    aggregate_escalc, cbind_escalc, rbind_escalc, emmprep, addpoly,
-    points_regplot, reporter, cidprop, cilayout, forest_dims, longarm,
-    rob, format_ci, CidpropResult, LongarmResult, ReportResult,
-)
-from .readers import (REVIEW_COLUMNS, ReviewDataResult, read_cdir,
-                      read_mtv, read_rm5)
-from .utils import (
-    blup, fitstats, aic_rma, bic_rma, se_rma, df_residual_rma,
-    model_matrix_rma, as_data_frame_list_rma, cooks_distance_rma,
-    sigma_matreg, update_rma, estimates, bldiag, blsplit, vec2mat,
-    as_data_frame_confint, as_matrix_list_rma, se,
-    as_data_frame_list_anova, as_data_frame_list_confint,
-    as_data_frame_vif, inches2units, units2inches,
-    jama_labels, ci, getmfopt, setmfopt,
-    replmiss, cmicalc, contrmat, pairmat, rcalc, forest_args,
-    RcalcResult, BlupResult, FitstatsResult, EstimatesResult,
-)
-from .meta_compose import (MetaaddResult, MetabindResult, MetacrResult,
-                            metaadd, metabind, metacr, metamerge)
 from .settings import (
-    META_DEFAULTS, NETMETA_DEFAULTS, gs, setvals, settings_meta,
+    META_DEFAULTS,
+    NETMETA_DEFAULTS,
+    gs,
+    settings_meta,
     settings_netmeta,
+    setvals,
 )
-from . import transforms as _transforms
+from .tau2 import estimate_tau2
 from .transforms import (
-    transf_abt, transf_ahw, transf_arcsin, transf_clestod,
-    transf_dtobesd, transf_dtocles, transf_dtocles_int, transf_dtocliffd,
-    transf_dtolnor_logis, transf_dtolnor_norm, transf_dtomd, transf_dtoovl,
-    transf_dtorbis, transf_dtorpb, transf_dtou1, transf_dtou2, transf_dtou3,
-    transf_exp_int, transf_exp_mode, transf_iabt, transf_iabt_int,
-    transf_iabt_mode, transf_iahw, transf_iahw_int, transf_iahw_mode,
-    transf_iarcsin, transf_iarcsin_int, transf_iarcsin_mode, transf_iirft,
-    transf_ilogit, transf_ilogit_int, transf_ilogit_mode, transf_ipft,
-    transf_ipft_hm, transf_iprobit, transf_iprobit_int, transf_iprobit_mode,
-    transf_irft, transf_isqrt, transf_lnortod_logis, transf_lnortod_norm,
-    transf_lnortord, transf_lnortorr, transf_lnortortet_digby,
-    transf_lnortortet_pearson, transf_logit, transf_pft, transf_probit,
-    transf_r2toz, transf_rpbtod, transf_rpbtorbis, transf_rtod, transf_rtorpb,
-    transf_rtoz, transf_ztor, transf_ztor_int, transf_ztor_mode, transf_ztor2,
+    transf_abt,
+    transf_ahw,
+    transf_arcsin,
+    transf_clestod,
+    transf_dtobesd,
+    transf_dtocles,
+    transf_dtocles_int,
+    transf_dtocliffd,
+    transf_dtolnor_logis,
+    transf_dtolnor_norm,
+    transf_dtomd,
+    transf_dtoovl,
+    transf_dtorbis,
+    transf_dtorpb,
+    transf_dtou1,
+    transf_dtou2,
+    transf_dtou3,
+    transf_exp_int,
+    transf_exp_mode,
+    transf_iabt,
+    transf_iabt_int,
+    transf_iabt_mode,
+    transf_iahw,
+    transf_iahw_int,
+    transf_iahw_mode,
+    transf_iarcsin,
+    transf_iarcsin_int,
+    transf_iarcsin_mode,
+    transf_iirft,
+    transf_ilogit,
+    transf_ilogit_int,
+    transf_ilogit_mode,
+    transf_ipft,
+    transf_ipft_hm,
+    transf_iprobit,
+    transf_iprobit_int,
+    transf_iprobit_mode,
+    transf_irft,
+    transf_isqrt,
+    transf_lnortod_logis,
+    transf_lnortod_norm,
+    transf_lnortord,
+    transf_lnortorr,
+    transf_lnortortet_digby,
+    transf_lnortortet_pearson,
+    transf_logit,
+    transf_pft,
+    transf_probit,
+    transf_r2toz,
+    transf_rpbtod,
+    transf_rpbtorbis,
+    transf_rtod,
+    transf_rtorpb,
+    transf_rtoz,
+    transf_ztor,
+    transf_ztor2,
+    transf_ztor_int,
+    transf_ztor_mode,
+)
+from .utils import (
+    BlupResult,
+    EstimatesResult,
+    FitstatsResult,
+    RcalcResult,
+    aic_rma,
+    as_data_frame_confint,
+    as_data_frame_list_anova,
+    as_data_frame_list_confint,
+    as_data_frame_list_rma,
+    as_data_frame_vif,
+    as_matrix_list_rma,
+    bic_rma,
+    bldiag,
+    blsplit,
+    blup,
+    ci,
+    cmicalc,
+    contrmat,
+    cooks_distance_rma,
+    df_residual_rma,
+    estimates,
+    fitstats,
+    forest_args,
+    getmfopt,
+    inches2units,
+    jama_labels,
+    model_matrix_rma,
+    pairmat,
+    rcalc,
+    replmiss,
+    se,
+    se_rma,
+    setmfopt,
+    sigma_matreg,
+    units2inches,
+    update_rma,
+    vec2mat,
 )
 
 # metafor exposes ``dfbetas``/``rstandard`` as S3 generics that pick up a model

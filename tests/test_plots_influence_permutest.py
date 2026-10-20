@@ -159,7 +159,7 @@ def test_plot_which_permutest_computes_the_test():
 def test_plot_which_permutest_from_a_permutest_result(tmp_path):
     perm = ma.permutest(_fit(), iter=90, seed=7)
     path = tmp_path / "perm.png"
-    out = ma.plot(perm, which="permutation", filename=str(path))
+    ma.plot(perm, which="permutation", filename=str(path))
     assert path.exists() and path.stat().st_size > 0
 
 

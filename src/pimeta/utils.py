@@ -277,7 +277,6 @@ def contrmat(data, grp1, grp2, last=None, shorten=False, minlen=2,
     Returns:
         dict of columns (or the contrast matrix when ``append=False``).
     """
-    import re
 
     if data is None:
         raise ValueError("Argument 'data' must be specified.")
@@ -742,8 +741,8 @@ def se_rma(result, type="beta"):
 
 def df_residual_rma(result):
     """``metafor::df.residual.rma`` — ``k.eff - p.eff``."""
-    k_eff = getattr(result, "k_eff", None) or getattr(result, "k")
-    p_eff = getattr(result, "p_eff", None) or getattr(result, "p")
+    k_eff = getattr(result, "k_eff", None) or result.k
+    p_eff = getattr(result, "p_eff", None) or result.p
     return int(k_eff) - int(p_eff)
 
 

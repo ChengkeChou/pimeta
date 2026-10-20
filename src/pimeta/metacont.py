@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .escalc import escalc
-from .pooling import PooledResult, pool_yv
-from .metabin import _result_dict
 from .data_compat import resolve
+from .escalc import escalc
+from .metabin import _result_dict
+from .pooling import PooledResult, pool_yv
 
 
 @dataclass

@@ -32,12 +32,11 @@ import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
-
-from .missing import MissingDataWarning as _MissingDataWarning
 from scipy import stats
 
 from .metaprop import _asin2p
 from .metarate import _asin2ir
+from .missing import MissingDataWarning as _MissingDataWarning
 from .pooling import _metafor_fisher_scoring_tau2
 from .tau2 import estimate_tau2
 

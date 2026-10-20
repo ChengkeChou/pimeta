@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass, field
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 from scipy import integrate, optimize, special, stats
@@ -83,6 +83,9 @@ class SelModelResult:
     yi: list[float]
     vi: list[float]
     level: float
+    # The rma.uni fit that profile_selmodel() refits on a delta grid.  It is not
+    # part of the R `$` field set, so it stays out of repr() and equality.
+    _model: Any = field(default=None, repr=False, compare=False)
 
     def to_dict(self) -> dict:
         return {
@@ -406,9 +409,11 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
 
         Ai = np.zeros(k)
         for i in sub_idx:
+            # quad() evaluates the integrand within this iteration; the
+            # default arguments pin the current arm's values explicitly.
             Ai[i], _ = integrate.quad(
-                lambda yv: _int_fn(
-                    yv, vi[i], preci[i], yhat[i], type_, delta, tau2,
+                lambda yv, vi_i=vi[i], preci_i=preci[i], yhat_i=yhat[i]: _int_fn(
+                    yv, vi_i, preci_i, yhat_i, type_, delta, tau2,
                     alternative, pval_min, steps,
                 ),
                 -np.inf, np.inf,
@@ -649,7 +654,7 @@ def _make_ll_trunc(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                    tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                    alternative, pval_min, dofit=False):
     """``.selmodel.ll.trunc`` — closed-form truncated likelihood."""
-    k = len(yi)
+    len(yi)
     sub_idx = np.where(subset)[0]
     nsub_idx = np.where(~subset)[0]
 
@@ -839,7 +844,6 @@ def selmodel(
 
     # --- precision weights -------------------------------------------------- #
     if prec is not None:
-        precspec = True
         if prec == "sei":
             preci = np.sqrt(vi)
         elif prec == "vi":
@@ -850,7 +854,6 @@ def selmodel(
             raise ValueError("prec must be 'sei', 'vi', 'ninv' or 'sqrtninv'")
         preci = preci / np.max(preci)
     else:
-        precspec = False
         preci = np.ones(k)
 
     # --- p-values ----------------------------------------------------------- #
@@ -888,55 +891,65 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([0.0, 1.0])
         deltas = 2
-        delta_lb = np.array([0.0, 0.0]); delta_ub = np.array([np.inf, np.inf])
-        delta_lb_excl = [True, True]; delta_ub_excl = [False, False]
+        delta_lb = np.array([0.0, 0.0])
+        delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 1.0])
-        delta_min = np.array([1e-5, 1e-5]); delta_max = np.array([100.0, 100.0])
-        H0_delta = np.array([1.0, 1.0]); delta_LRT = [True, True]
+        delta_min = np.array([1e-5, 1e-5])
+        delta_max = np.array([100.0, 100.0])
+        H0_delta = np.array([1.0, 1.0])
+        delta_LRT = [True, True]
         pval_min = 1e-5
         ll_kind = "cont"
     elif type_ in ("halfnorm", "negexp", "logistic", "power"):
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 1
-        delta_lb = np.array([0.0]); delta_ub = np.array([np.inf])
-        delta_lb_excl = [False]; delta_ub_excl = [False]
+        delta_lb = np.array([0.0])
+        delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
-        delta_min = np.array([0.0]); delta_max = np.array([100.0])
-        H0_delta = np.array([0.0]); delta_LRT = [True]
+        delta_min = np.array([0.0])
+        delta_max = np.array([100.0])
+        H0_delta = np.array([0.0])
+        delta_LRT = [True]
         pval_min = 1e-5 if type_ == "power" else 0.0
         ll_kind = "cont"
     elif type_ in ("halfnorm1", "negexp1", "logistic1", "power1"):
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 1
-        delta_lb = np.array([0.0]); delta_ub = np.array([np.inf])
-        delta_lb_excl = [False]; delta_ub_excl = [False]
+        delta_lb = np.array([0.0])
+        delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
-        delta_min = np.array([0.0]); delta_max = np.array([100.0])
-        H0_delta = np.array([0.0]); delta_LRT = [True]
+        delta_min = np.array([0.0])
+        delta_max = np.array([100.0])
+        H0_delta = np.array([0.0])
+        delta_LRT = [True]
         pval_min = 1e-5 if type_.endswith("1") and type_.startswith("power") else 0.0
         ll_kind = "cont"
     elif type_ in ("halfnorm2", "negexp2", "logistic2", "power2"):
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 2
-        delta_lb = np.array([0.0, 0.0]); delta_ub = np.array([np.inf, np.inf])
-        delta_lb_excl = [False, False]; delta_ub_excl = [False, False]
+        delta_lb = np.array([0.0, 0.0])
+        delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 0.25])
-        delta_min = np.array([0.0, 0.0]); delta_max = np.array([100.0, 100.0])
-        H0_delta = np.array([0.0, 0.0]); delta_LRT = [True, True]
+        delta_min = np.array([0.0, 0.0])
+        delta_max = np.array([100.0, 100.0])
+        H0_delta = np.array([0.0, 0.0])
+        delta_LRT = [True, True]
         pval_min = 0.0
         ll_kind = "cont"
     elif type_ == "negexppow":
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 2
-        delta_lb = np.array([0.0, 0.0]); delta_ub = np.array([np.inf, np.inf])
-        delta_lb_excl = [False, False]; delta_ub_excl = [False, False]
+        delta_lb = np.array([0.0, 0.0])
+        delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 1.0])
-        delta_min = np.array([0.0, 0.0]); delta_max = np.array([100.0, 100.0])
-        H0_delta = np.array([0.0, 0.0]); delta_LRT = [True, True]
+        delta_min = np.array([0.0, 0.0])
+        delta_max = np.array([100.0, 100.0])
+        H0_delta = np.array([0.0, 0.0])
+        delta_LRT = [True, True]
         pval_min = 0.0
         ll_kind = "cont"
     elif type_ == "stepfun":
@@ -948,17 +961,23 @@ def selmodel(
             mapinvfun_arr = ["I"] * deltas
             delta_lb = np.concatenate([[0.0], np.full(deltas - 1, -np.inf)])
             delta_ub = np.concatenate([[1.0], np.full(deltas - 1, np.inf)])
-            delta_lb_excl = [False] * deltas; delta_ub_excl = [False] * deltas
+            [False] * deltas
+            [False] * deltas
             delta_init = np.concatenate([[1.0], np.full(deltas - 1, -2.0)])
-            delta_min = np.zeros(deltas); delta_max = np.ones(deltas)
+            delta_min = np.zeros(deltas)
+            delta_max = np.ones(deltas)
         else:
             mapfun_arr = [None] * deltas
             mapinvfun_arr = [None] * deltas
-            delta_lb = np.zeros(deltas); delta_ub = np.full(deltas, np.inf)
-            delta_lb_excl = [False] * deltas; delta_ub_excl = [False] * deltas
+            delta_lb = np.zeros(deltas)
+            delta_ub = np.full(deltas, np.inf)
+            [False] * deltas
+            [False] * deltas
             delta_init = np.linspace(1.0, 0.8, deltas)
-            delta_min = np.zeros(deltas); delta_max = np.full(deltas, 100.0)
-        H0_delta = np.ones(deltas); delta_LRT = [True] * deltas
+            delta_min = np.zeros(deltas)
+            delta_max = np.full(deltas, 100.0)
+        H0_delta = np.ones(deltas)
+        delta_LRT = [True] * deltas
         pval_min = 0.0
         ll_kind = "stepfun"
     elif type_ == "stepcon":
@@ -969,7 +988,6 @@ def selmodel(
                 "argument 'prec' ignored (not applicable to this type of "
                 "selection model)", stacklevel=2,
             )
-            precspec = False
             preci = np.ones(k)
         deltas = len(steps_arr)
         # metafor sets delta.transf.fun = rep("plogis", deltas) but leaves
@@ -978,22 +996,28 @@ def selmodel(
         # constraint rather than through the parameterisation.
         mapfun_arr = [None] * deltas
         mapinvfun_arr = [None] * deltas
-        delta_lb = np.zeros(deltas); delta_ub = np.ones(deltas)
-        delta_lb_excl = [False] * deltas; delta_ub_excl = [False] * deltas
+        delta_lb = np.zeros(deltas)
+        delta_ub = np.ones(deltas)
+        [False] * deltas
+        [False] * deltas
         delta_init = np.linspace(1.0, 0.5, deltas)
-        delta_min = np.zeros(deltas); delta_max = np.ones(deltas)
-        H0_delta = np.ones(deltas); delta_LRT = [True] * deltas
+        delta_min = np.zeros(deltas)
+        delta_max = np.ones(deltas)
+        H0_delta = np.ones(deltas)
+        delta_LRT = [True] * deltas
         pval_min = 0.0
         ll_kind = "stepfun"
     elif type_ == "trunc":
         if len(steps_arr) != 1:
             raise ValueError("can only specify a single value for 'steps'")
         deltas = 1
-        delta_lb = np.array([0.0]); delta_ub = np.array([np.inf])
-        delta_lb_excl = [False]; delta_ub_excl = [False]
+        delta_lb = np.array([0.0])
+        delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
-        delta_min = np.array([0.0]); delta_max = np.array([100.0])
-        H0_delta = np.array([1.0]); delta_LRT = [True]
+        delta_min = np.array([0.0])
+        delta_max = np.array([100.0])
+        H0_delta = np.array([1.0])
+        delta_LRT = [True]
         pval_min = 0.0
         ll_kind = "trunc"
     elif type_ == "truncest":
@@ -1003,9 +1027,10 @@ def selmodel(
         # metafor leaves mapfun = c(NA, "I") here (scaled-logistic for delta[1],
         # then explicitly forces mapfun[2] <- "I"); see the type=="truncest"
         # override further below in selmodel.rma.uni().
-        mapfun_arr = [None, "I"]; mapinvfun_arr = [None, "I"]
-        delta_lb = np.array([0.0, -np.inf]); delta_ub = np.array([np.inf, np.inf])
-        delta_lb_excl = [False, False]; delta_ub_excl = [False, False]
+        mapfun_arr = [None, "I"]
+        mapinvfun_arr = [None, "I"]
+        delta_lb = np.array([0.0, -np.inf])
+        delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, float(np.mean(yi))])
         if alternative == "greater":
             delta_min = np.array([0.0, float(np.min(yi) - np.std(yi))])
@@ -1013,7 +1038,8 @@ def selmodel(
         else:
             delta_min = np.array([0.0, float(np.min(yi))])
             delta_max = np.array([100.0, float(np.max(yi) + np.std(yi))])
-        H0_delta = np.array([1.0, 0.0]); delta_LRT = [True, False]
+        H0_delta = np.array([1.0, 0.0])
+        delta_LRT = [True, False]
         pval_min = 0.0
         ll_kind = "trunc"
     else:
@@ -1393,7 +1419,7 @@ def selmodel(
         level=x.level,
     )
     # the source fit is needed by profile_selmodel() to refit on a delta grid
-    setattr(out, "_model", x)
+    out._model = x
     return out
 
 
@@ -1470,7 +1496,7 @@ def profile_selmodel(result, delta=None, n_points: int = 20, span=None,
     ll = []
     for d in delta:
         try:
-            fit = selmodel(getattr(result, "_model"), result.type,
+            fit = selmodel(result._model, result.type,
                            alternative=result.alternative,
                            delta=[d], control=None)
             ll.append(float(fit.ll))

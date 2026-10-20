@@ -21,7 +21,7 @@ import numpy as np
 from scipy import stats
 
 from .escalc import escalc
-from .metabin import _mh_or, _mh_rr, _mh_rd, _peto_or
+from .metabin import _mh_or, _mh_rr
 
 _Z_975 = stats.norm.ppf(0.975)
 
@@ -214,7 +214,7 @@ def rma_mh(
     n1 = a + b
     n2 = c + d
     N = a + b + c + d
-    k = a.shape[0]
+    a.shape[0]
     crit = float(stats.norm.ppf(1.0 - level / 2.0))
 
     CO = COp = MH = MHp = BD = BDp = TA = TAp = None

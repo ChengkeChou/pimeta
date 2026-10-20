@@ -533,7 +533,6 @@ def plot(x, which="forest", **kwargs):
         name = "profile"
     yi = _opt(x, "yi")
     vi = _opt(x, "vi")
-    sei = _opt(x, "sei")
     slab = _opt(x, "slab")
     effect_type = _opt(x, "measure") or _opt(x, "sm") or None
 

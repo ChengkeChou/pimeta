@@ -25,19 +25,20 @@ Supported tests of the coefficients: ``z`` (Wald), ``t``, ``knha``
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
 from scipy import optimize, stats
 
+from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
+from .missing import complete_cases
 from .pooling import (
     _metafor_fisher_scoring_tau2,
     confint_tau2,
     predict_rma,
 )
-from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
-from .missing import complete_cases
+
 if TYPE_CHECKING:                       # pragma: no cover - import cycle guard
     from .rma_ls import RmaLsResult
 
@@ -384,7 +385,7 @@ def rma(
     optbeta: bool = False,
     alpha=None,
     warn_missing: bool = True,
-) -> "RmaResult | RmaLsResult":
+) -> RmaResult | RmaLsResult:
     """Fit a univariate meta-analysis model (``metafor::rma``).
 
     Args:

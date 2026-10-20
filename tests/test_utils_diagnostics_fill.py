@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 import pimeta as ma
-from pimeta.utils import FitstatsResult, _fitstats_core, _coef_names
+from pimeta.utils import FitstatsResult, _coef_names, _fitstats_core
 
 YI = [0.10, -0.20, 0.05, -0.15, 0.30, 0.25]
 VI = [0.01, 0.0144, 0.0121, 0.0169, 0.0196, 0.0225]

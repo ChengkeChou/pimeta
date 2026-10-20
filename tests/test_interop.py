@@ -17,8 +17,8 @@ from pimeta.interop import (
     install_methods,
     protocol_report,
     supports,
-    to_frame,
     tidy,
+    to_frame,
 )
 from pimeta.interop.tables import normalize_columns
 

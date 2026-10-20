@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from itertools import combinations
 
 import numpy as np
@@ -53,8 +53,10 @@ def _num_grad(fun, x, h=None, order=1):
         h = _EPS ** (1.0 / 3.0) * np.maximum(np.abs(x), 1e-8)
     g = np.empty((q, p))
     for j in range(p):
-        xp = x.copy(); xp[j] += h[j]
-        xm = x.copy(); xm[j] -= h[j]
+        xp = x.copy()
+        xp[j] += h[j]
+        xm = x.copy()
+        xm[j] -= h[j]
         g[:, j] = (np.atleast_1d(fun(xp)) - np.atleast_1d(fun(xm))) / (2.0 * h[j])
     return g
 
@@ -74,14 +76,24 @@ def _num_hess(fun, x, h=None):
     for j in range(p):
         for k in range(j, p):
             if j == k:
-                xp = x.copy(); xp[j] += h[j]
-                xm = x.copy(); xm[j] -= h[j]
+                xp = x.copy()
+                xp[j] += h[j]
+                xm = x.copy()
+                xm[j] -= h[j]
                 val = (np.atleast_1d(fun(xp)) - 2.0 * f0 + np.atleast_1d(fun(xm))) / h[j] ** 2
             else:
-                xpp = x.copy(); xpp[j] += h[j]; xpp[k] += h[k]
-                xpm = x.copy(); xpm[j] += h[j]; xpm[k] -= h[k]
-                xmp = x.copy(); xmp[j] -= h[j]; xmp[k] += h[k]
-                xmm = x.copy(); xmm[j] -= h[j]; xmm[k] -= h[k]
+                xpp = x.copy()
+                xpp[j] += h[j]
+                xpp[k] += h[k]
+                xpm = x.copy()
+                xpm[j] += h[j]
+                xpm[k] -= h[k]
+                xmp = x.copy()
+                xmp[j] -= h[j]
+                xmp[k] += h[k]
+                xmm = x.copy()
+                xmm[j] -= h[j]
+                xmm[k] -= h[k]
                 val = (np.atleast_1d(fun(xpp)) - np.atleast_1d(fun(xpm))
                        - np.atleast_1d(fun(xmp)) + np.atleast_1d(fun(xmm))) / (4.0 * h[j] * h[k])
             H[:, j, k] = val
@@ -181,7 +193,11 @@ def deltamethod(coef, vcov, fun, order=1, level=0.95, H0=0.0):
     if nargs == 1:
         fun_v = fun
     elif nargs == p:
-        fun_v = lambda v: fun(*[float(z) for z in np.atleast_1d(v)])
+
+        def _vectorised(v):
+            return fun(*[float(z) for z in np.atleast_1d(v)])
+
+        fun_v = _vectorised
     else:
         raise ValueError(
             f"number of function arguments ({nargs}) does not match the number "
@@ -911,7 +927,7 @@ def permutest(result, exact=False, iter=1000, btt=None, permci=False,
                         altern, extend = "less", 1
                     try:
                         root = _opt.brentq(
-                            lambda v: _pval_at(v, j, altern) - alpha,
+                            lambda v, j=j, altern=altern: _pval_at(v, j, altern) - alpha,
                             lo, hi, xtol=1e-8, maxiter=200,
                         )
                     except ValueError:
@@ -922,12 +938,12 @@ def permutest(result, exact=False, iter=1000, btt=None, permci=False,
                             if extend < 0:
                                 lo2 = lo - span
                                 root = _opt.brentq(
-                                    lambda v: _pval_at(v, j, altern) - alpha,
+                                    lambda v, j=j, altern=altern: _pval_at(v, j, altern) - alpha,
                                     lo2, hi, xtol=1e-8, maxiter=200)
                             else:
                                 hi2 = hi + span
                                 root = _opt.brentq(
-                                    lambda v: _pval_at(v, j, altern) - alpha,
+                                    lambda v, j=j, altern=altern: _pval_at(v, j, altern) - alpha,
                                     lo, hi2, xtol=1e-8, maxiter=200)
                         except ValueError:
                             root = float("nan")

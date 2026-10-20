@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:                       # pragma: no cover - typing only
-    from ..netmeta import NetmetaResult
+    pass
 
 __all__ = ['NetimpactResult', 'netimpact']
 

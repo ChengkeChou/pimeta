@@ -371,7 +371,6 @@ def metabin(
     n2 = np.asarray(n_c, dtype=float)
     b = n1 - a
     d = n2 - c
-    N = n1 + n2
     k = len(a)
 
     if k == 0:

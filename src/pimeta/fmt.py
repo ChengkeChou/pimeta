@@ -8,9 +8,6 @@ small helper (:func:`_formatc`) so that widths, flags, ``digits`` and
 
 from __future__ import annotations
 
-import math
-import re
-
 import numpy as np
 
 __all__ = ["fmtp", "fmtp2", "fmtt", "fmtx", "dfround"]
