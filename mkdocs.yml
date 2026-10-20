@@ -58,6 +58,7 @@ plugins:
 nav:
   - Home: index.md
   - Quick start: quickstart.md
+  - Usage manual: usage.md
   - Coming from R: migration-from-r.md
   - Guides:
       - Effect sizes: guide/effect-sizes.md

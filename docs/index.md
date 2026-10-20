@@ -25,6 +25,14 @@ print(r.b[0], r.ci_lb[0], r.ci_ub[0])   # pooled estimate and 95% interval
 print(r.tau2, r.I2, r.QE, r.QEp)        # heterogeneity
 ```
 
+!!! tip "New here?"
+    The [**usage manual**](usage.md) walks from a first pool through effect
+    sizes, τ² estimators, meta-regression, publication bias, multilevel models,
+    network meta-analysis, result tables, ecosystem interop, plots and the CLI.
+    Every example there is executed and its real output recorded — and four
+    [notebooks](https://github.com/ChengkeChou/pimeta/tree/main/examples) ship
+    already executed if you would rather read than type.
+
 ## What is covered
 
 | Area | Highlights |

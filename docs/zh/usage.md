@@ -14,6 +14,9 @@
     `01-quickstart`（合并到森林图）、`02-meta-regression`（元回归与发表偏倚）、
     `03-network-meta-analysis`（网状 meta）、`04-ecosystem`（pandas / scikit-learn / xarray）。
 
+!!! abstract "English"
+    This manual is also available in [English](../usage.md).
+
 ## 1. 第一次合并
 
 最常用的入口是 `rma()`：给它效应量 `yi` 和方差 `vi`，它按随机效应模型合并。
