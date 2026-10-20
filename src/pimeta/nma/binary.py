@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
+from .core import _cochran_q, _dl_tau2
+
 
 @dataclass
 class NetmetabinResult:
@@ -582,8 +584,6 @@ def _netmetabin_mh(event1, n1, event2, n2, treat1, treat2, studlab,
             TE_direct[j, i] = -pair_est
             seTE_direct[i, j] = seTE_direct[j, i] = pair_se
             # Cochran Q centered on the inverse-variance mean (Q.Cochrane=FALSE).
-            from ..netmeta import _cochran_q, _dl_tau2  # local import: cycle
-
             yi = np.log((a * dd) / (b * c))
             vi = 1.0 / a + 1.0 / b + 1.0 / c + 1.0 / dd
             se_i = np.sqrt(vi)
