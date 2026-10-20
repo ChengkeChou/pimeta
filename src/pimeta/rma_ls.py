@@ -27,6 +27,8 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import optimize, stats
 
+from .missing import complete_cases
+
 __all__ = [
     "RmaLsResult",
     "RmaLsProfileResult",
@@ -329,6 +331,7 @@ def rma_ls(
     alpha=None,
     btt=None,
     att=None,
+    warn_missing: bool = True,
 ) -> RmaLsResult:
     """Fit a location-scale meta-analysis model (``rma(..., scale=~mods)``).
 
@@ -357,6 +360,8 @@ def rma_ls(
         alpha: fix (some of) the scale coefficients; ``NaN`` entries stay free.
         btt, att: 1-based indices for the omnibus tests of the location and the
             scale coefficients (default: all).
+        warn_missing: emit a warning naming the studies dropped because a
+            value is missing (R's ``na.action`` drops them silently).
     """
     yi = _resolve_col(yi, data)
     yi = np.asarray(yi, dtype=float).ravel()
@@ -394,6 +399,25 @@ def rma_ls(
     mods_arr = None if mods is None else _as_matrix(
         _resolve(mods, data, k), k, "mods")
     scale_arr = _as_matrix(_resolve(scale, data, k), k, "scale")
+
+    # Drop incomplete cases (R's na.action) before building the designs.
+    checked: dict = {"yi": yi, "vi": vi}
+    if mods_arr is not None:
+        for j in range(mods_arr.shape[1]):
+            checked[f"mods[{j}]"] = mods_arr[:, j]
+    for j in range(scale_arr.shape[1]):
+        checked[f"scale[{j}]"] = scale_arr[:, j]
+    keep, _dropped = complete_cases(checked, context="studies", warn=warn_missing)
+    if not keep.all():
+        yi = yi[keep]
+        vi = vi[keep]
+        if mods_arr is not None:
+            mods_arr = mods_arr[keep]
+        scale_arr = scale_arr[keep]
+        if slab is not None and len(slab) == keep.size:
+            slab = [s for s, ok in zip(slab, keep) if ok]
+        k = yi.size
+
     X = (np.column_stack([np.ones(k), mods_arr]) if mods_arr is not None
          else np.ones((k, 1))) if intercept else mods_arr
     if X is None:

@@ -88,6 +88,9 @@ Repository = "https://github.com/ChengkeChou/pimeta"
 Issues = "https://github.com/ChengkeChou/pimeta/issues"
 Changelog = "https://github.com/ChengkeChou/pimeta/blob/main/CHANGELOG.md"
 
+[project.scripts]
+pimeta = "pimeta.cli:main"
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

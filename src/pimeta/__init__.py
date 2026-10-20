@@ -166,6 +166,7 @@ from .data_compat import (
     to_dataframe,
     to_html,
 )
+from .missing import MissingDataWarning, complete_cases, is_missing
 from .plotting import (
     PlotResult, bubble, drapery, forest, funnel, hasse, labbe, llplot,
     netgraph, netheat, netposet, plot_baujat, plot_gosh, plot_influence,
@@ -575,6 +576,8 @@ __all__ = [
     "as_columns", "column_names", "lookup", "resolve", "resolve_mods",
     "FormulaSpec", "parse_formula", "design_matrix", "model_frame",
     "to_dataframe", "to_html", "install_repr_html",
+    # missing values
+    "MissingDataWarning", "complete_cases", "is_missing",
     # transf.*
     "transf_abt", "transf_ahw", "transf_arcsin", "transf_clestod",
     "transf_dtobesd", "transf_dtocles", "transf_dtocles_int", "transf_dtocliffd",

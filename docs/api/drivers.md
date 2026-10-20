@@ -202,7 +202,7 @@ Single-arm mean meta-analysis result (fixed + random, mean scale).
 ## `metagen`
 
 ```python
-metagen(TE, seTE, studlab=None, sm: 'str' = '', method_tau: 'str' = 'REML', method_random_ci: 'str' = 'classic', method_predict: 'str' = 'V', common: 'bool' = True, random: 'bool' = True, prediction: 'bool' = False, level: 'float' = 0.95, level_predict: 'float' = 0.95, null_effect: 'float' = 0.0, exclude=None) -> 'MetagenResult'
+metagen(TE, seTE, studlab=None, sm: 'str' = '', method_tau: 'str' = 'REML', method_random_ci: 'str' = 'classic', method_predict: 'str' = 'V', common: 'bool' = True, random: 'bool' = True, prediction: 'bool' = False, level: 'float' = 0.95, level_predict: 'float' = 0.95, null_effect: 'float' = 0.0, exclude=None, warn_missing: 'bool' = True) -> 'MetagenResult'
 ```
 
 *Mirrors R's `metagen`.*

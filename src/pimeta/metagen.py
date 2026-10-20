@@ -28,9 +28,12 @@ Heterogeneity (``meta``'s Q-based convention, *not* metafor's tau^2-based one):
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
+
+from .missing import MissingDataWarning as _MissingDataWarning
 from scipy import stats
 
 from .metaprop import _asin2p
@@ -460,6 +463,7 @@ def metagen(
     level_predict: float = 0.95,
     null_effect: float = 0.0,
     exclude=None,
+    warn_missing: bool = True,
 ) -> MetagenResult:
     """Generic inverse-variance meta-analysis (mirrors ``meta::metagen``).
 
@@ -506,6 +510,19 @@ def metagen(
     use = ~(np.isnan(TE) | np.isnan(seTE)) & ~np.isinf(TE) & ~np.isinf(seTE) & ~exclude
     k = int(np.sum(use))
     k_TE = int(np.sum(~np.isnan(TE)))
+
+    dropped = int(k_all - k)
+    if warn_missing and dropped:
+        rows = np.flatnonzero(~use)
+        shown = ", ".join(str(int(i) + 1) for i in rows[:10])
+        more = f", ... (+{rows.size - 10} more)" if rows.size > 10 else ""
+        warnings.warn(
+            f"dropped {dropped} of {k_all} studies with missing or infinite "
+            f"'TE'/'seTE' (row{'s' if rows.size > 1 else ''} {shown}{more}); "
+            "pass warn_missing=False to silence this",
+            _MissingDataWarning,
+            stacklevel=2,
+        )
 
     z = stats.norm.ppf(1.0 - (1.0 - level) / 2.0)  # qnorm((1+level)/2)
 

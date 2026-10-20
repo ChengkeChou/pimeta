@@ -301,6 +301,18 @@ def _design_block(name: str, values) -> list:
     arr = np.asarray(values)
     if arr.dtype.kind in "biufc":
         return [(name, arr.astype(float).ravel())]
+
+    # A column read straight from a CSV arrives as strings.  If every entry
+    # parses as a number, treat it as numeric instead of silently dummy-coding
+    # six "levels" (which would also make the model singular).
+    cleaned = [np.nan if v is None else v for v in arr.ravel()]
+    try:
+        numeric = np.asarray(cleaned, dtype=float)
+    except (TypeError, ValueError):
+        numeric = None
+    if numeric is not None and numeric.size == arr.size:
+        return [(name, numeric)]
+
     labels = [str(v) for v in arr.ravel()]
     levels = sorted(set(labels))
     return [(f"{name}[{lv}]",

@@ -8,6 +8,74 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Command-line interface.** `pimeta` (and `python -m pimeta`) with three
+  subcommands, so the common analyses need no Python at all:
+  - `pimeta fit data.csv --yi TE --vi seTE2 [--mods "~ dose + year"]` —
+    pools with `rma`, prints the coefficient table, and optionally writes a
+    forest plot and a `*_glance` file with model-level statistics.
+  - `pimeta escalc raw.csv --measure RR --ai ai --bi bi --ci ci --di di` —
+    arm-level to effect sizes.
+  - `pimeta network nma.csv --te TE --se seTE --treat1 t1 --treat2 t2` — the
+    treatment-by-treatment estimate matrix.
+  Input is CSV/TSV/JSON; output is TSV on stdout (`--format csv|json`, `-o
+  file.csv`), so it pipes.  Unknown columns, non-numeric values and unreadable
+  files exit with code 2 and a message on stderr.  `docs/guide/cli.md` documents
+  every option.
+- **Missing values are dropped with a warning.** R discards incomplete cases
+  silently through `na.action`; pimeta keeps the dropping but makes it visible:
+  `MissingDataWarning` names the number of dropped studies and their rows.
+  Wired into `rma` / `rma_ls` (including moderators and scale moderators, via
+  the new `warn_missing=True` argument) and `metagen` (which already dropped
+  them, silently, before).  `pimeta.missing.complete_cases` / `is_missing` are
+  public so downstream code can apply the same rule.
+- **Formula-derived coefficient names.** `rma("yi", "vi", mods="~ dose + arm",
+  data=df)` now reports `dose` and `arm[B]` instead of `V1`/`V2`; the names are
+  carried on `RmaResult.coefnames` and picked up by `tidy()`, `coef()` and the
+  printed summary.  A string column whose entries all parse as numbers is
+  treated as numeric rather than dummy-coded, which previously made a
+  CSV-loaded moderator singular.
+- **`py.typed` — inline types for downstream users.** The package now ships the
+  PEP 561 marker, so `mypy`/`pyright`/IDE completion use the real annotations
+  instead of `Any`. `mypy src/pimeta` went from **167 errors to 0** across 54
+  modules with no behavioural change: the fixes were container annotations
+  (`dict[str, Any]`, `list[tuple[float, float | None]]`), a typed `_new_ax()`
+  helper replacing six duplicated untyped `plt.subplots` branches in
+  `plotting.py`, `setattr` for dynamically attached methods, and `None`-safe
+  guards in `rma_mv` / `netmeta` / `selmodel`.
+- **`pimeta.nma` package skeleton.** The 7,467-line `netmeta.py` is being carved
+  into reviewable sections without changing an import path.
+  `netmeta::pairwise` (arm-level to comparison-level conversion) now lives in
+  `pimeta/nma/pairwise.py`; `pimeta.netmeta.pairwise` and
+  `pimeta.nma.pairwise` are the same object, and the package docstring maps the
+  remaining fourteen banner-delimited sections.
+- **CI and tooling.** `ci.yml` gains a `typecheck` job (`mypy src/pimeta`) and a
+  `lint` job (`ruff check` + `ruff format --check` over `src`, `tests`,
+  `tools`). A `.pre-commit-config.yaml` runs trailing-whitespace,
+  end-of-file-fixer, `check-yaml`, `check-toml`, ruff and mypy.
+- **Documentation site (`docs/`).** A full guide set plus a **generated** API
+  reference. `tools/gen_api_docs.py` walks `pimeta.__all__` (390 names), groups
+  the names by topic and renders one Markdown page per topic from the live
+  docstrings — no mkdocstrings, no Sphinx, no build step, so the reference
+  renders identically on GitHub, in VS Code and under MkDocs. It also
+  regenerates the `R S3 method -> pimeta callable` table and copies
+  `CHANGELOG.md` into the site.
+  - `docs/index.md`, `docs/quickstart.md` — landing page and a complete
+    walkthrough.
+  - `docs/migration-from-r.md` — every R idiom (`$`, `generic.class`, `x[i]`,
+    `mods=~`, `set.seed`) with its Python equivalent.
+  - `docs/guide/` — eleven task pages: effect sizes, pooling, meta-regression,
+    heterogeneity, publication bias, network meta-analysis, multilevel models,
+    selection and scale models, plots, data frames and formulas,
+    interoperability.
+  - `docs/reference/` — API conventions, differences from R, R method-name map.
+  - `docs/zh/index.md` — Chinese quick start and conventions.
+  - `mkdocs.yml` (material theme) and a `docs` extra so the site can be built
+    with `pip install pimeta[docs] && mkdocs serve`.
+  - `tests/test_docs.py` (12 tests) keeps the docs honest: every public callable
+    must have a docstring, the generated pages must cover every name in
+    `__all__`, every relative link must resolve, every `ma.<name>` mentioned in
+    prose must exist, and the snippets on the landing page and quickstart are
+    executed.
 - **`pimeta.interop` — ecosystem compatibility as protocols, not adapters.**
   A new subpackage that makes pimeta results consumable by the wider Python
   stack without adding a single runtime dependency (every optional import is

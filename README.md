@@ -87,6 +87,21 @@ fitted object, and `rma.mv` fits support `hatvalues`, `weights`, `rstandard`,
 `cooks_distance`, `dfbetas`, `rstudent`, `ranef`, `robust`, `confint`,
 `predict`, `qqnorm` and `profile_rmamv` (metafor's `profile.rma.mv`).
 
+### Command line
+
+The package installs a `pimeta` command (and `python -m pimeta` works too), so
+the common analyses need no script at all:
+
+```bash
+pimeta fit studies.csv --yi TE --vi seTE2 --method REML
+pimeta fit studies.csv --yi TE --vi seTE2 --mods "~ dose + year" -o coef.csv
+pimeta escalc raw.csv --measure RR --ai ai --bi bi --ci ci --di di
+pimeta network nma.csv --te TE --se seTE --treat1 t1 --treat2 t2 --sm MD
+```
+
+Output is TSV on stdout, `--format csv|json` or `-o file.csv` otherwise.  See
+[the guide](docs/guide/cli.md).
+
 ### Network meta-analysis (`netmeta`)
 `netmeta`, `netmetabin`, `netcomb`, `discomb`, `netcomplex`, `netmetareg`,
 `netmeasures`, `netrank` (P-scores), `netimpact`, `netpath`,

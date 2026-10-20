@@ -71,6 +71,7 @@ nav:
       - Plots: guide/plots.md
       - Data frames and formulas: guide/data-frames.md
       - Interoperability: guide/interop.md
+      - Command line: guide/cli.md
   - Reference:
       - API conventions: reference/api-conventions.md
       - Differences from R: reference/differences.md

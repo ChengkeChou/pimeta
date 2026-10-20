@@ -75,6 +75,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     # diagnostics and helpers
     "diagnostics": ("diagnostics", "Diagnostics and utilities"),
     "mv_diagnostics": ("diagnostics", "Diagnostics and utilities"),
+    "missing": ("diagnostics", "Diagnostics and utilities"),
     "extras": ("diagnostics", "Diagnostics and utilities"),
     "utils": ("diagnostics", "Diagnostics and utilities"),
     "_firth": ("diagnostics", "Diagnostics and utilities"),

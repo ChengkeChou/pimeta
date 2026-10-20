@@ -227,7 +227,7 @@ Fitted ``rma.glmm`` model, mirroring the R ``$`` field set.
 ## `rma_mv`
 
 ```python
-rma_mv(yi, vi=None, V=None, mods=None, data=None, random: 'str' = '~ 1 | study', struct: 'str' = 'CS', rho=None, method: 'str' = 'REML', level: 'float' = 95.0, test: 'str' = 'z', dfs: 'str' = 'residual', intercept: 'bool' = True, sigma2=None, slab=None, cluster=None) -> 'RmaMvResult'
+rma_mv(yi, vi=None, V=None, mods=None, data=None, random: 'str' = '~ 1 | study', struct: 'str' = 'CS', rho=None, method: 'str' = 'REML', level: 'float' = 95.0, test: 'str' = 'z', dfs: 'str | np.ndarray' = 'residual', intercept: 'bool' = True, sigma2=None, slab=None, cluster=None) -> 'RmaMvResult'
 ```
 
 *Mirrors R's `rma.mv`.*
@@ -374,7 +374,7 @@ RmaMhResult(beta: 'float', se: 'float', zval: 'float', pval: 'float', ci_lb: 'fl
 ## `rma`
 
 ```python
-rma(yi, vi=None, sei=None, mods=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, btt=None, digits: 'int' = 4, scale=None, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None) -> 'RmaResult'
+rma(yi, vi=None, sei=None, mods=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, btt=None, digits: 'int' = 4, scale=None, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None, warn_missing: 'bool' = True) -> "'RmaResult | RmaLsResult'"
 ```
 
 *Mirrors R's `rma`.*
@@ -395,11 +395,12 @@ Fit a univariate meta-analysis model (``metafor::rma``).
 - `btt` — 1-based coefficient indices to include in the QM omnibus test (default: the intercept for intercept-only models, otherwise all moderator coefficients).
 - `digits` — printing precision (recorded only).
 - `scale, scale_intercept, link, optbeta, alpha` — when ``scale`` is given a location-scale model is fitted instead (``rma(yi, vi, mods=~x, scale=~z)`` in R, class ``rma.ls``); the fit is delegated to :func:`pimeta.rma_ls` and an :class:`~pimeta.RmaLsResult` is returned.
+- `warn_missing` — emit a :class:`~pimeta.missing.MissingDataWarning` naming the studies dropped because ``yi``, ``vi`` or a moderator is missing.  R drops them silently through ``na.action``; pass ``False`` to drop them silently here too.
 
 ## `RmaResult`
 
 ```python
-RmaResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float | None', tau2_fix: 'bool', I2: 'float', H2: 'float', R2: 'float | None', vt: 'float', QE: 'float', QEp: 'float', QM: 'float', QMdf: 'list', QMp: 'float', k: 'int', k_f: 'int', k_eff: 'int', k_all: 'int', p: 'int', p_eff: 'int', parms: 'int', int_only: 'bool', int_incl: 'bool', yi: 'list[float]', vi: 'list[float]', X: 'np.ndarray', mods: 'np.ndarray | None', weights: 'list[float]', weights_pct: 'list[float]', fitted: 'list[float]', residuals: 'list[float]', method: 'str', test: 'str', dfs: 'float | None', ddf: 'float | None', s2w: 'float', measure: 'str', slab: 'list[str]', not_na: 'list[bool]', level: 'float') -> None
+RmaResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float | None', tau2_fix: 'bool', I2: 'float', H2: 'float', R2: 'float | None', vt: 'float', QE: 'float', QEp: 'float', QM: 'float', QMdf: 'list', QMp: 'float', k: 'int', k_f: 'int', k_eff: 'int', k_all: 'int', p: 'int', p_eff: 'int', parms: 'int', int_only: 'bool', int_incl: 'bool', yi: 'list[float]', vi: 'list[float]', X: 'np.ndarray', mods: 'np.ndarray | None', weights: 'list[float]', weights_pct: 'list[float]', fitted: 'list[float]', residuals: 'list[float]', method: 'str', test: 'str', dfs: 'float | None', ddf: 'float | None', s2w: 'float', measure: 'str', slab: 'list[str]', not_na: 'list[bool]', level: 'float', coefnames: 'list[str] | None' = None) -> None
 ```
 
 *Mirrors R's `rma.uni`.*
@@ -486,7 +487,7 @@ differ in the third or fourth digit.
 ## `rma_ls`
 
 ```python
-rma_ls(yi, vi=None, sei=None, mods=None, scale=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, intercept: 'bool' = True, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None, btt=None, att=None) -> 'RmaLsResult'
+rma_ls(yi, vi=None, sei=None, mods=None, scale=None, data=None, slab=None, measure: 'str' = 'GEN', method: 'str' = 'REML', test: 'str' = 'z', level: 'float' = 0.95, intercept: 'bool' = True, scale_intercept: 'bool' = True, link: 'str' = 'log', optbeta: 'bool' = False, alpha=None, btt=None, att=None, warn_missing: 'bool' = True) -> 'RmaLsResult'
 ```
 
 Fit a location-scale meta-analysis model (``rma(..., scale=~mods)``).
@@ -509,6 +510,7 @@ Fit a location-scale meta-analysis model (``rma(..., scale=~mods)``).
 - `optbeta` — estimate the location coefficients jointly with ``alpha`` instead of profiling them out (R's ``control=list(optbeta=TRUE)``).
 - `alpha` — fix (some of) the scale coefficients; ``NaN`` entries stay free.
 - `btt, att` — 1-based indices for the omnibus tests of the location and the scale coefficients (default: all).
+- `warn_missing` — emit a warning naming the studies dropped because a value is missing (R's ``na.action`` drops them silently).
 
 ## `RmaLsResult`
 

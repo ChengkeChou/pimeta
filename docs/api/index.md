@@ -1,6 +1,6 @@
 # API reference
 
-All 390 public names in `pimeta.__all__`, generated from the source docstrings.
+All 393 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -168,8 +168,6 @@ All 390 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`NetmetabinResult`](network.md#netmetabinresult) | Network meta-analysis | — |
 | [`netpairwise`](network.md#netpairwise) | Network meta-analysis | — |
 | [`NetpairwiseResult`](network.md#netpairwiseresult) | Network meta-analysis | — |
-| [`pairwise`](network.md#pairwise) | Network meta-analysis | — |
-| [`PairwiseData`](network.md#pairwisedata) | Network meta-analysis | — |
 | [`netrank`](network.md#netrank) | Network meta-analysis | — |
 | [`NetrankResult`](network.md#netrankresult) | Network meta-analysis | netrank |
 | [`netsplit`](network.md#netsplit) | Network meta-analysis | — |
@@ -298,6 +296,9 @@ All 390 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`estimates`](diagnostics.md#estimates) | Diagnostics and utilities | estimates |
 | [`EstimatesResult`](diagnostics.md#estimatesresult) | Diagnostics and utilities | estimates |
 | [`forest_args`](diagnostics.md#forest_args) | Diagnostics and utilities | .forestArgs |
+| [`MissingDataWarning`](diagnostics.md#missingdatawarning) | Diagnostics and utilities | — |
+| [`complete_cases`](diagnostics.md#complete_cases) | Diagnostics and utilities | — |
+| [`is_missing`](diagnostics.md#is_missing) | Diagnostics and utilities | — |
 | [`plot_mv_profile`](plotting.md#plot_mv_profile) | Figures | plot.profile.rma |
 | [`forest`](plotting.md#forest) | Figures | — |
 | [`funnel`](plotting.md#funnel) | Figures | — |
@@ -394,3 +395,5 @@ All 390 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`settings_netmeta`](s3.md#settings_netmeta) | S3-style generics and reporting | — |
 | [`META_DEFAULTS`](s3.md#meta_defaults) | S3-style generics and reporting | — |
 | [`NETMETA_DEFAULTS`](s3.md#netmeta_defaults) | S3-style generics and reporting | — |
+| [`pairwise`](misc.md#pairwise) | Other | — |
+| [`PairwiseData`](misc.md#pairwisedata) | Other | — |

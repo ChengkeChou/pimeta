@@ -36,8 +36,8 @@ from .pooling import (
     confint_tau2,
     predict_rma,
 )
-from .data_compat import resolve, resolve_mods
-
+from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
+from .missing import complete_cases
 if TYPE_CHECKING:                       # pragma: no cover - import cycle guard
     from .rma_ls import RmaLsResult
 
@@ -224,6 +224,7 @@ class RmaResult:
     slab: list[str]
     not_na: list[bool]
     level: float
+    coefnames: list[str] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -382,6 +383,7 @@ def rma(
     link: str = "log",
     optbeta: bool = False,
     alpha=None,
+    warn_missing: bool = True,
 ) -> "RmaResult | RmaLsResult":
     """Fit a univariate meta-analysis model (``metafor::rma``).
 
@@ -405,6 +407,10 @@ def rma(
             scale=~z)`` in R, class ``rma.ls``); the fit is delegated to
             :func:`pimeta.rma_ls` and an :class:`~pimeta.RmaLsResult` is
             returned.
+        warn_missing: emit a :class:`~pimeta.missing.MissingDataWarning` naming
+            the studies dropped because ``yi``, ``vi`` or a moderator is
+            missing.  R drops them silently through ``na.action``; pass
+            ``False`` to drop them silently here too.
     """
     if scale is not None:
         from .rma_ls import rma_ls
@@ -413,7 +419,7 @@ def rma(
             yi, vi=vi, sei=sei, mods=mods, scale=scale, data=data,
             slab=slab, measure=measure, method=method, test=test,
             level=level, scale_intercept=scale_intercept, link=link,
-            optbeta=optbeta, alpha=alpha, btt=btt,
+            optbeta=optbeta, alpha=alpha, btt=btt, warn_missing=warn_missing,
         )
     yi = resolve(yi, data, name="yi")
     if vi is None:
@@ -429,11 +435,35 @@ def rma(
     if slab is not None:
         slab = resolve(slab, data, name="slab", dtype=None)
 
-    k = len(yi)
-    not_na = [bool(np.isfinite(yi[i]) and np.isfinite(vi[i])) for i in range(k)]
+    n_rows = len(yi)
 
     # Build the design matrix (intercept + optional moderators).
-    mods_arr, add_intercept = resolve_mods(mods, data, k)
+    mods_arr, add_intercept = resolve_mods(mods, data, n_rows)
+
+    # A formula knows what its columns are called; carry those names through so
+    # coefficients read ``dose``/``arm[B]`` instead of ``V1``/``V2``.
+    coefnames: list[str] | None = None
+    if data is not None and isinstance(mods, (str, FormulaSpec)) and mods_arr is not None:
+        _, _term_names = design_matrix(mods, data, intercept=False)
+        coefnames = ((["intrcpt"] if add_intercept else []) + list(_term_names))
+
+    # Drop incomplete cases the way R's na.action does, but say so.
+    checked: dict = {"yi": yi, "vi": vi}
+    if mods_arr is not None:
+        for j in range(mods_arr.shape[1]):
+            checked[f"mods[{j}]"] = mods_arr[:, j]
+    keep, _dropped = complete_cases(checked, context="studies", warn=warn_missing)
+    if not keep.all():
+        yi = yi[keep]
+        vi = vi[keep]
+        if mods_arr is not None:
+            mods_arr = mods_arr[keep]
+        if slab is not None and len(slab) == keep.size:
+            slab = [s for s, ok in zip(slab, keep) if ok]
+
+    k = len(yi)
+    not_na = [True] * k
+
     if mods_arr is None:
         if not add_intercept:
             raise ValueError(
@@ -620,6 +650,7 @@ def rma(
         slab=slab_list,
         not_na=not_na,
         level=level,
+        coefnames=coefnames,
     )
 
 

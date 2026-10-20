@@ -83,8 +83,33 @@ print(ma.netmeasures(n).proportion)   # 直接证据占比
 ma.netgraph(n, filename="network.png")
 ```
 
-## 生态对接
+## 命令行
 
+安装后自带 `pimeta` 命令（`python -m pimeta` 等价），常见分析不用写脚本：
+
+```bash
+pimeta fit studies.csv --yi TE --vi seTE2 --method REML
+pimeta fit studies.csv --yi TE --vi seTE2 --mods "~ dose + year" -o coef.csv
+pimeta escalc raw.csv --measure RR --ai ai --bi bi --ci ci --di di
+pimeta network nma.csv --te TE --se seTE --treat1 t1 --treat2 t2 --sm MD
+```
+
+输出默认 TSV 到 stdout，可用 `--format csv|json` 或 `-o file.csv`。
+详见 [命令行指南](../guide/cli.md)。
+
+## 缺失值
+
+含缺失值的行会被剔除（等同 R 的 `na.action`），但 pimeta **会明确告知**：
+
+```
+pimeta: warning: dropped 2 of 13 studies with missing values in 'yi', 'vi'
+        (rows 3, 7); pass warn_missing=False to silence this
+```
+
+Python 里同理：`rma(..., warn_missing=True)` 是默认；命令行用 `--no-warn-missing`
+静默。`metagen()` 同样处理。
+
+## 生态对接
 协议层在 `pimeta.interop`，所有可选依赖都是懒加载：
 
 ```python

@@ -8,6 +8,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Command-line interface.** `pimeta` (and `python -m pimeta`) with three
+  subcommands, so the common analyses need no Python at all:
+  - `pimeta fit data.csv --yi TE --vi seTE2 [--mods "~ dose + year"]` —
+    pools with `rma`, prints the coefficient table, and optionally writes a
+    forest plot and a `*_glance` file with model-level statistics.
+  - `pimeta escalc raw.csv --measure RR --ai ai --bi bi --ci ci --di di` —
+    arm-level to effect sizes.
+  - `pimeta network nma.csv --te TE --se seTE --treat1 t1 --treat2 t2` — the
+    treatment-by-treatment estimate matrix.
+  Input is CSV/TSV/JSON; output is TSV on stdout (`--format csv|json`, `-o
+  file.csv`), so it pipes.  Unknown columns, non-numeric values and unreadable
+  files exit with code 2 and a message on stderr.  `docs/guide/cli.md` documents
+  every option.
+- **Missing values are dropped with a warning.** R discards incomplete cases
+  silently through `na.action`; pimeta keeps the dropping but makes it visible:
+  `MissingDataWarning` names the number of dropped studies and their rows.
+  Wired into `rma` / `rma_ls` (including moderators and scale moderators, via
+  the new `warn_missing=True` argument) and `metagen` (which already dropped
+  them, silently, before).  `pimeta.missing.complete_cases` / `is_missing` are
+  public so downstream code can apply the same rule.
+- **Formula-derived coefficient names.** `rma("yi", "vi", mods="~ dose + arm",
+  data=df)` now reports `dose` and `arm[B]` instead of `V1`/`V2`; the names are
+  carried on `RmaResult.coefnames` and picked up by `tidy()`, `coef()` and the
+  printed summary.  A string column whose entries all parse as numbers is
+  treated as numeric rather than dummy-coded, which previously made a
+  CSV-loaded moderator singular.
 - **`py.typed` — inline types for downstream users.** The package now ships the
   PEP 561 marker, so `mypy`/`pyright`/IDE completion use the real annotations
   instead of `Any`. `mypy src/pimeta` went from **167 errors to 0** across 54

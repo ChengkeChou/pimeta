@@ -1,6 +1,6 @@
 # Diagnostics and utilities
 
-*55 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*58 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -59,6 +59,9 @@
 | [`estimates`](#estimates) | estimates |
 | [`EstimatesResult`](#estimatesresult) | estimates |
 | [`forest_args`](#forest_args) | .forestArgs |
+| [`MissingDataWarning`](#missingdatawarning) | — |
+| [`complete_cases`](#complete_cases) | — |
+| [`is_missing`](#is_missing) | — |
 
 ## `MvProfileResult`
 
@@ -930,3 +933,50 @@ forest_args(common=True, random=True, prediction=False, overall=False, text_comm
 
 Returns a dict with the row labels in the order they appear in a forest
 plot, plus the ``common``/``random``/``prediction``/``overall`` flags.
+
+## `MissingDataWarning`
+
+Raised when rows are dropped because of missing values.
+
+## `complete_cases`
+
+```python
+complete_cases(columns, *, context: 'str' = 'rows', warn: 'bool' = True)
+```
+
+Row mask that keeps only complete cases, plus the dropped indices.
+
+**Args**
+
+- `columns` — ``{name: sequence}`` — every column must have the same length.
+- `context` — noun used in the warning message ("studies", "rows", ...).
+- `warn` — emit :class:`MissingDataWarning` when anything is dropped.
+
+**Returns**
+
+``(keep, dropped)`` where ``keep`` is a boolean mask over the original rows and ``dropped`` holds the 0-based indices that were removed.
+
+**Raises**
+
+- `ValueError` — when the columns do not all have the same length.
+
+## `is_missing`
+
+```python
+is_missing(values) -> 'np.ndarray'
+```
+
+Boolean mask of missing entries in ``values``.
+
+Numeric arrays use ``~np.isfinite`` (so ``nan``, ``inf`` and ``-inf`` all
+count as missing, as R's ``NA`` does after arithmetic).  Object arrays treat
+``None`` and ``float('nan')`` as missing.  Integer and boolean arrays have no
+missing values and yield an all-``False`` mask.
+
+**Args**
+
+- `values` — a 1-D array-like.
+
+**Returns**
+
+A boolean ``ndarray`` with one entry per element.
