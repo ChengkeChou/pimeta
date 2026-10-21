@@ -236,6 +236,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 - **`robust()`** now falls back to the `cluster` stored on the fit and raises
   R's `Argument 'cluster' must be specified.` when there is none.
 
+### Changed
+
+- **`netmeta.py` is down to 2,300 lines, from 7,088.** The ten zero-dependency
+  sections — everything that only *reads* a fitted object — now live in their
+  own modules under `pimeta/nma/`: `splitting` (`netsplit`), `league`
+  (`netleague`), `pairwise_table` (`netpairwise`), `complexity`
+  (`netcomplexity`, `netcomplex`), `convert` (`crossnma2netmeta`,
+  `gemtc2netmeta`), `matrix` (`netmatrix`, `netcomparison`, `netbind`), `paths`
+  (`netpath`), `labels` (`treats`, R's `abbreviate`), `ranking` (`vikor`) and
+  `tables` (`subgroup`, `nettable`). `pimeta.netmeta` re-exports all of them, so
+  `pimeta.netmeta.netsplit` and `pimeta.nma.splitting.netsplit` are the same
+  object and not one import path changed; `pimeta/nma/__init__.py` carries the
+  map. What remains in `netmeta.py` is the fitting code plus `netmetareg`, the
+  heat matrix and the `createC`/`invmat`/`hatmatrix` aliases. The split was
+  done by AST span rather than by hand, and the whole suite passed without a
+  single test edit.
+
 ### Fixed
 
 - **`conv_delta()` / `conv_wald()` silently collapsed to one element when
