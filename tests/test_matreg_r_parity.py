@@ -131,7 +131,10 @@ def test_matreg_level_conventions():
     assert _fit_23().level == pytest.approx(0.05)
     assert ma.matreg(1, [2, 3], R4, n=100, level=90).level == pytest.approx(0.1)
     lo = ma.matreg(1, [2, 3], R4, n=100, level=90).ci_lb
-    assert lo == pytest.approx([0.3142471091423, 0.0642471091423], abs=1e-12)
+    # 1e-10 rather than 1e-12: the reference is R's own output, and the
+    # matrix solve behind it accumulates in a different order on different
+    # BLAS builds (Python 3.10 on the CI runner lands 1.9e-12 away).
+    assert lo == pytest.approx([0.3142471091423, 0.0642471091423], abs=1e-10)
     hi = ma.matreg(1, [2, 3], R4, n=100, level=0.95).ci_lb
     assert hi == pytest.approx(_fit_23().ci_lb, abs=1e-13)
 

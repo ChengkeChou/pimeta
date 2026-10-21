@@ -238,6 +238,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **`conv_delta()` / `conv_wald()` silently collapsed to one element when
+  `transf` was a scalar function.** On NumPy 1.x `math.exp(np.array([a, b]))`
+  returns `exp(a)` instead of raising, so the `except TypeError` fallback in
+  `_apply` never ran: the result had length one and — because NumPy emits a
+  `DeprecationWarning` for that conversion — the test suite, which promotes
+  those to errors, failed on the `numpy1` CI jobs while `numpy2` passed (there
+  the same call raises). The callable is now classified by the *shape* it
+  returns rather than by whether the call succeeded, and the probe's warning is
+  suppressed. `conv_wald()` used the same pattern and had the same defect.
 - **`selmodel()` used the wrong delta map, so every smooth family could stop
   short of the maximum.** metafor keeps two maps apart: `delta.transf.fun` (the
   exponential, used only when `delta.max` contains an infinity or the type

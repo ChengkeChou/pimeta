@@ -11,6 +11,7 @@ from __future__ import annotations
 import builtins
 import math
 import sys
+import warnings
 
 import numpy as np
 from scipy import stats
@@ -45,19 +46,28 @@ class ConvWaldResult:
 
 
 def _apply(fun, arr):
-    """Evaluate ``fun`` on an array, falling back to a per-element loop.
+    """Evaluate ``fun`` elementwise, accepting vectorised and scalar callables.
 
     ``transf`` is conventionally vectorised (``numpy.exp``), but users often
-    pass a scalar function from :mod:`math`.  Calling it with an array raised a
-    bare ``TypeError: only 0-dimensional arrays...`` from the middle of the
-    derivative code, so both forms are accepted.
+    pass a scalar function from :mod:`math`.  The two cannot be told apart by
+    calling alone: on NumPy 1.x ``math.exp(array)`` returns the exponential of
+    the *first* element and emits a ``DeprecationWarning`` (an error from NumPy
+    2 on), so a call that does not raise is not a sign that the callable is
+    vectorised.  The shape of the result is: ``numpy.exp`` returns the input
+    shape, ``math.exp`` returns a 0-d value.  Warnings are silenced because
+    provoking that conversion is exactly what this probe does.
     """
-    try:
-        return np.asarray(fun(arr), dtype=float)
-    except (TypeError, ValueError):
-        a = np.asarray(arr)
-        flat = [fun(v.item() if hasattr(v, "item") else v) for v in a.ravel()]
-        return np.asarray(flat, dtype=float).reshape(a.shape)
+    a = np.asarray(arr, dtype=float)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        try:
+            out = np.asarray(fun(a), dtype=float)
+        except Exception:
+            out = np.empty(())
+    if out.shape == a.shape:
+        return out
+    flat = [fun(v) for v in a.ravel().tolist()]
+    return np.asarray(flat, dtype=float).reshape(a.shape)
 
 
 def _num_deriv(fun, x, h=None):
@@ -141,7 +151,9 @@ def conv_wald(out, ci_lb, ci_ub, level=95.0, transf=None):
     level = _level_pct(level)
     crit = stats.norm.isf((1.0 - level / 100.0) / 2.0)
     vi = ((hi - lo) / (2.0 * crit)) ** 2
-    yi = out if transf is None else np.asarray(transf(out), dtype=float).ravel()
+    # _apply, not np.asarray(transf(out)): a scalar transform such as math.exp
+    # collapses the array on NumPy 1.x (length-one result, no exception).
+    yi = out if transf is None else _apply(transf, out)
     return ConvWaldResult(yi, vi)
 
 

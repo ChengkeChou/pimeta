@@ -8,6 +8,7 @@ the matrix-to-vector ordering is the one ``metafor::rcalc`` produces
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import pytest
@@ -202,6 +203,54 @@ def test_conv_delta_accepts_a_scalar_function():
     res = ma.conv_delta(0.5, 0.04, math.exp)
     assert np.asarray(res.vi)[0] == pytest.approx(math.exp(0.5) ** 2 * 0.04,
                                                   abs=1e-9)
+
+
+def test_conv_delta_treats_a_scalar_function_as_elementwise():
+    """``math.exp`` must be applied per element, not to the first one only.
+
+    On NumPy 1.x ``math.exp(np.array([a, b]))`` returns ``exp(a)`` and emits a
+    ``DeprecationWarning``; the call does not raise, so a scalar callable can
+    only be recognised by the shape it returns.  Getting this wrong is silent
+    (a length-one result) and noisy (the warning becomes an error under
+    ``-W error``), so pin both halves.
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        res = ma.conv_delta([0.5, 1.0], [0.04, 0.09], math.exp)
+
+    assert not [w for w in caught
+                if issubclass(w.category, DeprecationWarning)], caught
+    assert np.asarray(res.yi) == pytest.approx([math.exp(0.5), math.exp(1.0)],
+                                               abs=1e-12)
+    # a vectorised callable takes the same path
+    vec = ma.conv_delta([0.5, 1.0], [0.04, 0.09], np.exp)
+    assert np.asarray(vec.yi) == pytest.approx(np.asarray(res.yi), abs=1e-14)
+
+
+def test_apply_handles_a_callable_that_silently_collapses_the_array():
+    """The NumPy 1.x failure mode, reproduced without NumPy 1.x.
+
+    ``math.exp(np.array([a, b]))`` does not raise there — it returns ``exp(a)``
+    — so ``_apply`` cannot use "the call succeeded" as evidence that the
+    callable is vectorised.  This stands in for that behaviour.
+    """
+    from pimeta.conv import _apply
+
+    def first_only(x):
+        return math.exp(float(np.ravel(x)[0]))
+
+    assert _apply(first_only, [0.0, 1.0]) == pytest.approx([1.0, math.e])
+    # and a genuinely vectorised callable is left alone
+    assert _apply(np.exp, [0.0, 1.0]) == pytest.approx([1.0, math.e])
+
+
+def test_conv_wald_applies_a_scalar_transform_elementwise():
+    """Same trap as :func:`conv_delta`: ``transf`` may be a scalar callable."""
+    res = ma.conv_wald([0.5, 1.0], [0.4, 1.0], [0.6, 1.4], transf=math.exp)
+    yi = np.asarray(res.yi)
+    assert yi.shape == (2,)
+    assert yi == pytest.approx([math.exp(0.5), math.exp(1.0)], abs=1e-12)
+    assert np.asarray(res.vi).shape == (2,)
 
 
 def test_conv_delta_rejects_a_length_mismatch():
