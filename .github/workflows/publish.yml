@@ -162,12 +162,30 @@ jobs:
           fi
           python - <<'PY'
           import pathlib
-          import re
 
-          dist = sorted(pathlib.Path("dist").iterdir())
+          # Read the version off the artifacts themselves, not pyproject.toml.
+          # This job never checks the repository out -- it only has dist/ -- so
+          # reading pyproject.toml here raised FileNotFoundError *after* a
+          # successful upload and failed a release that had already happened.
+          # The artifact name is also the more honest source: it is literally
+          # what was sent to PyPI.
+          dist = sorted(p for p in pathlib.Path("dist").iterdir() if p.is_file())
+          assert dist, "dist/ is empty - the publish step uploaded nothing"
+
+          def version_of(name):
+              # "pimeta-1.1.0-py3-none-any.whl" -> 1.1.0
+              # "pimeta-1.1.0.tar.gz"             -> 1.1.0
+              for suffix in (".whl", ".tar.gz", ".zip"):
+                  if name.endswith(suffix):
+                      stem = name[: -len(suffix)]
+                      return stem.split("-")[1]
+              raise ValueError(f"unrecognised artifact name: {name}")
+
           names = ", ".join(p.name for p in dist)
-          text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
-          version = re.search(r'^version = "([^"]+)"', text, re.M).group(1)
+          versions = {version_of(p.name) for p in dist}
+          assert len(versions) == 1, f"artifacts disagree on the version: {versions}"
+          version = versions.pop()
+
           print(f"::notice title=Uploaded to PyPI::pimeta {version} - {names}")
           print(f"https://pypi.org/project/pimeta/{version}/")
           PY
