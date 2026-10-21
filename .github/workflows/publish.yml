@@ -8,10 +8,11 @@ name: Publish to PyPI
 #   Environment        pypi
 #
 # Trigger it either by publishing a GitHub Release (recommended) or by running
-# this workflow manually from the Actions tab. Manual runs default to
-# `dry_run: true`, which exercises the full build + test + artifact pipeline but
-# stops before uploading - use it to validate a workflow change without
-# burning a version number.
+# this workflow manually from the Actions tab. A manual run publishes: leave
+# `dry_run` unchecked. Tick it only when you want the full build + test +
+# artifact pipeline without uploading, e.g. to validate a workflow change
+# without burning a version number. The job title and the final log line both
+# state which of the two happened, so a dry run can never look like a release.
 
 on:
   release:
