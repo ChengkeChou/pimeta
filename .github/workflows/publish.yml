@@ -19,9 +19,14 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Build and test only - skip the PyPI upload"
+        # Defaults to false: a manual run of *this* workflow means "release".
+        # The build job already runs the full suite and `twine check`, and PyPI
+        # refuses a version that already exists, so the worst case of an
+        # accidental run is a clear "file already exists" error.  Leaving it
+        # true caused two runs that looked green while PyPI received nothing.
+        description: "Build and test only - do NOT upload to PyPI"
         type: boolean
-        default: true
+        default: false
 
 permissions:
   contents: read
@@ -116,7 +121,10 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Publish to PyPI
+    # A dry run skips the upload but every step ends "success" or "skipped", so
+    # the job shows green while PyPI gets nothing.  Put the mode in the job name
+    # so that cannot be misread.
+    name: Publish to PyPI${{ (inputs.dry_run == true) && ' (DRY RUN - nothing is uploaded)' || '' }}
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -141,3 +149,25 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         # No `password:` - the action obtains a short-lived OIDC token from PyPI.
         # No `repository-url:` - defaults to https://upload.pypi.org/legacy/
+
+      - name: Say what actually happened
+        # Runs after both branches, so the log always states whether PyPI was
+        # touched.  This is the answer to "the workflow was green but the new
+        # version is not on PyPI".
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "::warning title=Nothing uploaded::DRY RUN - the upload step was skipped. Re-run this workflow with 'dry_run' unchecked to publish to PyPI."
+            exit 0
+          fi
+          python - <<'PY'
+          import pathlib
+          import re
+
+          dist = sorted(pathlib.Path("dist").iterdir())
+          names = ", ".join(p.name for p in dist)
+          text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          version = re.search(r'^version = "([^"]+)"', text, re.M).group(1)
+          print(f"::notice title=Uploaded to PyPI::pimeta {version} - {names}")
+          print(f"https://pypi.org/project/pimeta/{version}/")
+          PY
+
