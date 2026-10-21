@@ -505,19 +505,6 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
     return ll
 
 
-def _stepcon_ineq(par, p, deltas, delta_arg, delta_min, delta_max, mapfun):
-    """metafor's ``.rma.selmodel.ineqfun.pos`` for ``type="stepcon"``.
-
-    Returns ``-diff(delta)``, constrained to ``[0, 1]``. Since every ``delta``
-    already lives in ``[0, 1]`` the upper bound is implied, so SciPy only needs
-    the ``>= 0`` half (monotone non-increasing step weights).
-    """
-    d = np.asarray(par[p + 1:p + 1 + deltas], dtype=float)
-    d = _transform_delta(d, deltas, delta_min, delta_max, mapfun, False)
-    d = np.where(np.isnan(delta_arg), d, delta_arg)
-    return -np.diff(d)
-
-
 def _wi_scalar(type_, x, delta, preci, steps):
     """Scalar (fast) counterpart of :func:`_wi_fun` for the continuous models.
 
