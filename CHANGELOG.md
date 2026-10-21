@@ -238,6 +238,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **`selmodel()` used the wrong delta map, so every smooth family could stop
+  short of the maximum.** metafor keeps two maps apart: `delta.transf.fun` (the
+  exponential, used only when `delta.max` contains an infinity or
+  `control={'defmap': TRUE}`) and the `mapfun` that is actually applied, which
+  is `NA` for every family with a finite `delta.max` and therefore falls back to
+  the scaled logistic `lb + (ub - lb) * plogis(x)`. pimeta used the exponential
+  everywhere. On the 20-study reference data this left `power2` at
+  delta = (0.0014, 100) with ll = 19.13 instead of R's (0.00046, 58.24) with
+  ll = 20.2552; `beta`, `halfnorm`, `negexp`, `logistic`, `power`, the `*1` and
+  `*2` families, `negexppow` and `trunc` were affected the same way. `stepcon`
+  now also uses metafor's `delta.max = 1` instead of 100.
+- **`selmodel()` no longer produces `ll = nan` from an overflowing weight.** The
+  power-family ratio `(1-x)**e / (1-s0)**e` is evaluated as a single `exp` of a
+  difference of logarithms (the direct form is `0/0` at `s0 = 1` and `inf/inf`
+  for a large negative exponent), `exp(tau2)` is capped, `1/(1+exp(-x))` became
+  `expit`, and a non-finite log-likelihood is replaced by a large finite
+  penalty instead of being handed to the optimiser, which used to keep whatever
+  NaN point it happened to be standing on.
+- **`stepcon` is fitted with the monotone parameterisation instead of a
+  constraint.** metafor solves this model with an SQP solver (Rsolnp) under the
+  constraint `delta[j] >= delta[j+1]`; SciPy's SLSQP is the same class of
+  solver, but it reports failure and still returns the iterate it stopped on,
+  so pimeta could hand back `delta = (1, 0.066, 0.0995, ...)` — a sequence no
+  `stepcon` model can produce — together with an `ll` above the true maximum.
+  `stepcon` and `stepfun(decreasing=TRUE)` are the same model, so the
+  cumulative parameterisation the latter uses is now used for both: the
+  monotone cone is reached by construction and the boundary optimum (two
+  adjacent weights equal, the usual answer) is found. On `dat.bcg` with
+  `steps=(0.025, 0.5, 1)` the fit now reproduces R: ll = -12.6129799 vs
+  -12.6129800, se(beta) = 0.207145 vs 0.207146, delta = (1, 1, 0.68944) vs
+  (1, 0.99999977, 0.68945369).
 - **A self-comparison is rejected instead of silently fitted.** `netmeta()` and
   `netmetabin()` accepted a row whose two treatments were the same, which
   produced a meaningless fit and later surfaced as a bare `StopIteration`

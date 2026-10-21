@@ -1,4 +1,4 @@
-"""selmodel — a faithful transcription of ``metafor::selmodel`` (selection models).
+﻿"""selmodel 鈥?a faithful transcription of ``metafor::selmodel`` (selection models).
 
 Implements the full family of publication-bias selection models on top of an
 ``rma`` fit: ``beta``, ``halfnorm``/``halfnorm1``/``halfnorm2``, ``negexp``/
@@ -128,6 +128,54 @@ def _plogis(x):
     return special.expit(x)
 
 
+#: Exponent cap for a weight that would otherwise overflow: ``exp(700)`` is the
+#: largest power of e that still fits in a float (``exp(709.78)`` overflows).
+_EXP_CAP = 700.0
+
+#: Value handed to the optimiser when the likelihood is not finite.  Any real
+#: log-likelihood on these data sets is in [-100, 100], so this is strictly
+#: worse than every feasible point and the line search backs away from it.
+_NAN_PENALTY = 1e10
+
+
+def _exp_tau2(tau2):
+    """``exp`` of the tau^2 optimisation scale, capped so it cannot overflow."""
+    return np.exp(min(float(tau2), _EXP_CAP))
+
+
+def _objective(llval):
+    """Negate a log-likelihood for minimisation; never return NaN.
+
+    A NaN objective is poison for a Quasi-Newton optimiser: every comparison
+    against it is False, so it keeps whichever NaN point it happened to land
+    on and the fit silently "converges" with ``ll = nan``.
+    """
+    if not np.isfinite(llval):
+        return _NAN_PENALTY
+    return -llval
+
+
+def _pow_ratio(x, s0, expo):
+    """``(1 - x)**expo / (1 - s0)**expo`` without a ``0/0`` or ``inf/inf``.
+
+    metafor writes the ratio of two powers literally.  With a large ``expo``
+    both powers underflow (or, with a negative one, both overflow) and the
+    quotient is NaN -- which the optimiser then happily accepts as the best
+    point it has seen, producing a fit with ``ll = nan``.  One ``exp`` of a
+    difference of logarithms is the same value wherever the direct form is
+    finite, and finite (merely extreme) everywhere else.  A negative ``expo``
+    can still blow up, hence the cap.
+    """
+    with np.errstate(divide="ignore", invalid="ignore"):
+        gap = np.log1p(-np.clip(x, 0.0, 1.0)) - np.log1p(-s0)
+        exponent = np.multiply(expo, gap)
+        # s0 == 1 leaves gap = +inf; a vanishing exponent then gives 0 * inf.
+        # The limit of the ratio as expo -> 0 is 1, which is also the only
+        # finite answer available there.
+        exponent = np.where(np.isnan(exponent), 0.0, exponent)
+        return np.exp(np.minimum(exponent, _EXP_CAP))
+
+
 def _qlogis(x):
     return special.logit(x)
 
@@ -137,12 +185,14 @@ def _is_dummy(x, eps=1e-8):
 
 
 def _mapfun(x, lb, ub, fun=None):
-    """metafor's ``.mapfun`` — forward map from optimisation scale."""
+    """metafor's ``.mapfun`` 鈥?forward map from optimisation scale."""
     if fun is None:
         if lb == 0.0 and ub == 1.0:
             y = _plogis(x)
         else:
-            y = lb + (ub - lb) / (1.0 + np.exp(-x))
+            # expit, not 1/(1+exp(-x)): the direct form overflows to inf for
+            # large negative x (the value it returns is the same).
+            y = lb + (ub - lb) * special.expit(x)
     else:
         if fun == "exp":
             y = np.exp(x)
@@ -152,12 +202,16 @@ def _mapfun(x, lb, ub, fun=None):
             y = _plogis(x)
         else:
             y = x
+        # metafor clamps the mapped value to [delta.min, delta.max].  The
+        # clamp is kept for parity (``control={'delta.max': ...}`` must bite),
+        # but it leaves a flat surface past the bound, where the gradient is
+        # exactly zero -- see the restart in ``selmodel()``.
         y = np.minimum(np.maximum(y, lb), ub)
     return y
 
 
 def _mapinvfun(x, lb, ub, fun=None):
-    """metafor's ``.mapinvfun`` — inverse map onto the optimisation scale."""
+    """metafor's ``.mapinvfun`` 鈥?inverse map onto the optimisation scale."""
     if fun is None:
         if lb == 0.0 and ub == 1.0:
             return _qlogis(x)
@@ -204,7 +258,7 @@ def _wi_fun(type_, x, delta, yi, vi, preci, alternative, steps):
             den = 2.0 * np.exp(-delta[0] * preci * s0) / (1.0 + np.exp(-delta[0] * preci * s0))
             return np.where(x <= s0, 1.0, num / den)
         # power
-        return np.where(x <= s0, 1.0, (1.0 - x) ** (preci * delta[0]) / (1.0 - s0) ** (preci * delta[0]))
+        return np.where(x <= s0, 1.0, _pow_ratio(x, s0, preci * delta[0]))
 
     if type_ in ("halfnorm1", "negexp1", "logistic1", "power1"):
         s0 = steps[0]
@@ -216,7 +270,7 @@ def _wi_fun(type_, x, delta, yi, vi, preci, alternative, steps):
         if type_ == "logistic1":
             return np.where(x <= s0, 1.0, 2.0 * np.exp(-delta[0] * preci * t) / (1.0 + np.exp(-delta[0] * preci * t)))
         # power1
-        return np.where(x <= s0, 1.0, (1.0 - t) ** (preci * delta[0]))
+        return np.where(x <= s0, 1.0, _pow_ratio(t, 0.0, preci * delta[0]))
 
     if type_ == "negexppow":
         s0 = steps[0]
@@ -237,7 +291,7 @@ def _wi_fun(type_, x, delta, yi, vi, preci, alternative, steps):
             den = 2.0 * np.exp(-delta[1] * preci * s0) / (1.0 + np.exp(-delta[1] * preci * s0))
             inner = num / den
         else:  # power2
-            inner = (1.0 - x) ** (preci * delta[1]) / (1.0 - s0) ** (preci * delta[1])
+            inner = _pow_ratio(x, s0, preci * delta[1])
         return np.where(x <= s0, 1.0, (delta[0] + inner) / (1.0 + delta[0]))
 
     if type_ in ("stepfun", "stepcon"):
@@ -266,6 +320,15 @@ def _clamp_tau2(tau2, tau2_max):
     if tau2 > tau2_max:
         tau2 = tau2_max
     return tau2
+
+
+def _at_delta_max(par, p, deltas, delta_min, delta_max, mapfun, decreasing):
+    """Which delta's mapped value sits on its upper bound?"""
+    raw = np.asarray(par[p + 1:p + 1 + deltas], dtype=float)
+    mapped = _transform_delta(raw, deltas, delta_min, delta_max, mapfun,
+                              decreasing)
+    bound = np.asarray(delta_max, dtype=float)
+    return np.isclose(mapped, bound, rtol=1e-6, atol=1e-12)
 
 
 def _transform_delta(delta, deltas, delta_min, delta_max, mapfun, decreasing):
@@ -322,8 +385,8 @@ def _wi_array(type_, x, delta, preci, steps):
             den = (2.0 * np.exp(-delta[0] * preci * s0)
                    / (1.0 + np.exp(-delta[0] * preci * s0)))
         elif type_ == "power":
-            num = (1.0 - x) ** (preci * delta[0])
-            den = (1.0 - s0) ** (preci * delta[0])
+            num = _pow_ratio(x, s0, preci * delta[0])
+            den = 1.0
         elif type_ in ("halfnorm1", "negexp1", "logistic1", "power1"):
             t = (x - s0) / (1.0 - s0)
             if type_ == "halfnorm1":
@@ -335,7 +398,7 @@ def _wi_array(type_, x, delta, preci, steps):
                     1.0 + np.exp(-delta[0] * preci * t))
                 den = 1.0
             else:
-                num, den = (1.0 - t) ** (preci * delta[0]), 1.0
+                num, den = _pow_ratio(t, 0.0, preci * delta[0]), 1.0
         elif type_ == "negexppow":
             num = np.exp(-delta[0] * preci * x ** (1.0 / delta[1]))
             den = np.exp(-delta[0] * preci * s0 ** (1.0 / delta[1]))
@@ -353,8 +416,7 @@ def _wi_array(type_, x, delta, preci, steps):
                         / (1.0 + np.exp(-delta[1] * preci * s0)))
                 inner = num / den_
             else:
-                inner = ((1.0 - x) ** (preci * delta[1])
-                         / (1.0 - s0) ** (preci * delta[1]))
+                inner = _pow_ratio(x, s0, preci * delta[1])
             return (delta[0] + inner) / (1.0 + delta[0])
         else:
             raise ValueError(f"unsupported selection model type: {type_!r}")
@@ -370,17 +432,17 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                   mapfun, delta_min, delta_max, decreasing, delta_transf,
                   tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                   alternative, pval_min, dofit=False):
-    """``.selmodel.ll.cont`` — numeric integration over the density.
+    """``.selmodel.ll.cont`` 鈥?numeric integration over the density.
 
     The per-study integrals use adaptive quadrature with exactly the tolerances
     metafor passes to R's ``integrate()`` (``rel.tol = .Machine$double.eps^0.25``,
-    ``subdivisions = 100``), so the numerical accuracy — and hence the point at
-    which the optimiser stops — matches the reference implementation.
+    ``subdivisions = 100``), so the numerical accuracy 鈥?and hence the point at
+    which the optimiser stops 鈥?matches the reference implementation.
 
     A fixed Gauss-Hermite rule would be two orders of magnitude faster, but the
     selection weights ``exp(-delta * preci * p^2)`` are step functions once
     ``delta`` grows (the exponent reaches -600 on the realistic fits), and a
-    200-node rule loses 5e-4 of relative accuracy there — enough to move the
+    200-node rule loses 5e-4 of relative accuracy there 鈥?enough to move the
     optimum more than R's own quadrature does.  Accuracy wins over speed.
     """
     k = len(yi)
@@ -396,7 +458,7 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
 
         beta = np.where(np.isnan(beta_arg), beta, beta_arg)
         if tau2_transf:
-            tau2 = np.exp(tau2)
+            tau2 = _exp_tau2(tau2)
         tau2 = np.where(~np.isnan(tau2_arg), tau2_arg, tau2)
         tau2 = _clamp_tau2(float(tau2), tau2_max)
 
@@ -438,7 +500,7 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
 
         if dofit:
             return {"ll": llval, "beta": beta, "tau2": tau2, "delta": delta}
-        return -llval
+        return _objective(llval)
 
     return ll
 
@@ -480,7 +542,7 @@ def _wi_scalar(type_, x, delta, preci, steps):
         den = 2.0 * math.exp(-delta[0] * preci * s0) / (1.0 + math.exp(-delta[0] * preci * s0))
         return num / den
     if type_ == "power":
-        return (1.0 - x) ** (preci * delta[0]) / (1.0 - s0) ** (preci * delta[0])
+        return float(_pow_ratio(x, s0, preci * delta[0]))
 
     if type_ in ("halfnorm1", "negexp1", "logistic1", "power1"):
         t = (x - s0) / (1.0 - s0)
@@ -492,7 +554,7 @@ def _wi_scalar(type_, x, delta, preci, steps):
             return 2.0 * math.exp(-delta[0] * preci * t) / (
                 1.0 + math.exp(-delta[0] * preci * t)
             )
-        return (1.0 - t) ** (preci * delta[0])
+        return float(_pow_ratio(t, 0.0, preci * delta[0]))
 
     if type_ == "negexppow":
         return math.exp(-delta[0] * preci * x ** (1.0 / delta[1])) / math.exp(
@@ -517,7 +579,7 @@ def _wi_scalar(type_, x, delta, preci, steps):
             )
             inner = num / den
         else:  # power2
-            inner = (1.0 - x) ** (preci * delta[1]) / (1.0 - s0) ** (preci * delta[1])
+            inner = float(_pow_ratio(x, s0, preci * delta[1]))
         return (delta[0] + inner) / (1.0 + delta[0])
 
     raise ValueError(f"unsupported selection model type: {type_!r}")
@@ -553,7 +615,7 @@ def _make_ll_stepfun(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                      mapfun, delta_min, delta_max, decreasing, delta_transf,
                      tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                      alternative, pval_min, dofit=False):
-    """``.selmodel.ll.stepfun`` — closed-form (analytic) integrals."""
+    """``.selmodel.ll.stepfun`` 鈥?closed-form (analytic) integrals."""
     k = len(yi)
     sub_idx = np.where(subset)[0]
     nsub_idx = np.where(~subset)[0]
@@ -567,7 +629,7 @@ def _make_ll_stepfun(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
 
         beta = np.where(np.isnan(beta_arg), beta, beta_arg)
         if tau2_transf:
-            tau2 = np.exp(tau2)
+            tau2 = _exp_tau2(tau2)
         tau2 = np.where(~np.isnan(tau2_arg), tau2_arg, tau2)
         tau2 = _clamp_tau2(float(tau2), tau2_max)
 
@@ -636,16 +698,18 @@ def _make_ll_stepfun(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
         llval0 = float(np.sum(
             stats.norm.logpdf(yi[nsub_idx], yhat[nsub_idx], sei[nsub_idx])
         ))
-        llval1 = float(np.sum(
-            np.log(delta[pgrp[sub_idx]] / preci[sub_idx])
-            + stats.norm.logpdf(yi[sub_idx], yhat[sub_idx], sei[sub_idx])
-            - np.log(Ai[sub_idx])
-        ))
+        # a zero delta gives log(0) = -inf, which is the value metafor produces
+        with np.errstate(divide="ignore", invalid="ignore"):
+            llval1 = float(np.sum(
+                np.log(delta[pgrp[sub_idx]] / preci[sub_idx])
+                + stats.norm.logpdf(yi[sub_idx], yhat[sub_idx], sei[sub_idx])
+                - np.log(Ai[sub_idx])
+            ))
         llval = llval0 + llval1
 
         if dofit:
             return {"ll": llval, "beta": beta, "tau2": tau2, "delta": delta}
-        return -llval
+        return _objective(llval)
 
     return ll
 
@@ -654,7 +718,7 @@ def _make_ll_trunc(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                    mapfun, delta_min, delta_max, decreasing, delta_transf,
                    tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                    alternative, pval_min, dofit=False):
-    """``.selmodel.ll.trunc`` — closed-form truncated likelihood."""
+    """``.selmodel.ll.trunc`` 鈥?closed-form truncated likelihood."""
     len(yi)
     sub_idx = np.where(subset)[0]
     nsub_idx = np.where(~subset)[0]
@@ -666,7 +730,7 @@ def _make_ll_trunc(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
 
         beta = np.where(np.isnan(beta_arg), beta, beta_arg)
         if tau2_transf:
-            tau2 = np.exp(tau2)
+            tau2 = _exp_tau2(tau2)
         tau2 = np.where(~np.isnan(tau2_arg), tau2_arg, tau2)
         tau2 = _clamp_tau2(float(tau2), tau2_max)
 
@@ -687,19 +751,23 @@ def _make_ll_trunc(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
         yh = yhat[sub_idx]
         se = sei[sub_idx]
         if alternative == "less":
-            ll1i = (np.where(ys < cutoff, 0.0, np.log(delta[0]))
-                    + stats.norm.logpdf(ys, yh, se)
-                    - np.log(1.0 - (1.0 - delta[0]) * stats.norm.sf(cutoff, yh, se)))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ll1i = (np.where(ys < cutoff, 0.0, np.log(delta[0]))
+                        + stats.norm.logpdf(ys, yh, se)
+                        - np.log(1.0 - (1.0 - delta[0])
+                                 * stats.norm.sf(cutoff, yh, se)))
         else:
-            ll1i = (np.where(ys > cutoff, 0.0, np.log(delta[0]))
-                    + stats.norm.logpdf(ys, yh, se)
-                    - np.log(1.0 - (1.0 - delta[0]) * stats.norm.cdf(cutoff, yh, se)))
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ll1i = (np.where(ys > cutoff, 0.0, np.log(delta[0]))
+                        + stats.norm.logpdf(ys, yh, se)
+                        - np.log(1.0 - (1.0 - delta[0])
+                                 * stats.norm.cdf(cutoff, yh, se)))
 
         llval = float(np.sum(ll0i) + np.sum(ll1i))
 
         if dofit:
             return {"ll": llval, "beta": beta, "tau2": tau2, "delta": delta}
-        return -llval
+        return _objective(llval)
 
     return ll
 
@@ -803,6 +871,14 @@ def selmodel(
     if type_ != "stepfun" and decreasing:
         decreasing = False
 
+    # ``stepcon`` is the same model as ``stepfun`` with ``decreasing=TRUE``:
+    # the monotone constraint on the weights is what both express.  metafor
+    # solves it with an SQP solver, which stalls whenever the optimum sits on
+    # the boundary of the cone (two adjacent weights equal); the cumulative
+    # parameterisation that ``stepfun`` uses cannot leave the cone in the first
+    # place, so the same optimum is reached without a constraint at all.
+    decreasing_fit = bool(decreasing) or type_ == "stepcon"
+
     control = dict(control or {})
     con = {
         "verbose": False, "delta.init": None, "beta.init": None, "tau2.init": None,
@@ -886,12 +962,22 @@ def selmodel(
         subset = np.asarray(subset, dtype=bool)
 
     # --- type configuration -------------------------------------------------- #
-    mapfun_arr: list[str | None] | None = None
-    mapinvfun_arr: list[str | None] | None = None
+    # metafor keeps two separate things: ``delta.transf.fun`` (the map used when
+    # the parameter is unbounded) and ``mapfun`` (the map actually used).  The
+    # latter stays ``NA`` -- i.e. the default ``lb + (ub - lb) * plogis(x)`` --
+    # unless ``delta.max`` contains an infinity or the type forces it through
+    # ``control={'defmap': TRUE}`` (``stepfun`` with ``decreasing=TRUE``).
+    # Every smooth family here has a finite ``delta.max`` of 100, so the map is
+    # the *logistic* one, not ``exp``.
+    delta_transf: list[str | None] = [None] * 0
+    delta_transf_inv: list[str | None] = [None] * 0
+    defmap = False
     if type_ == "beta":
         if not stepsspec:
             steps_arr = np.array([0.0, 1.0])
         deltas = 2
+        delta_transf = ["exp", "exp"]
+        delta_transf_inv = ["log", "log"]
         delta_lb = np.array([0.0, 0.0])
         delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 1.0])
@@ -905,6 +991,8 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 1
+        delta_transf = ["exp"]
+        delta_transf_inv = ["log"]
         delta_lb = np.array([0.0])
         delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
@@ -918,6 +1006,8 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 1
+        delta_transf = ["exp"]
+        delta_transf_inv = ["log"]
         delta_lb = np.array([0.0])
         delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
@@ -931,6 +1021,8 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 2
+        delta_transf = ["exp", "exp"]
+        delta_transf_inv = ["log", "log"]
         delta_lb = np.array([0.0, 0.0])
         delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 0.25])
@@ -944,6 +1036,8 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([0.0])
         deltas = 2
+        delta_transf = ["exp", "exp"]
+        delta_transf_inv = ["log", "log"]
         delta_lb = np.array([0.0, 0.0])
         delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, 1.0])
@@ -958,22 +1052,19 @@ def selmodel(
             raise ValueError("must specify the 'steps' argument for stepfun")
         deltas = len(steps_arr)
         if decreasing:
-            mapfun_arr = ["I"] * deltas
-            mapinvfun_arr = ["I"] * deltas
+            delta_transf = ["I"] * deltas
+            delta_transf_inv = ["I"] * deltas
+            defmap = True
             delta_lb = np.concatenate([[0.0], np.full(deltas - 1, -np.inf)])
             delta_ub = np.concatenate([[1.0], np.full(deltas - 1, np.inf)])
-            [False] * deltas
-            [False] * deltas
             delta_init = np.concatenate([[1.0], np.full(deltas - 1, -2.0)])
             delta_min = np.zeros(deltas)
             delta_max = np.ones(deltas)
         else:
-            mapfun_arr = [None] * deltas
-            mapinvfun_arr = [None] * deltas
+            delta_transf = ["exp"] * deltas
+            delta_transf_inv = ["log"] * deltas
             delta_lb = np.zeros(deltas)
             delta_ub = np.full(deltas, np.inf)
-            [False] * deltas
-            [False] * deltas
             delta_init = np.linspace(1.0, 0.8, deltas)
             delta_min = np.zeros(deltas)
             delta_max = np.full(deltas, 100.0)
@@ -991,17 +1082,12 @@ def selmodel(
             )
             preci = np.ones(k)
         deltas = len(steps_arr)
-        # metafor sets delta.transf.fun = rep("plogis", deltas) but leaves
-        # mapfun = NA; for lb=0, ub=1 the NA branch of .mapfun is plogis(), so
-        # both coincide. monotone non-increasing delta is enforced as a
-        # constraint rather than through the parameterisation.
-        mapfun_arr = [None] * deltas
-        mapinvfun_arr = [None] * deltas
-        delta_lb = np.zeros(deltas)
-        delta_ub = np.ones(deltas)
-        [False] * deltas
-        [False] * deltas
-        delta_init = np.linspace(1.0, 0.5, deltas)
+        delta_transf = ["I"] * deltas
+        delta_transf_inv = ["I"] * deltas
+        defmap = True
+        delta_lb = np.concatenate([[0.0], np.full(deltas - 1, -np.inf)])
+        delta_ub = np.concatenate([[1.0], np.full(deltas - 1, np.inf)])
+        delta_init = np.concatenate([[1.0], np.full(deltas - 1, -2.0)])
         delta_min = np.zeros(deltas)
         delta_max = np.ones(deltas)
         H0_delta = np.ones(deltas)
@@ -1012,6 +1098,8 @@ def selmodel(
         if len(steps_arr) != 1:
             raise ValueError("can only specify a single value for 'steps'")
         deltas = 1
+        delta_transf = ["exp"]
+        delta_transf_inv = ["log"]
         delta_lb = np.array([0.0])
         delta_ub = np.array([np.inf])
         delta_init = np.array([1.0])
@@ -1025,11 +1113,10 @@ def selmodel(
         if not stepsspec:
             steps_arr = np.array([np.nan])
         deltas = 2
-        # metafor leaves mapfun = c(NA, "I") here (scaled-logistic for delta[1],
-        # then explicitly forces mapfun[2] <- "I"); see the type=="truncest"
-        # override further below in selmodel.rma.uni().
-        mapfun_arr = [None, "I"]
-        mapinvfun_arr = [None, "I"]
+        # metafor: delta.transf.fun = c("exp", "I") -- the cut-point is
+        # optimised on the identity scale, the weight on the log scale.
+        delta_transf = ["exp", "I"]
+        delta_transf_inv = ["log", "I"]
         delta_lb = np.array([0.0, -np.inf])
         delta_ub = np.array([np.inf, np.inf])
         delta_init = np.array([1.0, float(np.mean(yi))])
@@ -1045,6 +1132,20 @@ def selmodel(
         ll_kind = "trunc"
     else:
         raise ValueError(f"unsupported selection model type: {type_!r}")
+
+    # metafor: mapfun <- delta.transf.fun only when defmap=TRUE or delta.max is
+    # unbounded; otherwise .mapfun is called with fun=NA and falls back to the
+    # scaled logistic on [delta.min, delta.max].  ``truncest`` then pins the
+    # cut-point to the identity scale.
+    if defmap or np.any(np.isinf(delta_max)):
+        mapfun_arr: list[str | None] = list(delta_transf)
+        mapinvfun_arr: list[str | None] = list(delta_transf_inv)
+    else:
+        mapfun_arr = [None] * deltas
+        mapinvfun_arr = [None] * deltas
+    if type_ == "truncest":
+        mapfun_arr[1] = "I"
+        mapinvfun_arr[1] = "I"
 
     # --- delta argument (user-specified fixed values) ----------------------- #
     if delta is None:
@@ -1080,12 +1181,6 @@ def selmodel(
     # ``stepfun`` (decreasing) and ``truncest`` set their own maps above; an
     # infinite delta.max forces the exponential transform (metafor's
     # ``ddd$defmap || any(is.infinite(delta.max))`` branch).
-    if mapfun_arr is None:
-        mapfun_arr = [None] * deltas
-        mapinvfun_arr = [None] * deltas
-    if np.any(np.isinf(delta_max)):
-        mapfun_arr = ["exp"] * deltas
-        mapinvfun_arr = ["log"] * deltas
 
     if con["pval.min"] is not None:
         pval_min = float(con["pval.min"])
@@ -1160,32 +1255,14 @@ def selmodel(
 
     ll_fun = make(
         yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
-        mapfun_arr, delta_min, delta_max, decreasing, True, tau2_arg,
+        mapfun_arr, delta_min, delta_max, decreasing_fit, True, tau2_arg,
         True, con["tau2.max"], beta_arg, type_, steps_arr, alternative, pval_min,
         dofit=False,
     )
 
     # --- optimise ------------------------------------------------------------ #
     def _run_opt(fun, x0):
-        """BFGS for the unconstrained types; SLSQP for ``stepcon``.
-
-        metafor delegates ``stepcon`` to ``Rsolnp::solnp`` (an augmented
-        Lagrangian SQP solver) with the monotonicity constraint
-        ``0 <= delta[j] - delta[j+1] <= 1``; SciPy's SLSQP is the same class of
-        solver and converges to the same KKT point.
-        """
-        if type_ == "stepcon":
-            return optimize.minimize(
-                fun, x0, method="SLSQP",
-                constraints=[{
-                    "type": "ineq",
-                    "fun": lambda par: _stepcon_ineq(
-                        par, p, deltas, delta_arg, delta_min, delta_max,
-                        mapfun_arr,
-                    ),
-                }],
-                options={"maxiter": 1000, "ftol": 1e-10},
-            )
+        """BFGS on the (unconstrained) optimisation scale of every delta."""
         return optimize.minimize(
             fun, x0, method="BFGS",
             options={"gtol": 1e-9, "maxiter": 1000},
@@ -1193,12 +1270,37 @@ def selmodel(
 
     opt_res = _run_opt(ll_fun, par0)
 
+    # A delta that finished pressed against ``delta.max`` sits on a flat part
+    # of the surface (the map clamps, so the gradient is exactly zero there)
+    # and BFGS stops immediately.  That is how ``power2`` reported delta[2] =
+    # 100 with ll = 19.13 while the interior optimum is 58.24 with ll = 20.26.
+    # One restart from inside the bound is enough to escape it.
+    if (np.any(np.isnan(delta_arg)) and ll_kind == "cont"
+            and np.any(_at_delta_max(opt_res.x, p, deltas, delta_min,
+                                     delta_max, mapfun_arr, decreasing_fit))):
+        retry = np.asarray(opt_res.x, dtype=float).copy()
+        at_max = _at_delta_max(retry, p, deltas, delta_min, delta_max,
+                               mapfun_arr, decreasing_fit)
+        for j in np.flatnonzero(at_max).tolist():
+            hi = float(delta_max[j])
+            if not np.isfinite(hi):
+                continue
+            start = max(0.5 * hi, float(delta_min[j]) + 1e-6, 1e-6)
+            retry[p + 1 + j] = _mapinvfun(start, delta_min[j], delta_max[j],
+                                          mapfun_arr[j])
+        retried = _run_opt(ll_fun, retry)
+        if (np.isfinite(retried.fun)
+                and float(retried.fun) < float(opt_res.fun)):
+            opt_res = retried
+
     # The truncated / step-function likelihoods are piecewise constant in the
     # cut-point, so the score is exactly zero across whole intervals and a
     # gradient method happily stops on such a plateau; two-parameter weights
     # are flat enough to stall as well.  metafor's optim() has the same
     # weakness (its ``truncest`` and ``negexppow`` fits are not the maxima).
     # One derivative-free restart costs little and never makes the fit worse.
+    # ``stepcon`` is in the list because it shares the cumulative delta
+    # parameterisation with ``stepfun``, where every raw value is feasible.
     _restart = type_ in ("trunc", "truncest", "stepfun", "stepcon",
                          "negexppow")
     if _restart and np.any(np.isnan(delta_arg)):
@@ -1217,11 +1319,12 @@ def selmodel(
                            <= float(np.asarray(nm.fun)) else nm)
         except Exception:
             pass
+
     par_opt = opt_res.x
 
     fit = make(
         yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
-        mapfun_arr, delta_min, delta_max, decreasing, True, tau2_arg,
+        mapfun_arr, delta_min, delta_max, decreasing_fit, True, tau2_arg,
         True, con["tau2.max"], beta_arg, type_, steps_arr, alternative, pval_min,
         dofit=True,
     )
@@ -1263,7 +1366,7 @@ def selmodel(
     # Hessian of the log-likelihood evaluated on the natural scale
     ll_fun_nat = make(
         yi, vi, X, preci, subset, p, pvals, deltas, delta_hes,
-        mapfun_arr, delta_min, delta_max, decreasing, False, tau2_hes,
+        mapfun_arr, delta_min, delta_max, decreasing_fit, False, tau2_hes,
         False, con["tau2.max"], beta_hes, type_, steps_arr, alternative, pval_min,
         dofit=False,
     )
@@ -1310,14 +1413,18 @@ def selmodel(
         QM = np.nan
     QMp = float(stats.chi2.sf(QM, m)) if m > 0 else np.nan
 
-    se = np.sqrt(np.diag(vb))
+    with np.errstate(invalid="ignore"):
+        # a delta pressed against its bound gives a near-singular Hessian and
+        # hence a negative variance, exactly as in metafor (se = NaN)
+        se = np.sqrt(np.diag(vb))
     zval = beta / se
     pval = 2.0 * stats.norm.sf(np.abs(zval))
     crit = stats.norm.isf((1.0 - x.level) / 2.0)
     ci_lb = beta - crit * se
     ci_ub = beta + crit * se
 
-    se_delta = np.sqrt(np.diag(vd))
+    with np.errstate(invalid="ignore"):
+        se_delta = np.sqrt(np.diag(vd))
     zval_delta = (delta - H0_delta) / se_delta
     pval_delta = 2.0 * stats.norm.sf(np.abs(zval_delta))
     ci_lb_delta = delta - crit * se_delta
@@ -1338,7 +1445,7 @@ def selmodel(
     if not x.tau2_fix and x.method not in ("FE", "EE", "CE"):
         ll_fun_t0 = make(
             yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
-            mapfun_arr, delta_min, delta_max, decreasing, True, 0.0,
+            mapfun_arr, delta_min, delta_max, decreasing_fit, True, 0.0,
             False, con["tau2.max"], beta_arg, type_, steps_arr, alternative, pval_min,
             dofit=False,
         )
@@ -1346,7 +1453,7 @@ def selmodel(
         opt_t0 = _run_opt(ll_fun_t0, par0_t0)
         fit_t0 = make(
             yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
-            mapfun_arr, delta_min, delta_max, decreasing, True, 0.0,
+            mapfun_arr, delta_min, delta_max, decreasing_fit, True, 0.0,
             False, con["tau2.max"], beta_arg, type_, steps_arr, alternative, pval_min,
             dofit=True,
         )(opt_t0.x)

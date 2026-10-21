@@ -28,6 +28,7 @@ R_LL = {
     "beta": 18.3144458122617,
     "halfnorm": 12.7466971115375,
     "negexppow": 29.3325688590139,
+    "power2": 20.2552501917326,
     "truncest": 13.5676238719807,
     "trunc": 7.7328292372705,
     "stepcon": 12.0055255810418,
@@ -88,6 +89,91 @@ def test_step_selection_models_with_steps(type_):
 def test_unknown_type_is_rejected():
     with pytest.raises(ValueError, match="unknown 'type'"):
         ma.selmodel(base_fit(), type="nope")
+
+
+def test_power2_matches_r():
+    """The two-parameter power weight: R 4.6.1 / metafor 5.2-1.
+
+    R reaches ll = 20.2552501917 with delta = (0.00046339376644487,
+    58.2429811035974), b = -0.0417265.  Getting there needs three things that
+    an earlier version got wrong: metafor's default *scaled-logistic* delta
+    map (not ``exp``), a finite ``exp(tau2)`` and a non-NaN objective.
+    """
+    f = fit(type="power2")
+    assert np.isfinite(f.ll)
+    assert f.ll >= R_LL["power2"] - 1e-9
+    delta = np.asarray(f.delta, dtype=float)
+    assert delta[0] == pytest.approx(0.00046339376644487, abs=1e-4)
+    assert delta[1] == pytest.approx(58.2429811035974, abs=1e-1)
+    assert float(np.asarray(f.b)[0]) == pytest.approx(-0.0417265, abs=1e-3)
+
+
+def test_two_parameter_families_match_r():
+    """halfnorm2 / negexp2 / logistic2 from R 4.6.1 / metafor 5.2-1.
+
+    These are the families whose delta map was hardest to get wrong; the
+    reference log-likelihoods come from the same run as the others.
+    """
+    r_ll = {"halfnorm2": 13.2641641579596, "negexp2": 19.2738913495441,
+            "logistic2": 18.8572521113785}
+    for type_, ref in r_ll.items():
+        f = fit(type=type_)
+        assert np.isfinite(f.ll), type_
+        assert f.ll >= ref - 1e-9, (type_, f.ll, ref)
+        assert float(np.asarray(f.delta)[1]) > 50.0, type_
+
+
+def test_power_weights_stay_finite_at_extreme_exponents():
+    """``(1-x)**e / (1-s0)**e`` is 0/0 for a large positive e and inf/inf for
+    a negative one; either way the NaN used to reach the optimiser."""
+    from pimeta.selmodel import _pow_ratio
+
+    for expo in (-5000.0, -100.0, 0.0, 100.0, 5000.0):
+        for x in (0.0, 0.001, 0.5, 0.999999, 1.0):
+            value = float(_pow_ratio(x, 0.05, expo))
+            assert np.isfinite(value), (expo, x, value)
+            assert value >= 0.0
+    # where the direct form is finite, the log-space form agrees with it
+    direct = (1.0 - 0.3) ** 12.0 / (1.0 - 0.05) ** 12.0
+    assert float(_pow_ratio(0.3, 0.05, 12.0)) == pytest.approx(direct, rel=1e-12)
+
+
+def test_objective_never_returns_nan():
+    """A NaN objective makes the optimiser keep the point it is on."""
+    from pimeta.selmodel import _NAN_PENALTY, _objective
+
+    assert np.isfinite(_objective(float("nan")))
+    assert _objective(float("nan")) == _NAN_PENALTY
+    assert _objective(float("inf")) == _NAN_PENALTY
+    assert _objective(-3.5) == 3.5
+
+
+def test_delta_map_is_metafor_default_scaled_logistic():
+    """Every smooth family has a *finite* ``delta.max``, so metafor's
+    ``.mapfun`` is called with ``fun=NA`` and maps the optimisation scale onto
+    ``[delta.min, delta.max]`` through ``lb + (ub - lb) * plogis(x)``.
+
+    Using the exponential map here (as an earlier version did) changes the
+    surface and pulls the optimum to ``delta.max``: ``power2`` stopped at
+    delta = (0.0014, 100) with ll = 19.13 instead of (0.00046, 58.24) with
+    ll = 20.2552.
+    """
+    from pimeta.selmodel import _mapfun, _mapinvfun
+
+    # unbounded default (metafor's `delta.transf.fun`, only used when
+    # delta.max is infinite or control={'defmap': True})
+    assert float(_mapfun(0.0, 0.0, 100.0, "exp")) == pytest.approx(1.0)
+    assert float(_mapfun(np.log(58.24), 0.0, 100.0, "exp")) == pytest.approx(58.24)
+    assert float(_mapinvfun(58.24, 0.0, 100.0, "log")) == pytest.approx(np.log(58.24))
+
+    # the map actually used for the smooth families
+    assert float(_mapfun(0.0, 0.0, 100.0, None)) == pytest.approx(50.0)
+    assert float(_mapfun(np.inf, 0.0, 100.0, None)) == pytest.approx(100.0)
+    assert float(_mapfun(-np.inf, 0.0, 100.0, None)) == pytest.approx(0.0)
+    assert float(_mapinvfun(50.0, 0.0, 100.0, None)) == pytest.approx(0.0)
+    # lb == 0 and ub == 1 collapses to the plain logit (stepcon)
+    assert float(_mapfun(0.0, 0.0, 1.0, None)) == pytest.approx(0.5)
+    assert float(_mapinvfun(0.5, 0.0, 1.0, None)) == pytest.approx(0.0)
 
 
 def test_type_is_prefix_matched():
