@@ -952,8 +952,9 @@ def selmodel(
     # metafor keeps two separate things: ``delta.transf.fun`` (the map used when
     # the parameter is unbounded) and ``mapfun`` (the map actually used).  The
     # latter stays ``NA`` -- i.e. the default ``lb + (ub - lb) * plogis(x)`` --
-    # unless ``delta.max`` contains an infinity or the type forces it through
-    # ``control={'defmap': TRUE}`` (``stepfun`` with ``decreasing=TRUE``).
+    # unless ``delta.max`` contains an infinity or the type forces the unbounded
+    # map through its own flag (``stepfun`` with ``decreasing=TRUE`` and
+    # ``stepcon``, which share the cumulative parameterisation).
     # Every smooth family here has a finite ``delta.max`` of 100, so the map is
     # the *logistic* one, not ``exp``.
     delta_transf: list[str | None] = [None] * 0
@@ -1120,10 +1121,10 @@ def selmodel(
     else:
         raise ValueError(f"unsupported selection model type: {type_!r}")
 
-    # metafor: mapfun <- delta.transf.fun only when defmap=TRUE or delta.max is
-    # unbounded; otherwise .mapfun is called with fun=NA and falls back to the
-    # scaled logistic on [delta.min, delta.max].  ``truncest`` then pins the
-    # cut-point to the identity scale.
+    # metafor: mapfun <- delta.transf.fun only when the type forces the
+    # unbounded map or delta.max is infinite; otherwise .mapfun is called with
+    # fun=NA and falls back to the scaled logistic on [delta.min, delta.max].
+    # ``truncest`` then pins the cut-point to the identity scale.
     if defmap or np.any(np.isinf(delta_max)):
         mapfun_arr: list[str | None] = list(delta_transf)
         mapinvfun_arr: list[str | None] = list(delta_transf_inv)
@@ -1166,8 +1167,7 @@ def selmodel(
 
     # mapfun / mapinvfun (default: scaled-logistic onto [delta.min, delta.max]).
     # ``stepfun`` (decreasing) and ``truncest`` set their own maps above; an
-    # infinite delta.max forces the exponential transform (metafor's
-    # ``ddd$defmap || any(is.infinite(delta.max))`` branch).
+    # infinite delta.max forces the exponential transform, as in metafor.
 
     if con["pval.min"] is not None:
         pval_min = float(con["pval.min"])

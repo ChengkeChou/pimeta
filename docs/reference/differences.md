@@ -48,11 +48,13 @@ where the multi-block R console layout is not reproduced byte-for-byte.
 | `rma`, `rma.uni`, τ² estimators | < 1e-12 | same iterative schemes |
 | `rma.mv`, `rma.glmm` | < 1e-6 | different optimiser (`scipy.optimize` vs `optim`), same objective |
 | `rma.ls` coefficients | ~1e-5 | see below |
+| `selmodel` (smooth families) | < 1e-6 | same likelihood, different quadrature tolerance |
+| `selmodel` (`truncest`, `negexppow`) | ours is higher | R's `optim()` stalls on a plateau; see below |
 | `rma.mv` diagnostics / profile | ~1e-8 | finite-difference Hessian and grid refits |
 | `netmeta`, `netmetareg`, `netmeasures` | < 1e-6 … 1e-8 | same algebra, different linear-algebra backend |
 | `transf.*`, `fmt.*` | < 1e-10 | closed form |
 
-**`rma.ls` is the one place pimeta reports a better optimum than R.** metafor
+**`rma.ls` is the clearest place pimeta reports a better optimum than R.** metafor
 stops `optim()` on a relative *function* tolerance, so the gradient at its
 reported estimate sits around 1e-4 (log link) to 1e-3 (identity link). pimeta
 adds a damped Newton polish on the free scale parameters and drives the gradient
@@ -60,6 +62,15 @@ to about 1e-9. Our log-likelihood is therefore always ≥ R's, and the scale
 coefficients α can differ in the fifth significant digit. Both are valid local
 optima; ours is the more converged one. The suite pins this as
 `r.ll >= ref.ll - 1e-9` instead of exact equality.
+
+The same caveat applies to `selmodel`. The truncated and step-function
+likelihoods are piecewise constant in the cut-point, so the score is exactly
+zero across whole intervals and `optim()` stops on such a plateau; metafor's own
+`truncest` and `negexppow` fits are not the maxima of their own objectives.
+pimeta adds one derivative-free restart, so its log-likelihood is ≥ R's for
+these types as well. The smooth families (`beta`, `halfnorm`, `negexp`,
+`logistic`, `power`, the `*1`/`*2` variants, `stepfun`, `stepcon`) agree to
+about 1e-6, the residual being R's adaptive-quadrature tolerance.
 
 ## 3. Deliberate non-portings
 

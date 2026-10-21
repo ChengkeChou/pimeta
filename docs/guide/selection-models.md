@@ -106,6 +106,26 @@ ma.plot_selprofile(prof)
 > grid point; pimeta re-estimates it, which is the proper profile likelihood.
 > The curve can differ in the third or fourth digit.
 
+### Convergence and the delta parameterisation
+
+metafor optimises each `delta` through a map onto `[delta.min, delta.max]`.
+There are two of them — `delta.transf.fun` (the exponential) and the `mapfun`
+that is actually applied — and the exponential is only used when `delta.max`
+is unbounded or the type forces it. Every smooth family has `delta.max = 100`,
+so the map is the **scaled logistic** `lb + (ub - lb) * plogis(x)`.
+`stepfun(decreasing=True)` and `stepcon` use the cumulative parameterisation
+instead, which keeps the step weights monotone by construction; pimeta does the
+same for both, so the two agree exactly. Setting `control={"delta.max": float("inf")}`
+forces the exponential map, exactly as in R.
+
+The truncated and step-function likelihoods are piecewise constant in the
+cut-point: the score is exactly zero across whole intervals and `optim()` stops
+on such a plateau. R's own `truncest` and `negexppow` fits are not the maxima of
+their objectives. pimeta adds one derivative-free restart after the gradient
+run, so its log-likelihood is ≥ R's for those types. The smooth families agree
+to about $10^{-6}$ (the residual is R's adaptive-quadrature tolerance). See
+[Differences from R](../reference/differences.md).
+
 ## Which one?
 
 | Question | Model |

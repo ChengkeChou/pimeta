@@ -240,15 +240,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - **`selmodel()` used the wrong delta map, so every smooth family could stop
   short of the maximum.** metafor keeps two maps apart: `delta.transf.fun` (the
-  exponential, used only when `delta.max` contains an infinity or
-  `control={'defmap': TRUE}`) and the `mapfun` that is actually applied, which
-  is `NA` for every family with a finite `delta.max` and therefore falls back to
-  the scaled logistic `lb + (ub - lb) * plogis(x)`. pimeta used the exponential
-  everywhere. On the 20-study reference data this left `power2` at
-  delta = (0.0014, 100) with ll = 19.13 instead of R's (0.00046, 58.24) with
-  ll = 20.2552; `beta`, `halfnorm`, `negexp`, `logistic`, `power`, the `*1` and
-  `*2` families, `negexppow` and `trunc` were affected the same way. `stepcon`
-  now also uses metafor's `delta.max = 1` instead of 100.
+  exponential, used only when `delta.max` contains an infinity or the type
+  forces it) and the `mapfun` that is actually applied, which is `NA` for every
+  family with a finite `delta.max` and therefore falls back to the scaled
+  logistic `lb + (ub - lb) * plogis(x)`. pimeta used the exponential everywhere.
+  On the 20-study reference data this left `power2` at delta = (0.0014, 100) with
+  ll = 19.13 instead of R's (0.00046, 58.24) with ll = 20.2552; `beta`,
+  `halfnorm`, `negexp`, `logistic`, `power`, the `*1` and `*2` families,
+  `negexppow` and `trunc` were affected the same way.
 - **`selmodel()` no longer produces `ll = nan` from an overflowing weight.** The
   power-family ratio `(1-x)**e / (1-s0)**e` is evaluated as a single `exp` of a
   difference of logarithms (the direct form is `0/0` at `s0 = 1` and `inf/inf`

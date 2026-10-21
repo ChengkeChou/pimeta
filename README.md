@@ -323,11 +323,13 @@ byte-for-byte.
 | `rma`, `rma.uni`, τ² estimators | < 1e-12 | same iterative schemes |
 | `rma.mv`, `rma.glmm` | < 1e-6 | different optimiser (`scipy.optimize` vs `optim`), same objective |
 | `rma.ls` coefficients | ~1e-5 | see below |
+| `selmodel` (smooth families) | < 1e-6 | same likelihood, different quadrature tolerance |
+| `selmodel` (`truncest`, `negexppow`) | ours is higher | R's `optim()` stalls on a plateau; see below |
 | `rma.mv` diagnostics / profile | ~1e-8 | finite-difference Hessian and grid refits |
 | `netmeta`, `netmetareg`, `netmeasures` | < 1e-6 … 1e-8 | same algebra, different linear-algebra backend |
 | `transf.*`, `fmt.*` | < 1e-10 | closed form |
 
-**`rma.ls` is the one place pimeta reports a *better* optimum than R.** metafor
+**`rma.ls` is the clearest place pimeta reports a better optimum than R.** metafor
 stops `optim()` on a relative *function* tolerance, so the gradient at its
 reported estimate sits around $10^{-4}$ (log link) to $10^{-3}$ (identity link).
 pimeta adds a damped Newton polish on the free scale parameters and drives the
@@ -335,6 +337,15 @@ gradient to about $10^{-9}$. Our log-likelihood is therefore always
 $\ge$ R's, and the scale coefficients $\alpha$ can differ in the fifth
 significant digit. Both are valid local optima; ours is the more converged one.
 The suite pins this as `r.ll >= ref.ll - 1e-9` instead of exact equality.
+
+The same caveat applies to `selmodel`. The truncated and step-function
+likelihoods are piecewise constant in the cut-point, so the score is exactly
+zero across whole intervals and `optim()` stops on such a plateau — metafor's own
+`truncest` and `negexppow` fits are not the maxima of their own objectives.
+pimeta adds one derivative-free restart, so its log-likelihood is $\ge$ R's for
+these types too. The smooth families (`beta`, `halfnorm`, `negexp`, `logistic`,
+`power`, the `*1`/`*2` variants, `stepfun`, `stepcon`) agree to about $10^{-6}$,
+the residual being R's adaptive-quadrature tolerance.
 
 ### 3. Deliberate non-portings
 
@@ -682,16 +693,25 @@ x = ma.update_rma(ma.rma(yi, vi), mods=z)
 | `rma`、`rma.uni`、τ² 估计 | < 1e-12 | 同一套迭代格式 |
 | `rma.mv`、`rma.glmm` | < 1e-6 | 优化器不同（`scipy.optimize` vs `optim`），目标函数相同 |
 | `rma.ls` 的 α 系数 | ~1e-5 | 见下 |
+| `selmodel`（平滑家族） | < 1e-6 | 同一个似然，自适应积分容差不同 |
+| `selmodel`（`truncest`、`negexppow`） | 我们的更高 | R 的 `optim()` 停在平台区；见下 |
 | `rma.mv` 诊断量 / profile | ~1e-8 | 数值 Hessian 与网格重拟合 |
 | `netmeta`、`netmetareg`、`netmeasures` | < 1e-6 … 1e-8 | 同一套代数，线性代数后端不同 |
 | `transf.*`、`fmt.*` | < 1e-10 | 闭式 |
 
-**`rma.ls` 是唯一一处我们的解比 R 更收敛。** metafor 用相对**函数值**
+**`rma.ls` 是最明显的一处：我们的解比 R 更收敛。** metafor 用相对**函数值**
 容差停 `optim()`，所以它报告的估计处梯度在 $10^{-4}$（log 连接）到
 $10^{-3}$（identity 连接）量级。pimeta 额外做了一步阻尼牛顿抛光，把梯度压到
 $10^{-9}$ 左右。因此我们的对数似然**恒 ≥ R**，α 系数可能在第五位有效数字上
 不同。两者都是合法的局部最优，我们的是收敛更彻底的那个。测试里钉的是
 `r.ll >= ref.ll - 1e-9`，而不是精确相等。
+
+`selmodel` 也有同样的情形。截尾与阶梯类型的似然对切点是**分段常数**，整段区间
+上得分函数恰好为零，`optim()` 就停在这样的平台上——metafor 自己的 `truncest`
+与 `negexppow` 结果并非其目标函数的极大点。pimeta 在此基础上加了一次导数
+无关的重启，所以这两类模型的对数似然也**恒 ≥ R**。平滑家族（`beta`、
+`halfnorm`、`negexp`、`logistic`、`power`、`*1`/`*2` 变体、`stepfun`、
+`stepcon`）与 R 的差异在 $10^{-6}$ 量级，残差来自 R 自适应积分的容差。
 
 #### 三、故意不移植的部分
 
