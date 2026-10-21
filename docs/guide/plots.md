@@ -77,8 +77,8 @@ ma.plot(ma.profile_selmodel(fit_sel))
 ## Headless and file output
 
 The backend is forced to `Agg` when no display is available, so scripts and CI
-never block. `filename=` accepts anything matplotlib's `savefig` understands
-(`.png`, `.pdf`, `.svg`, …).
+never block. `filename=` accepts anything matplotlib's `savefig` understands —
+.png, .pdf, .svg and the rest.
 
 ```python
 import pimeta as ma

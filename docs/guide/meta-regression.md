@@ -85,7 +85,7 @@ ma.drapery(r)       # shaded likelihood surface of the pooled estimate
 ## As a scikit-learn estimator
 
 The same model is available with the estimator protocol, which unlocks
-`Pipeline`, `GridSearchCV` and `cross_val_score`:
+scikit-learn's Pipeline, GridSearchCV and cross_val_score:
 
 ```python
 from pimeta.interop import MetaRegressor

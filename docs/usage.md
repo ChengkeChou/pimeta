@@ -54,8 +54,8 @@ Q             = 22.7202 (df=9, p=0.0069)
 ```
 
 `r.b` is always an array (even for an intercept-only model), so read it with
-`float(r.b[0])`. The field names mirror R's `$` exactly: `r$b` → `r.b`,
-`r$ci.lb` → `r.ci_lb`, `r$tau2` → `r.tau2`.
+`float(r.b[0])`. The field names mirror R's `$` exactly, so r$b becomes r.b,
+r$ci.lb becomes r.ci_lb and r$tau2 becomes r.tau2.
 
 ## 2. Where the data comes from
 

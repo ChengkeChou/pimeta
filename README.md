@@ -52,40 +52,64 @@ r.weights, r.fitted, r.residuals              # R: r$weights, r$fitted, r$residu
 ## What is covered
 
 ### Effect sizes — `escalc()`
-`RR`, `OR`, `RD`, `AS`, `PETO`, `IRR`, `IRS`, `IRSD`, `MN`, `SMN`,
-`MRAW`, `SMCC`, `MD`, `SMD`, `SMDH`, `ROM`, `RPB`, `RBIS`, `D2OR`, `COR`, `UCOR`,
-`ZCOR`, `ZPCOR`, `PR`, `PLN`, `PLO`, `PAS`, `PFT`, `PRAW`, `PD` — plus cell
-continuity corrections (`add`, `to = "only0" | "all" | "IF0"`) and `drop00`.
+
+```text
+ratios        RR     OR     RD     AS     PETO
+incidence     IRR    IRS    IRSD
+means         MN     SMN    MRAW   SMCC   MD     SMD    SMDH   ROM
+correlation   RPB    RBIS   D2OR   COR    UCOR   ZCOR   ZPCOR  PR
+proportions   PLN    PLO    PAS    PFT    PRAW   PD
+```
+
+Cell-continuity corrections: add, to = "only0" | "all" | "IF0", drop00.
 
 ### Pooling and heterogeneity
-- Fixed-effect and random-effects (`common` / `random`) pooling
-- τ² estimators: `DL`, `HE`, `HS`, `SJ`, `ML`, `REML`, `PM`, `EB`, `GENQ`,
-  `GENQM`, `QGENQ`, `QGENQM`
-- Hartung–Knapp adjustment, Knapp–Hartung (`test = "knha"`, `"adhoc"`)
-- Prediction intervals, `QE`/`I²`/`H²`/`R²`, `QE`-based CIs, profile-likelihood τ² CI
+
+- Fixed-effect and random-effects pooling (common / random)
+- τ² estimators: DL, HE, HS, SJ, ML, REML, PM, EB, GENQ, GENQM, QGENQ, QGENQM
+- Hartung–Knapp adjustment / Knapp–Hartung (test = "knha" or "adhoc")
+- Prediction intervals, QE / I² / H² / R², QE-based CIs, profile-likelihood τ² CI
 
 ### High-level drivers (R-function parity)
-`rma()`, `rma.uni` (`rma_uni`), `rma.mv` (`rma_mv`), `rma.glmm` (`rma_glmm`),
-`rma.peto`, `rma.mh`, `rma.uni.selmodel`, `rma.ls` (`rma(..., scale=~z)`),
-`metagen`, `metabin`, `metacont`,
-`metacor`, `metainc`, `metaprop`, `metarate`, `metamean`, `metacum`, `metainf`,
-`metareg`, `trimfill`, `regtest`, `metabias`, `begg_test`, `funnel`, `forest`,
-`labbe`, `radial`, `baujat`, `leave1out`, `influence`, `cooks_distance`,
-`rstudent`, `hatvalues`, `gosh`, `fsn`, `permutest`, `tes`, `vif`,
-`profile_rma`, `profile_rmamv`, `profile_rma_ls`, `confint_rma_ls`.
 
-`leave1out` / `influence` / `confint` results support R's ``x[i]``,
-`head(x)` and `tail(x)` idioms natively: `x[0:3]`, `x[2]`, `x[[1, 3]]` and
-`ma.head(x, 6)` / `ma.tail(x, 6)`.  R's `generic.class` method names
-(`print.rma.uni`, `cooks.distance.rma.mv`, `[.list.rma`, ...) are not valid
-Python identifiers, but `getattr(ma, "cooks.distance.rma.mv")` resolves to the
-implementing callable — see `ma.r_methods()` for the full 66-entry map.
+```text
+pooling      rma          rma.uni        rma.mv          rma.glmm
+             rma.peto     rma.mh         rma.uni.selmodel
+             rma.ls       (reached through rma(..., scale=~z))
+meta         metagen      metabin        metacont        metacor
+             metainc      metaprop       metarate        metamean
+             metacum      metainf        metareg
+bias         trimfill     regtest        metabias        begg_test
+plots        forest       funnel         labbe           radial
+             baujat       leave1out      influence       cooks_distance
+             rstudent     hatvalues      gosh            fsn
+             permutest    tes            vif
+profile      profile_rma  profile_rmamv  profile_rma_ls  confint_rma_ls
+```
 
-`rma.peto` / `rma.mh` carry metafor's own methods: `weights`, `cumul`,
-`leave1out`, `rstandard`, `rstudent`, `confint` and `qqnorm` all accept the
-fitted object, and `rma.mv` fits support `hatvalues`, `weights`, `rstandard`,
-`cooks_distance`, `dfbetas`, `rstudent`, `ranef`, `robust`, `confint`,
-`predict`, `qqnorm` and `profile_rmamv` (metafor's `profile.rma.mv`).
+`leave1out`, `influence` and `confint` results support R's `x[i]`, `head(x)`
+and `tail(x)` idioms natively:
+
+```python
+loo = ma.leave1out(yi, vi)
+
+loo[0:3]        # every per-study vector sliced together
+loo[2]          # a length-1 result (R semantics, not a bare scalar)
+loo[[1, 3]]     # selected rows
+loo[mask]       # boolean mask
+ma.head(loo, 6); ma.tail(loo, 6)
+```
+
+R's generic.class method names — print.rma.uni, cooks.distance.rma.mv,
+[.list.rma — are not valid Python identifiers, but
+`getattr(ma, "cooks.distance.rma.mv")` resolves to the implementing callable.
+`ma.r_methods()` lists all 66 mappings.
+
+rma.peto and rma.mh carry metafor's own methods: weights, cumul, leave1out,
+rstandard, rstudent, confint and qqnorm all accept the fitted object. rma.mv
+fits support hatvalues, weights, rstandard, cooks_distance, dfbetas, rstudent,
+ranef, robust, confint, predict, qqnorm and `profile_rmamv` (metafor's
+`profile.rma.mv`).
 
 ### Command line
 
@@ -103,52 +127,87 @@ Output is TSV on stdout, `--format csv|json` or `-o file.csv` otherwise.  See
 [the guide](docs/guide/cli.md).
 
 ### Network meta-analysis (`netmeta`)
-`netmeta`, `netmetabin`, `netcomb`, `discomb`, `netcomplex`, `netmetareg`,
-`netmeasures`, `netrank` (P-scores), `netimpact`, `netpath`,
-`netsplit`, `netmatrix`, `netcomparison`, `netbind`, `netcontrib`,
-`netdistance`, `netheat`, `nettable`, `netgraph`, `netposet`, `hasse`,
-`rankogram`, `decomp_design`, `invmat`, `hatmatrix`, `comps`, `combinations`,
-`treats`, `vikor`, `subgroup`, `crossnma2netmeta`, `gemtc2netmeta`, `createC`.
+
+```text
+core         netmeta       netmetabin     netcomb        discomb
+             netcomplex    netcomplexity  netmetareg     netmeasure
+ranking      netrank       netimpact
+splitting    netsplit      netpath        netcontrib
+matrices     netmatrix     netcomparison  netbind        nettable
+plots        netheat       netgraph       netposet       hasse
+             rankogram
+helpers      decomp_design invmat         hatmatrix      comps
+             combinations  treats         vikor          subgroup
+             crossnma2netmeta             gemtc2netmeta  createC
+```
 
 ### Publication bias & sensitivity
-`regtest` (Egger), `begg_test` (Begg rank test), `metabias` — all nine `meta`
-tests: `Begg`, `Egger`, `Thompson`, `Schwarzer`, `Harbord`, `Peters`, `Deeks`,
-`Pustejovsky`, `Macaskill` — `trimfill` (L0 / R0 / Q0), `fsn`, `funnel`,
-`gosh`, `influence`, `baujat`, `leave1out`, `permutest`.
+
+All nine `meta` tests — Begg, Egger, Thompson, Schwarzer, Harbord, Peters,
+Deeks, Pustejovsky, Macaskill — are available through `metabias`, with `regtest`
+(Egger) and `begg_test` (Begg rank test) as the named entry points.
+
+```text
+tests        regtest       begg_test      metabias
+adjustment   trimfill      fsn            gosh
+sensitivity  influence     baujat         leave1out     permutest
+plots        funnel
+```
 
 ### Reporting helpers (`meta` package parity)
-`cidprop`, `cilayout`, `format_ci`, `forest_dims`, `longarm`, `addpoly`,
-`reporter`, `rob`, `aggregate_escalc`, `cbind_escalc`, `rbind_escalc`,
-`estimates`, `emmprep`, `points_regplot`.
+
+```text
+formatting   cidprop   cilayout   format_ci   forest_dims
+layout       longarm   addpoly    points_regplot
+reporting    reporter  rob        estimates   emmprep
+combining    aggregate_escalc  cbind_escalc  rbind_escalc
+```
 
 ### S3-style generics
-`coef`, `vcov`, `fitted`, `residuals`, `logLik`, `deviance`, `nobs`, `formula`,
-`AIC`, `BIC`, `weights`, `sigma`, `df_residual`, `model_matrix`, `simulate`,
-`confint`, `predict`, `hatvalues`, `hatvalues_rma`, `dfbetas`, `dfbetas_rma`,
-`rstandard`, `rstandard_rma`, `ranef`, `summary`, `summary_text`,
-`print_summary`, `plot`.
+
+```text
+model        coef      vcov        fitted      residuals   logLik
+             deviance  nobs        formula     model_matrix
+             sigma     df_residual AIC         BIC
+weights      weights   simulate
+inference    confint   predict     hatvalues   dfbetas     rstandard
+             ranef     summary     plot
+```
 
 ### Figures
-`forest`, `funnel`, `radial`, `labbe`, `llplot`, `bubble`, `drapery`,
-`qqnorm_rma`, `plot_baujat`, `plot_gosh`, `plot_influence` (metafor's
-`plot.infl.rma.uni`), `plot_permutest` (metafor's `plot.permutest.rma.uni`),
-`plot_selprofile` (metafor's `plot.profile.rma`), `plot_mv_profile`
-(metafor's `plot.profile.rma` for `rma.mv` variance components), `heatplot`,
-`regplot`,
-`netgraph`, `netheat`, `rankogram`, `hasse`,
-`netposet`, `traffic_light` — plus `plot(x, which=...)` to reach all of them
-from a fitted object.
+
+```text
+metafor      forest    funnel     labbe      radial     llplot
+             bubble    drapery    regplot    heatplot
+             qqnorm_rma          plot_baujat   plot_gosh
+             plot_influence      plot_permutest
+             plot_selprofile     plot_mv_profile
+netmeta      netgraph  netheat    rankogram  hasse
+             netposet  traffic_light
+```
+
+`plot(x, which=...)` reaches all of them from a fitted object.
 
 ### Readers
-`read_rm5`, `read_cdir`, `read_mtv` — parse Cochrane RevMan `.rm5` files and
+
+`read_rm5`, `read_cdir` and `read_mtv` parse Cochrane RevMan `.rm5` files and
 Cochrane `.cdir` / `.mtv` exports directly into analysis-ready objects.
 
 ### Transforms (all 58 of `metafor::transf.*`)
-`transf_logit`, `transf_ilogit`, `transf_probit`, `transf_arcsin`,
-`transf_ztor`, `transf_ztor2`, `transf_dtocliffd`,
-`transf_pft`, `transf_ipft`, `transf_ahw`, `transf_iahw`, `transf_abt`,
-`transf_iabt`, `transf_rpbtod`, `transf_dtou1`, `transf_dtou2`,
-`transf_dtou3`, and the `_int` / `_mode` variants.
+
+```text
+logit        transf_logit        transf_ilogit       transf_probit
+             transf_arcsin
+Fisher z     transf_ztor         transf_ztor2        transf_rtor
+             transf_dtocliffd
+proportions  transf_pft          transf_ipft
+             transf_ahw          transf_iahw
+             transf_abt          transf_iabt
+             transf_rpbtod
+d to u       transf_dtou1        transf_dtou2        transf_dtou3
+```
+
+Each has an `_int` and a `_mode` variant where R provides one.
 
 ---
 
@@ -213,15 +272,20 @@ print(ma.fsn(d.yi, d.vi, type="Rosenthal").fsnum)
 
 ## Requirements
 
-- Python ≥ 3.10 (tested on 3.10 – 3.13)
-- `numpy` ≥ 1.24, `scipy` ≥ 1.10, `matplotlib` ≥ 3.7
-- `pandas` is optional — only needed for DataFrame-shaped output
-  (`pip install pimeta[pandas]`)
+```text
+Python       >= 3.10        tested on 3.10 - 3.13
+numpy        >= 1.24
+scipy        >= 1.10
+matplotlib   >= 3.7
+pandas       optional       DataFrame-shaped output only
+```
 
-CI runs the suite on Python 3.12 with `numpy` 2.5, `scipy` 1.18 and
-`matplotlib` 3.11; the same example script passes locally with `numpy` 1.26 /
-`scipy` 1.16, so both sides of the NumPy 2.0 boundary are covered. Figures use
-the headless `Agg` backend and never need a display.
+Install the optional table backend with `pip install pimeta[pandas]`.
+
+CI runs the suite on Python 3.12 with numpy 2.5, scipy 1.18 and matplotlib
+3.11; the same example script passes locally with numpy 1.26 / scipy 1.16, so
+both sides of the NumPy 2.0 boundary are covered. Figures use the headless
+`Agg` backend and never need a display.
 
 ---
 
@@ -466,9 +530,14 @@ ma.interop.protocol_report(r)
 ma.interop.available()      # which optional backends are installed
 ```
 
-Backends are opt-in: `pip install pimeta[pandas]`, `pimeta[polars]`,
-`pimeta[arrow]`, `pimeta[sklearn]`, `pimeta[statsmodels]`, `pimeta[xarray]`,
-`pimeta[networkx]` — or `pimeta[interop]` for all of them.
+Backends are opt-in. Install one (`pip install pimeta[pandas]`) or all of them
+(`pip install pimeta[interop]`).
+
+```text
+pimeta[pandas]        pimeta[polars]      pimeta[arrow]
+pimeta[sklearn]       pimeta[statsmodels] pimeta[xarray]
+pimeta[networkx]      pimeta[interop]
+```
 
 ### Data frames and formulas
 
@@ -709,9 +778,9 @@ $10^{-9}$ 左右。因此我们的对数似然**恒 ≥ R**，α 系数可能在
 `selmodel` 也有同样的情形。截尾与阶梯类型的似然对切点是**分段常数**，整段区间
 上得分函数恰好为零，`optim()` 就停在这样的平台上——metafor 自己的 `truncest`
 与 `negexppow` 结果并非其目标函数的极大点。pimeta 在此基础上加了一次导数
-无关的重启，所以这两类模型的对数似然也**恒 ≥ R**。平滑家族（`beta`、
-`halfnorm`、`negexp`、`logistic`、`power`、`*1`/`*2` 变体、`stepfun`、
-`stepcon`）与 R 的差异在 $10^{-6}$ 量级，残差来自 R 自适应积分的容差。
+无关的重启，所以这两类模型的对数似然也**恒 ≥ R**。平滑家族——beta、halfnorm、
+negexp、logistic、power、`*1`/`*2` 变体、stepfun、stepcon——与 R 的差异在
+$10^{-6}$ 量级，残差来自 R 自适应积分的容差。
 
 #### 三、故意不移植的部分
 
@@ -800,9 +869,12 @@ ma.interop.protocol_report(r)   # 这个对象支持哪些协议
 ma.interop.available()          # 装了哪些可选后端
 ```
 
-按需安装后端：`pip install pimeta[pandas]`、`pimeta[polars]`、`pimeta[arrow]`、
-`pimeta[sklearn]`、`pimeta[statsmodels]`、`pimeta[xarray]`、`pimeta[networkx]`，
-或一次装齐 `pimeta[interop]`。
+按需安装后端：`pip install pimeta[pandas]` 或一次装齐 `pimeta[interop]`。
+
+```text
+pimeta[pandas]   pimeta[polars]   pimeta[arrow]   pimeta[sklearn]
+pimeta[statsmodels]   pimeta[xarray]   pimeta[networkx]   pimeta[interop]
+```
 
 **数据框与公式。** 所有吃数据的入口都支持 **frame + 列名**，`mods` 还额外支持
 R 风格公式，R 代码不用手工拆列：

@@ -240,18 +240,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - **`netmeta.py` is down to 2,300 lines, from 7,088.** The ten zero-dependency
   sections — everything that only *reads* a fitted object — now live in their
-  own modules under `pimeta/nma/`: `splitting` (`netsplit`), `league`
-  (`netleague`), `pairwise_table` (`netpairwise`), `complexity`
-  (`netcomplexity`, `netcomplex`), `convert` (`crossnma2netmeta`,
-  `gemtc2netmeta`), `matrix` (`netmatrix`, `netcomparison`, `netbind`), `paths`
-  (`netpath`), `labels` (`treats`, R's `abbreviate`), `ranking` (`vikor`) and
-  `tables` (`subgroup`, `nettable`). `pimeta.netmeta` re-exports all of them, so
-  `pimeta.netmeta.netsplit` and `pimeta.nma.splitting.netsplit` are the same
-  object and not one import path changed; `pimeta/nma/__init__.py` carries the
-  map. What remains in `netmeta.py` is the fitting code plus `netmetareg`, the
-  heat matrix and the `createC`/`invmat`/`hatmatrix` aliases. The split was
-  done by AST span rather than by hand, and the whole suite passed without a
-  single test edit.
+  own modules under `pimeta/nma/`:
+
+  ```text
+  splitting       netsplit          league         netleague
+  pairwise_table  netpairwise       complexity     netcomplex(ity)
+  convert         crossnma2netmeta  gemtc2netmeta  matrix   netmatrix
+                  netcomparison     netbind        paths    netpath
+  labels          treats            ranking        vikor
+  tables          subgroup          nettable
+  ```
+
+  `pimeta.netmeta` re-exports all of them, so `pimeta.netmeta.netsplit` and
+  `pimeta.nma.splitting.netsplit` are the same object and not one import path
+  changed; `pimeta/nma/__init__.py` carries the map. What remains in
+  `netmeta.py` is the fitting code plus `netmetareg`, the heat matrix and the
+  `createC`/`invmat`/`hatmatrix` aliases. The split was done by AST span rather
+  than by hand, and the whole suite passed without a single test edit.
+- **The README no longer enumerates names as comma-separated inline code.**
+  Runs such as `` `RR`, `OR`, `RD`, ... `` reorder badly in renderers that treat
+  `<code>` as an independent inline box: the commas stay put and the identifiers
+  drift to the end of the paragraph, which made the "What is covered" section
+  read as a string of commas. Those lists are now fenced `text` blocks (and, in
+  the Requirements section, a table), and
+  `tests/test_docs.py::test_no_comma_separated_runs_of_inline_code` keeps them
+  that way.
 
 ### Fixed
 

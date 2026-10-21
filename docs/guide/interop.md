@@ -80,8 +80,8 @@ and takes precedence.
 
 The class does **not** import scikit-learn: it implements the duck-typed
 contract, so it stays a plain Python object when sklearn is absent and gains
-`clone`, `Pipeline`, `GridSearchCV`, `cross_val_score`, `joblib` and
-`optuna` when it is present.
+clone, Pipeline, GridSearchCV, cross_val_score, joblib and optuna when it is
+present.
 
 ## statsmodels
 

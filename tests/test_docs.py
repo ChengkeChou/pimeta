@@ -246,3 +246,46 @@ def test_mirror_names_are_plain_identifiers():
                 if not name or not (name[0].isalpha() or name[0] in "[$._"):
                     bad.append(f"{path.relative_to(ROOT)}:{i}: {name!r}")
     assert not bad, "malformed mirror names:\n" + "\n".join(bad)
+
+
+# --------------------------------------------------------------------------- #
+# no comma-separated runs of inline code
+# --------------------------------------------------------------------------- #
+_SPAN = re.compile(r"`[^`\n]+`")
+_PUNCT = set(" \t,;、，；|/()[]{}<>+-–—:.·*")
+
+
+def _is_enumeration(line: str) -> bool:
+    """Is this line nothing but three or more code spans glued by punctuation?
+
+    ``\\`RR\\`, \\`OR\\`, \\`RD\\`, ...`` is the shape that breaks a renderer which
+    treats ``<code>`` as an independent inline box: the commas stay put and the
+    spans drift to the end of the paragraph, so the README reads as a run of
+    commas followed by a pile of identifiers.  The question is therefore what
+    is *left* once the spans are removed -- only punctuation means the line was
+    an enumeration.  Prose that merely mentions a few identifiers keeps its
+    words and is fine.
+    """
+    if len(_SPAN.findall(line)) < 3:
+        return False
+    rest = _SPAN.sub("", line)
+    return len([ch for ch in rest if ch not in _PUNCT]) <= 3
+
+
+def test_no_comma_separated_runs_of_inline_code():
+    """Enumerations must be fenced blocks or tables, not inline-code chains."""
+    targets = [ROOT / "README.md", *sorted(DOCS.rglob("*.md"))]
+    bad = []
+    for path in targets:
+        if "changelog" in path.name or path.parent.name == "api":
+            continue  # release history and generated pages keep the old shape
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith(("```", "|")):
+                continue
+            if _is_enumeration(line):
+                bad.append(f"{path.relative_to(ROOT)}:{i}: {line.strip()[:90]}")
+    assert not bad, (
+        "inline-code enumerations reorder badly in some renderers; use a "
+        "```text block or a table instead:\n" + "\n".join(bad)
+    )
+

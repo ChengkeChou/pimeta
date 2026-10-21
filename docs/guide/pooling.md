@@ -110,8 +110,8 @@ print(res.pooled_effect, res.pooled_se, res.q, res.i2)
 ## Fixed-effect-only models
 
 `rma.mh` (Mantel–Haenszel) and `rma.peto` are fixed-effect-only, mirror their
-metafor counterparts, and support `weights`, `cumul`, `leave1out`, `rstandard`,
-`rstudent`, `confint` and `qqnorm`:
+metafor counterparts, and support weights, cumul, leave1out, rstandard,
+rstudent, confint and qqnorm:
 
 ```python
 import pimeta as ma

@@ -55,8 +55,52 @@ jobs:
       - name: Install the built wheel
         run: python -m pip install dist/*.whl
 
+      - name: Check the version matches the release tag
+        # A tag of v1.1.0 that builds 1.0.0 would publish the wrong thing (or
+        # be rejected by PyPI as a duplicate) with a confusing error, so catch
+        # it here instead.  Only meaningful for a real release.
+        if: github.event_name == 'release'
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          tag = os.environ["GITHUB_REF_NAME"]
+          expected = tag[1:] if tag.startswith("v") else tag
+          text = pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          version = re.search(r'^version = "([^"]+)"', text, re.M).group(1)
+          assert version == expected, (
+              f"release tag {tag!r} does not match pyproject version {version!r}")
+          print(f"tag {tag} matches pyproject version {version}")
+          PY
+
       - name: Smoke test the installed package
-        run: python -c "import pimeta; print('pimeta', pimeta.__version__, '|', len(pimeta.__all__), 'exports'); assert len(pimeta.__all__) == 351"
+        # Deliberately not an export *count*.  The count grows whenever a module
+        # gains a public name, so pinning it turns the next routine feature into
+        # a mystery release failure -- which is exactly what a stale `== 351`
+        # did.  Assert the invariants instead: every advertised name resolves,
+        # none is duplicated, and a real fit still runs end to end.
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          import pimeta
+
+          bad = [n for n in pimeta.__all__ if not hasattr(pimeta, n)]
+          assert not bad, f"{len(bad)} names in __all__ do not resolve: {bad[:10]}"
+
+          dupes = sorted({n for n in pimeta.__all__ if pimeta.__all__.count(n) > 1})
+          assert not dupes, f"duplicate entries in __all__: {dupes}"
+
+          r = pimeta.rma([0.2, 0.4, 0.1], vi=[0.04, 0.05, 0.03], method="REML")
+          assert np.all(np.isfinite(r.b)), r.b
+          assert np.isfinite(r.tau2), r.tau2
+
+          print(f"pimeta {pimeta.__version__} | {len(pimeta.__all__)} exports, "
+                f"all resolvable | rma ok "
+                f"(b={float(r.b[0]):.4f}, tau2={float(r.tau2):.4g})")
+          PY
 
       - name: Run the test suite
         run: |
