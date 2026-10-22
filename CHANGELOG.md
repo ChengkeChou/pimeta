@@ -6,6 +6,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **The four example notebooks are now bilingual.** Every markdown cell leads
+  with English and keeps the original Chinese underneath as a `**中文**`
+  blockquote, so the runnable examples read the same way as the rest of the
+  documentation. Code cells and their stored outputs are untouched. The
+  `!!! note` admonition in `03-network-meta-analysis.ipynb` became a plain
+  blockquote, which renders in Jupyter and on GitHub rather than only under
+  MkDocs Material.
+
 ### Added
 
 - **Diagnostic test accuracy: the bivariate model and HSROC.** `pimeta.dta`
