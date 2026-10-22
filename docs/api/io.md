@@ -501,7 +501,7 @@ being materialised here.
 
 **Args**
 
-- `mods` — ``None``; a 1-D/2-D array-like; a list of column names; or a formula string such as ``"~ dose + year"``.
+- `mods` — ``None``; a 1-D/2-D array-like; a `basis.Basis`; a list of column names; or a formula string such as ``"~ dose + year"`` or ``"~ rcs(dose, 4)"``.
 - `data` — the ``data=`` frame.
 - `k` — number of studies, used for length checking.
 

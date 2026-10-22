@@ -1,6 +1,6 @@
 # Figures
 
-*23 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*24 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -10,6 +10,7 @@
 | [`netgraph`](#netgraph) | — |
 | [`plot_baujat`](#plot_baujat) | — |
 | [`plot_gosh`](#plot_gosh) | — |
+| [`plot_sroc`](#plot_sroc) | — |
 | [`plot_influence`](#plot_influence) | plot.infl.rma.uni |
 | [`plot_permutest`](#plot_permutest) | plot.permutest.rma.uni |
 | [`plot_selprofile`](#plot_selprofile) | plot.profile.rma |
@@ -113,6 +114,45 @@ Draw a GOSH plot (Goodman-Schulz-Hastie heterogeneity).
 
 ``result`` is a `GoshResult`; ``x``/``y`` select two of the stored
 per-subset vectors: ``estimate``, ``tau2``, ``QE``, ``I2``, ``H2``.
+
+## `plot_sroc`
+
+```python
+plot_sroc(fit, studlab=None, curve: 'bool' = True, summary: 'bool' = True, ci: 'bool' = True, show_auc: 'bool' = True, size_by: 'str' = 'diseased', filename: 'str | None' = None, figsize: 'tuple[float, float]' = (6.0, 6.0), title: 'str | None' = None, ax: 'plt.Axes | None' = None) -> 'plt.Axes'
+```
+
+Draw an SROC: study points, summary curve and the summary point.
+
+The picture `mada` splits across ``crosshair`` and ``ROCellipse``, drawn in
+one axes: one dot per study at (FPR, TPR) with area proportional to the
+number of diseased participants, the Rutter-Gatsonis summary curve, and the
+back-transformed mean pair as a crosshair whose arms are the confidence
+interval on each axis.
+
+**Args**
+
+- `fit` — a `dta.ReitsmaResult` from `dta.reitsma`.
+- `studlab` — study labels; defaults to ``Study 1`` ... ``Study k``. Pass ``[]`` to draw no labels.
+- `curve` — draw the summary curve.
+- `summary` — draw the summary point.
+- `ci` — draw the confidence interval on each axis of the summary point.
+- `show_auc` — annotate the AUC and the partial AUC.
+- `size_by` — ``"diseased"`` (number of participants with the target condition), ``"total"`` or ``"equal"``.
+- `filename` — when given, save at 300 dpi.
+- `figsize, title, ax` — standard plotting arguments.
+
+**Returns**
+
+The `matplotlib.axes.Axes`.
+
+**Raises**
+
+- `TypeError` — when ``fit`` is not a ``ReitsmaResult``.
+
+**Example**
+
+- `>>> fit = ma.reitsma(counts)            # doctest` — +SKIP
+- `>>> ma.plot_sroc(fit)                   # doctest` — +SKIP
 
 ## `plot_influence`
 

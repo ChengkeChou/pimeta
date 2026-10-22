@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import optimize, stats
 
+from .basis import Basis
 from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
 from .missing import complete_cases
 from .pooling import (
@@ -448,7 +449,10 @@ def rma(
     # A formula knows what its columns are called; carry those names through so
     # coefficients read ``dose``/``arm[B]`` instead of ``V1``/``V2``.
     coefnames: list[str] | None = None
-    if data is not None and isinstance(mods, (str, FormulaSpec)) and mods_arr is not None:
+    if isinstance(mods, Basis) and mods_arr is not None:
+        coefnames = (["intrcpt"] if add_intercept else []) + list(mods.names)
+    elif (data is not None and isinstance(mods, (str, FormulaSpec))
+          and mods_arr is not None):
         _, _term_names = design_matrix(mods, data, intercept=False)
         coefnames = ((["intrcpt"] if add_intercept else []) + list(_term_names))
 

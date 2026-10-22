@@ -54,6 +54,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "rma_ls": ("models", "Models"),
     "rma_peto_mh": ("models", "Models"),
     "selmodel": ("models", "Models"),
+    "basis": ("models", "Models"),
     # high-level drivers
     "metagen": ("drivers", "High-level drivers"),
     "metabin": ("drivers", "High-level drivers"),

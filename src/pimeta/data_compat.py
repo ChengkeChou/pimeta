@@ -29,6 +29,18 @@ expanded into a design matrix:
 
 String columns are dummy-coded the way R does it — first level dropped, columns
 named ``arm[B]`` — so the resulting coefficients line up with a ``metafor`` fit.
+
+A moderator can also be expanded in place, by naming a basis constructor inside
+the formula:
+
+    ``"~ rcs(dose, 4)"``           restricted cubic spline, 4 knots
+    ``"~ rcs(dose, knots=[1, 5, 9])"``  explicit knots
+    ``"~ fp(dose, [0.5, 1])"``     fractional polynomial
+
+The expansion happens before the design matrix is built, so ``rcs(...)`` is
+just a convenient way to write several columns; nothing downstream needs to
+know about it. A call must not contain ``+`` (the formula splitter would read
+it as a term separator).
 """
 
 from __future__ import annotations
@@ -38,6 +50,10 @@ import re
 from collections.abc import Mapping
 
 import numpy as np
+
+from .basis import Basis
+from .basis import fp as _fp_basis
+from .basis import rcs as _rcs_basis
 
 __all__ = [
     "as_columns",
@@ -241,6 +257,30 @@ def _expand_operand(op: str) -> list:
     return [":".join(factors)]
 
 
+def _split_terms(rhs: str) -> list[str]:
+    """Split a right-hand side on ``+``/``-`` at paren depth zero.
+
+    Splitting on a bare ``+`` would break ``fp(x, [-1, 0])`` and any other call
+    whose argument list contains a sign.
+    """
+    parts: list[str] = []
+    depth = 0
+    current = ""
+    for ch in rhs:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch in "+-" and depth == 0:
+            parts.append(current)
+            parts.append(ch)
+            current = ""
+        else:
+            current += ch
+    parts.append(current)
+    return [p.strip() for p in parts]
+
+
 def parse_formula(formula) -> FormulaSpec:
     """Parse a formula string into a :class:`FormulaSpec`.
 
@@ -273,7 +313,7 @@ def parse_formula(formula) -> FormulaSpec:
     terms: list[str] = []
     intercept = True
     sign = "+"
-    for chunk in re.split(r"\s*([+-])\s*", rhs.strip()):
+    for chunk in _split_terms(rhs.strip()):
         chunk = chunk.strip()
         if chunk in ("+", "-"):
             sign = chunk
@@ -294,6 +334,162 @@ def parse_formula(formula) -> FormulaSpec:
                     terms.append(term)
 
     return FormulaSpec(response=response, terms=terms, intercept=intercept)
+
+
+# --------------------------------------------------------------------------- #
+# basis calls inside a formula:  rcs(dose, 4)  /  fp(age, [0.5, 1])
+# --------------------------------------------------------------------------- #
+_BASIS_CALL = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\((.*)\)$", re.S)
+_BASIS_NAMES = ("rcs", "fp")
+
+
+def _norm_ws(text: str) -> str:
+    """Collapse whitespace: ``knots = [2, 12]`` -> ``knots=[2,12]``."""
+    out = re.sub(r"\s+", "", text)
+    return out.replace("=[", "=[")
+
+
+def _split_args(text: str) -> list[str]:
+    """Split a call's arguments on top-level commas."""
+    parts: list[str] = []
+    depth = 0
+    current = ""
+    for ch in text:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    if current.strip():
+        parts.append(current)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _numbers(text: str) -> list[float]:
+    """Parse ``3``, ``[1, 2]`` or ``c(1, 2)`` into a list of floats."""
+    t = text.strip()
+    if t.startswith("c(") and t.endswith(")"):
+        t = t[2:-1]
+    elif t.startswith("[") and t.endswith("]"):
+        t = t[1:-1]
+    return [float(p) for p in t.split(",") if p.strip()]
+
+
+def basis_from_call(factor: str, columns: Mapping) -> Basis | None:
+    """Expand a basis call written inside a formula, or return ``None``.
+
+    Args:
+        factor: one factor of a formula term, e.g. ``"rcs(dose, 4)"``.
+        columns: the frame, as returned by :func:`as_columns`.
+
+    Returns:
+        The :class:`~pimeta.basis.Basis`, or ``None`` when ``factor`` is not a
+        recognised basis call (so the caller falls back to looking it up as a
+        column name).
+
+    Raises:
+        ValueError: for a recognised constructor called wrongly — an unknown
+            column, a stray keyword, or bad numbers.
+    """
+    match = _BASIS_CALL.match(factor.strip())
+    if not match:
+        return None
+    fname = match.group(1)
+    if fname not in _BASIS_NAMES:
+        return None
+
+    args = _split_args(match.group(2))
+    if not args:
+        raise ValueError(f"{fname}() needs a column name, e.g. {fname}(dose)")
+    # One canonical spelling, so the coefficient names do not depend on where
+    # the author put spaces.
+    label = f"{fname}({', '.join(_norm_ws(a) for a in args)})"
+    column = args[0]
+    if column not in columns:
+        have = ", ".join(sorted(columns)) or "(none)"
+        raise ValueError(
+            f"{fname}() refers to column {column!r}, which does not exist; "
+            f"available columns: {have}")
+
+    positional: list[str] = []
+    keyword: dict[str, str] = {}
+    for arg in args[1:]:
+        if "=" in arg:
+            key, value = arg.split("=", 1)
+            keyword[key.strip()] = value.strip()
+        else:
+            positional.append(arg)
+
+    values = columns[column]
+    if fname == "rcs":
+        allowed = {"nk", "df", "knots"}
+        bad = set(keyword) - allowed
+        if bad:
+            raise ValueError(
+                f"rcs() got unexpected argument(s) {sorted(bad)}; use "
+                f"{sorted(allowed)}")
+        kw: dict = {}
+        if positional:
+            if len(positional) > 1:
+                raise ValueError("rcs() takes one positional argument (nk or df)")
+            first = _numbers(positional[0])
+            if len(first) == 1:
+                kw["nk"] = int(first[0])
+            else:
+                kw["knots"] = first
+        for key, value in keyword.items():
+            if key == "knots":
+                kw["knots"] = _numbers(value)
+            else:
+                nums = _numbers(value)
+                if len(nums) != 1:
+                    raise ValueError(f"rcs({key}=...) needs a single number")
+                kw[key] = int(nums[0])
+        return _rcs_basis(values, name=label, **kw)
+
+    allowed = {"powers", "scale", "center"}
+    bad = set(keyword) - allowed
+    if bad:
+        raise ValueError(
+            f"fp() got unexpected argument(s) {sorted(bad)}; use "
+            f"{sorted(allowed)}")
+    kw = {}
+    if positional:
+        if len(positional) > 1:
+            raise ValueError("fp() takes one positional argument (the powers)")
+        kw["powers"] = _numbers(positional[0])
+    if "powers" in keyword:
+        kw["powers"] = _numbers(keyword["powers"])
+    if "scale" in keyword:
+        kw["scale"] = _numbers(keyword["scale"])[0]
+    if "center" in keyword:
+        text = keyword["center"].strip().lower()
+        if text not in ("true", "false", "1", "0"):
+            raise ValueError("fp(center=...) must be true or false")
+        kw["center"] = text in ("true", "1")
+    if "powers" not in kw:
+        raise ValueError(
+            "fp() needs the powers, e.g. fp(dose, [1, 2]) or "
+            "fp(dose, powers=[-1, 0])")
+    return _fp_basis(values, name=label, **kw)
+
+
+def _factor_parts(factor: str, columns: Mapping) -> list:
+    """The design-matrix columns contributed by one factor."""
+    basis = basis_from_call(factor, columns)
+    if basis is not None:
+        return [(basis.names[j], basis.values[:, j])
+                for j in range(basis.values.shape[1])]
+    if factor not in columns:
+        have = ", ".join(sorted(columns)) or "(none)"
+        raise ValueError(
+            f"term {factor!r} in the formula does not name a column; "
+            f"available columns: {have}")
+    return _design_block(factor, columns[factor])
 
 
 def _design_block(name: str, values) -> list:
@@ -352,12 +548,7 @@ def design_matrix(formula, data, intercept=None):
         factors = term.split(":")
         parts: list[list] = []
         for factor in factors:
-            if factor not in cols:
-                have = ", ".join(sorted(cols)) or "(none)"
-                raise ValueError(
-                    f"term {factor!r} in the formula does not name a column; "
-                    f"available columns: {have}")
-            parts.append(_design_block(factor, cols[factor]))
+            parts.append(_factor_parts(factor, cols))
 
         # Cartesian product of the factor blocks, row-wise.
         acc = list(parts[0])
@@ -409,8 +600,9 @@ def resolve_mods(mods, data=None, k=None):
     being materialised here.
 
     Args:
-        mods: ``None``; a 1-D/2-D array-like; a list of column names; or a
-            formula string such as ``"~ dose + year"``.
+        mods: ``None``; a 1-D/2-D array-like; a :class:`~pimeta.basis.Basis`;
+            a list of column names; or a formula string such as
+            ``"~ dose + year"`` or ``"~ rcs(dose, 4)"``.
         data: the ``data=`` frame.
         k: number of studies, used for length checking.
 
@@ -422,6 +614,9 @@ def resolve_mods(mods, data=None, k=None):
     """
     if mods is None:
         return None, True
+
+    if isinstance(mods, Basis):
+        return np.asarray(mods.values, dtype=float), True
 
     if isinstance(mods, str):
         if data is None:

@@ -1,6 +1,6 @@
 # Models
 
-*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*54 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -13,6 +13,16 @@
 | [`Tau2Confint`](#tau2confint) | confint |
 | [`predict_rma`](#predict_rma) | predict.rma |
 | [`PredictResult`](#predictresult) | predict.rma |
+| [`Basis`](#basis) | — |
+| [`CurveResult`](#curveresult) | — |
+| [`NonlinearTestResult`](#nonlineartestresult) | — |
+| [`WaldResult`](#waldresult) | — |
+| [`default_knots`](#default_knots) | — |
+| [`fp`](#fp) | — |
+| [`nonlinear_test`](#nonlinear_test) | — |
+| [`predict_curve`](#predict_curve) | — |
+| [`rcs`](#rcs) | — |
+| [`wald_test`](#wald_test) | anova |
 | [`hc_rma`](#hc_rma) | hc.rma.uni |
 | [`HcResult`](#hcresult) | hc.rma.uni |
 | [`estimate_tau2`](#estimate_tau2) | — |
@@ -168,6 +178,261 @@ PredictResult(pred: 'float', se: 'float', ci_lb: 'float', ci_ub: 'float', pi_lb:
 *Mirrors R's `predict.rma`.*
 
 Predicted value + CI/PI (mirrors ``metafor::predict.rma``).
+
+## `Basis`
+
+```python
+Basis(values: 'np.ndarray', names: 'list[str]', label: 'str', kind: 'str', x: 'np.ndarray', builder: 'Callable[[np.ndarray], np.ndarray]', detail: 'dict[str, Any]' = <factory>) -> None
+```
+
+An expanded moderator: the columns, their names, and how to rebuild them.
+
+**Attributes**
+
+- `values` — ``(n, m)`` matrix of the expanded moderator.
+- `names` — one name per column, ``"<label>[j]"``.
+- `label` — what the term is called in the model, e.g. ``"rcs(dose,4)"``.
+- `kind` — ``"rcs"`` or ``"fp"``.
+- `builder` — maps a 1-D vector of new values to a new ``(g, m)`` matrix.
+- `detail` — the construction parameters (knots, powers, scale), for display and for the record.
+
+## `CurveResult`
+
+```python
+CurveResult(x: 'np.ndarray', fit: 'np.ndarray', se: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', pi_lb: 'np.ndarray | None', pi_ub: 'np.ndarray | None', level: 'float', term: 'str', at: 'dict[str, float]' = <factory>) -> None
+```
+
+A fitted curve with its confidence and prediction bands.
+
+**Attributes**
+
+- `x` — the grid the curve was evaluated on.
+- `fit` — predicted effect at each grid point (analysis scale).
+- `se` — standard error of the prediction.
+- `ci_lb, ci_ub` — confidence band.
+- `pi_lb, pi_ub` — prediction band (``None`` entries when ``tau2 == 0``, because then there is no between-study distribution to predict).
+- `level` — confidence level, e.g. 0.95.
+- `term` — the basis label.
+- `at` — the values the other moderators were held at.
+
+## `NonlinearTestResult`
+
+```python
+NonlinearTestResult(term: 'str', overall: 'WaldResult', nonlinear: 'WaldResult', k: 'int') -> None
+```
+
+Overall and non-linearity tests for one basis term.
+
+**Attributes**
+
+- `term` — the term label, e.g. ``"rcs(dose,4)"``.
+- `overall` — joint test over every column of the term — "is there any association?".
+- `nonlinear` — joint test over the non-linear columns only — "is the association non-linear?". For a spline this is all columns after the first, because the first column is ``x`` itself.
+- `k` — number of studies.
+
+## `WaldResult`
+
+```python
+WaldResult(QM: 'float', df: 'int', pval: 'float', names: 'list[str]', test: 'str', ddf: 'float | None', k: 'int') -> None
+```
+
+Joint test that a set of coefficients is zero.
+
+Mirrors ``metafor::anova.rma``: ``QM`` is the quadratic form
+``b' V^-1 b`` over the selected coefficients, referred to a chi-squared
+distribution (``test="z"``) or an F distribution with ``df`` and ``ddf``
+degrees of freedom (``test="knha"``/``"t"``/``"adhoc"``).
+
+**Attributes**
+
+- `QM` — the test statistic.
+- `df` — number of coefficients tested (the numerator df).
+- `pval` — p-value.
+- `names` — the coefficients that were tested.
+- `test` — ``"chi2"`` or ``"F"``.
+- `ddf` — denominator df, or ``None`` for the chi-squared test.
+- `k` — number of studies in the model.
+
+## `default_knots`
+
+```python
+default_knots(x, nk: 'int' = 4) -> 'np.ndarray'
+```
+
+Harrell's default knot positions for ``nk`` knots.
+
+Uses the published percentile table for 3–7 knots and an evenly spaced
+grid of percentiles from 5% to 95% beyond that. Quantiles are the
+``type = 7`` (linear interpolation) ones that R uses by default.
+
+**Args**
+
+- `x` — the moderator.
+- `nk` — number of knots.
+
+**Returns**
+
+Sorted knot vector of length ``nk``.
+
+**Raises**
+
+- `ValueError` — for fewer than 3 knots, or more knots than distinct values.
+
+## `fp`
+
+```python
+fp(x, powers, scale: 'float | None' = None, center: 'bool' = False, name: 'str | None' = None) -> 'Basis'
+```
+
+Fractional-polynomial basis (Royston & Sauerbrei) for a moderator.
+
+**Args**
+
+- `x` — the moderator, strictly positive, 1-D.
+- `powers` — the powers, e.g. ``[1, 2]``, ``[-1, 0]``, ``[0.5, 0.5]``. They are sorted (the literature always lists them ascending); a repeated power contributes a second term multiplied by ``log(x)``.
+- `scale` — divides ``x`` before the transform. ``None`` (default) means 1, i.e. no rescaling. Scaling does not change the fit, only the coefficients.
+- `center` — subtract each column's mean. Also fit-invariant; it only makes the intercept interpretable at the mean of the transformed values.
+- `name` — label for the term; defaults to ``"fp"``.
+
+**Returns**
+
+`Basis` with one column per power.
+
+**Raises**
+
+- `ValueError` — for an empty power list, non-positive ``x``, or a missing value.
+
+**Example**
+
+>>> b = fp([1, 2, 3, 4], powers=[0, 1])      # log(x) and x
+- `>>> [round(v, 4) for v in b.values[` — , 0]]
+[0.0, 0.6931, 1.0986, 1.3863]
+
+## `nonlinear_test`
+
+```python
+nonlinear_test(result, term: 'str') -> 'NonlinearTestResult'
+```
+
+Test whether the effect of a basis term is non-linear.
+
+Runs two joint Wald tests over the columns that belong to ``term``: one
+over all of them (``overall``) and one over all but the first
+(``nonlinear``). The convention that the first column is the linear term
+holds for both ``rcs`` and ``fp``, where the first power is the linear one
+whenever the model has it.
+
+**Args**
+
+- `result` — a fitted model that used a basis as moderator.
+- `term` — the basis label, e.g. ``"rcs(dose,4)"`` or ``"fp(dose,[1,2])"``.
+
+**Returns**
+
+`NonlinearTestResult`.
+
+**Raises**
+
+- `ValueError` — when no coefficient belongs to ``term``.
+
+**Example**
+
+- `>>> fit = ma.rma(yi, vi, mods="~ rcs(dose, 4)", data=df)   # doctest` — +SKIP
+- `>>> print(ma.nonlinear_test(fit, "rcs(dose,4)"))           # doctest` — +SKIP
+
+## `predict_curve`
+
+```python
+predict_curve(result, basis: 'Basis', grid=None, at: 'dict | None' = None, level: 'float | None' = None) -> 'CurveResult'
+```
+
+Evaluate a fitted basis term over a grid, with bands.
+
+This is a thin wrapper around ``result.predict(newmods=...)``: the only
+thing it adds is rebuilding the design matrix from a `Basis`, and
+holding the *other* moderators at fixed values.
+
+**Args**
+
+- `result` — a fitted `rma_uni.RmaResult` whose moderators include ``basis``.
+- `basis` — the basis used in the fit (or one rebuilt with the same knots).
+- `grid` — values of the moderator to evaluate at. Defaults to 100 points spanning the observed range.
+- `at` — values for the other moderators, by coefficient name. Anything not given is held at 0, which is the model's reference point.
+- `level` — confidence level; defaults to the level of the fit.
+
+**Returns**
+
+`CurveResult`.
+
+**Raises**
+
+- `ValueError` — when no coefficient belongs to the basis, when ``at`` names an unknown moderator, or when a moderator is left unset.
+
+**Example**
+
+- `>>> b = ma.rcs(df["dose"], nk=4, name="rcs(dose,4)")     # doctest` — +SKIP
+- `>>> fit = ma.rma(df["yi"], df["vi"], mods=b)             # doctest` — +SKIP
+- `>>> curve = ma.predict_curve(fit, b)                     # doctest` — +SKIP
+
+## `rcs`
+
+```python
+rcs(x, nk: 'int | None' = 4, df: 'int | None' = None, knots=None, name: 'str | None' = None) -> 'Basis'
+```
+
+Restricted cubic spline basis (Harrell) for a moderator.
+
+**Args**
+
+- `x` — the moderator, 1-D.
+- `nk` — number of knots; 4 by default, which gives 3 columns.
+- `df` — degrees of freedom — the number of *columns* — as an alternative to ``nk``. ``df=3`` is the same as ``nk=4``.
+- `knots` — explicit knot positions. When given, ``nk`` and ``df`` are ignored.
+- `name` — label for the term; defaults to ``"rcs"``. ``design_matrix`` passes the call itself, so a fitted coefficient is named ``rcs(dose,4)[2]``.
+
+**Returns**
+
+- ``Basis` with ``nk - 1`` columns` — ``x`` followed by the
+``nk - 2`` non-linear terms.
+
+**Raises**
+
+- `ValueError` — for fewer than 3 knots, fewer than 4 distinct values, or knots that are not strictly increasing.
+
+**Example**
+
+- `>>> b = rcs([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], nk=4)   # doctest` — +SKIP
+- `>>> b.shape                                          # doctest` — +SKIP
+(10, 3)
+
+## `wald_test`
+
+```python
+wald_test(result, btt: 'Sequence[int] | None' = None, names: 'Sequence[str] | None' = None) -> 'WaldResult'
+```
+
+*Mirrors R's `anova`.*
+
+Joint Wald test for a subset of coefficients (``metafor::anova``).
+
+**Args**
+
+- `result` — a fitted `rma_uni.RmaResult` (or anything with ``b``, ``vb``, ``test``, ``s2w`` and ``ddf``).
+- `btt` — **1-based** coefficient positions, exactly as in ``metafor::anova(fit, btt=)``. Note the difference from Python indexing: ``btt=[2, 3]`` tests the second and third coefficients.
+- `names` — coefficient names instead of positions. Matching is exact, so pass the names ``result.coefnames`` reports.
+
+**Returns**
+
+`WaldResult`.
+
+**Raises**
+
+- `ValueError` — when nothing is selected, or a position is out of range.
+
+**Example**
+
+- `>>> fit = ma.rma(yi, vi, mods="~ x", data=df)    # doctest` — +SKIP
+- `>>> ma.wald_test(fit, btt=[2])                    # doctest` — +SKIP
 
 ## `hc_rma`
 

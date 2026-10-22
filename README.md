@@ -73,6 +73,29 @@ Cell-continuity corrections: add, to = "only0" | "all" | "IF0", drop00.
   CR0 / CR1 / CR1.S1 / CR1.S2, plus CR2 / CR3 with Satterthwaite degrees of
   freedom; see [the guide](docs/guide/multilevel.md)
 
+### Non-linear meta-regression — splines and fractional polynomials
+
+```python
+import pimeta as ma
+
+fit = ma.rma(yi, vi, mods="~ rcs(dose, 4)", data=df)   # Harrell spline
+print(fit.coefnames)                                   # rcs(dose, 4)[1], [2], ...
+
+test = ma.nonlinear_test(fit, "rcs(dose, 4)")
+print(test.overall.QM, test.overall.pval)              # is there any effect?
+print(test.nonlinear.QM, test.nonlinear.pval)          # is it non-linear?
+
+curve = ma.predict_curve(fit, ma.rcs(df["dose"], nk=4, name="rcs(dose, 4)"))
+print(curve.fit[:5], curve.ci_lb[:5], curve.pi_lb[:5])
+```
+
+`rcs` places its knots at Harrell's recommended percentiles and forces the fit
+to be linear beyond the outer ones; `fp` is the Royston–Sauerbrei alternative
+(any powers, `log(x)` for power 0, a repeated power multiplied by `log(x)`).
+Both work inside a formula or as objects passed to `mods=`, and both are
+verified against `rms` 8.1.1 and `metafor` 5.2.1. See
+[the guide](docs/guide/meta-regression.md).
+
 ### High-level drivers (R-function parity)
 
 ```text

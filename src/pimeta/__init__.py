@@ -19,6 +19,18 @@ try:
 except PackageNotFoundError:  # importing straight from a source tree
     __version__ = "0.0.0+unknown"
 
+from .basis import (
+    Basis,
+    CurveResult,
+    NonlinearTestResult,
+    WaldResult,
+    default_knots,
+    fp,
+    nonlinear_test,
+    predict_curve,
+    rcs,
+    wald_test,
+)
 from .conv import (
     Conv2x2Result,
     ConvDeltaResult,
@@ -197,6 +209,7 @@ from .plotting import (
     plot_mv_profile,
     plot_permutest,
     plot_selprofile,
+    plot_sroc,
     qqnorm_rma,
     radial,
     rankogram,
@@ -573,6 +586,16 @@ __all__ = [
     "Tau2Confint",
     "predict_rma",
     "PredictResult",
+    "Basis",
+    "CurveResult",
+    "NonlinearTestResult",
+    "WaldResult",
+    "default_knots",
+    "fp",
+    "nonlinear_test",
+    "predict_curve",
+    "rcs",
+    "wald_test",
     "hc_rma",
     "HcResult",
     "escalc",
@@ -690,6 +713,7 @@ __all__ = [
     "netgraph",
     "plot_baujat",
     "plot_gosh",
+    "plot_sroc",
     "plot_influence",
     "plot_permutest",
     "plot_selprofile",

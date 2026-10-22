@@ -1,6 +1,6 @@
 # API reference
 
-All 422 public names in `pimeta.__all__`, generated from the source docstrings.
+All 433 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -106,6 +106,16 @@ All 422 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`Tau2Confint`](models.md#tau2confint) | Models | confint |
 | [`predict_rma`](models.md#predict_rma) | Models | predict.rma |
 | [`PredictResult`](models.md#predictresult) | Models | predict.rma |
+| [`Basis`](models.md#basis) | Models | — |
+| [`CurveResult`](models.md#curveresult) | Models | — |
+| [`NonlinearTestResult`](models.md#nonlineartestresult) | Models | — |
+| [`WaldResult`](models.md#waldresult) | Models | — |
+| [`default_knots`](models.md#default_knots) | Models | — |
+| [`fp`](models.md#fp) | Models | — |
+| [`nonlinear_test`](models.md#nonlinear_test) | Models | — |
+| [`predict_curve`](models.md#predict_curve) | Models | — |
+| [`rcs`](models.md#rcs) | Models | — |
+| [`wald_test`](models.md#wald_test) | Models | anova |
 | [`hc_rma`](models.md#hc_rma) | Models | hc.rma.uni |
 | [`HcResult`](models.md#hcresult) | Models | hc.rma.uni |
 | [`estimate_tau2`](models.md#estimate_tau2) | Models | — |
@@ -317,6 +327,7 @@ All 422 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`netgraph`](plotting.md#netgraph) | Figures | — |
 | [`plot_baujat`](plotting.md#plot_baujat) | Figures | — |
 | [`plot_gosh`](plotting.md#plot_gosh) | Figures | — |
+| [`plot_sroc`](plotting.md#plot_sroc) | Figures | — |
 | [`plot_influence`](plotting.md#plot_influence) | Figures | plot.infl.rma.uni |
 | [`plot_permutest`](plotting.md#plot_permutest) | Figures | plot.permutest.rma.uni |
 | [`plot_selprofile`](plotting.md#plot_selprofile) | Figures | plot.profile.rma |

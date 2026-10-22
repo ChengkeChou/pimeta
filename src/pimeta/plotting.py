@@ -36,6 +36,7 @@ __all__ = [
     "netgraph",
     "plot_baujat",
     "plot_gosh",
+    "plot_sroc",
     "radial",
     "labbe",
     "llplot",
@@ -1179,6 +1180,135 @@ def plot_gosh(
 
     _save(fig, filename)
     return ax
+
+
+def plot_sroc(
+    fit,
+    studlab=None,
+    curve: bool = True,
+    summary: bool = True,
+    ci: bool = True,
+    show_auc: bool = True,
+    size_by: str = "diseased",
+    filename: str | None = None,
+    figsize: tuple[float, float] = (6.0, 6.0),
+    title: str | None = None,
+    ax: plt.Axes | None = None,
+) -> plt.Axes:
+    """Draw an SROC: study points, summary curve and the summary point.
+
+    The picture `mada` splits across ``crosshair`` and ``ROCellipse``, drawn in
+    one axes: one dot per study at (FPR, TPR) with area proportional to the
+    number of diseased participants, the Rutter-Gatsonis summary curve, and the
+    back-transformed mean pair as a crosshair whose arms are the confidence
+    interval on each axis.
+
+    Args:
+        fit: a :class:`~pimeta.dta.ReitsmaResult` from :func:`~pimeta.dta.reitsma`.
+        studlab: study labels; defaults to ``Study 1`` ... ``Study k``. Pass
+            ``[]`` to draw no labels.
+        curve: draw the summary curve.
+        summary: draw the summary point.
+        ci: draw the confidence interval on each axis of the summary point.
+        show_auc: annotate the AUC and the partial AUC.
+        size_by: ``"diseased"`` (number of participants with the target
+            condition), ``"total"`` or ``"equal"``.
+        filename: when given, save at 300 dpi.
+        figsize, title, ax: standard plotting arguments.
+
+    Returns:
+        The :class:`matplotlib.axes.Axes`.
+
+    Raises:
+        TypeError: when ``fit`` is not a ``ReitsmaResult``.
+
+    Example:
+        >>> fit = ma.reitsma(counts)            # doctest: +SKIP
+        >>> ma.plot_sroc(fit)                   # doctest: +SKIP
+    """
+    from .dta import ReitsmaResult, sroc
+
+    if not isinstance(fit, ReitsmaResult):
+        raise TypeError(
+            "plot_sroc expects a ReitsmaResult (the output of reitsma()); "
+            f"got {type(fit).__name__}")
+
+    data = fit.data
+    fpr = np.asarray(data.fpr, dtype=float).ravel()
+    tpr = np.asarray(data.sens, dtype=float).ravel()
+    k = fpr.size
+    if studlab is None:
+        labels = _studlab(None, k)
+    else:
+        labels = [str(s) for s in list(studlab)]
+
+    key = size_by.lower()
+    if key == "diseased":
+        weight = np.asarray(data.n_positive, dtype=float).ravel()
+    elif key == "total":
+        weight = (np.asarray(data.n_positive, dtype=float).ravel()
+                  + np.asarray(data.n_negative, dtype=float).ravel())
+    elif key == "equal":
+        weight = np.ones(k)
+    else:
+        raise ValueError(
+            "size_by must be 'diseased', 'total' or 'equal', "
+            f"not {size_by!r}")
+    span = weight.max() - weight.min()
+    sizes = 40.0 + (140.0 * (weight - weight.min()) / span) if span > 0 else None
+    if sizes is None:
+        sizes = np.full(k, 90.0)
+
+    fig, ax = _new_ax(ax, figsize)
+
+    ax.plot([0.0, 1.0], [0.0, 1.0], color="0.7", linewidth=0.8,
+            linestyle="--", zorder=1)
+
+    if curve:
+        smry = sroc(fit)
+        ax.plot(smry.fpr, smry.tpr, color="C0", linewidth=1.6, zorder=2)
+
+    ax.scatter(fpr, tpr, s=sizes, c="0.25", edgecolors="k", linewidths=0.5,
+               alpha=0.75, zorder=3)
+    if labels:
+        for x, y, lab in zip(fpr, tpr, labels):
+            ax.annotate(lab, (x, y), textcoords="offset points", xytext=(5, 3),
+                        fontsize=7)
+
+    if summary:
+        sx = float(fit.summary_fpr)
+        sy = float(fit.summary_sens)
+        if ci:
+            lo, hi = fit.fpr_ci
+            ax.plot([lo, hi], [sy, sy], color="C3", linewidth=1.2, zorder=4)
+            lo, hi = fit.sens_ci
+            ax.plot([sx, sx], [lo, hi], color="C3", linewidth=1.2, zorder=4)
+        ax.scatter([sx], [sy], s=90, marker="D", c="C3", edgecolors="k",
+                   linewidths=0.6, zorder=5)
+
+    if show_auc:
+        stats = _auc_dict(fit)
+        ax.text(
+            0.98, 0.02,
+            f"AUC = {stats['auc']:.3f}\npartial AUC = {stats['pauc']:.3f}",
+            transform=ax.transAxes, ha="right", va="bottom", fontsize=8,
+        )
+
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlabel("False positive rate (1 - specificity)")
+    ax.set_ylabel("True positive rate (sensitivity)")
+    if title:
+        ax.set_title(title)
+
+    _save(fig, filename)
+    return ax
+
+
+def _auc_dict(fit) -> dict:
+    from .dta import auc
+
+    return auc(fit)
 
 
 # --------------------------------------------------------------------------- #

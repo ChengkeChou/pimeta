@@ -19,29 +19,30 @@ too.
 
 ## The methods
 
-### 1. Non-linear meta-regression — **partial**
+### 1. Non-linear meta-regression — **yes**
 
 Wanted: restricted cubic splines, fractional polynomials, a test for
 non-linearity, and a predicted curve.
 
-Already there: meta-regression is complete, including the part people assume is
-missing. There is a formula parser and a design-matrix builder in
-`pimeta.data_compat`: `parse_formula` splits a string into terms,
-`design_matrix` expands them into columns, and `resolve_mods` is the entry
-point `ma.rma` uses. So `ma.rma(yi, vi, mods="~ dose + year", data=df)` and
-interactions (`a*b`, `a:b`), dummy coding, `0 +` and `.` expansion all work, and
-`pimeta.record` captures the call. `predict(newmods=...)` already returns a
-point estimate with a confidence *and* a prediction interval per row, so a
-curve plus bands needs only a basis matrix, not new prediction code.
+All four are in `pimeta.basis`. `ma.rcs` gives Harrell's restricted cubic
+spline with its knots at the recommended percentiles, `ma.fp` the
+Royston–Sauerbrei fractional polynomial, and both can be written inside a
+formula (`~ rcs(dose, 4)`, `~ fp(dose, [-1, 0])`) or passed to `mods=` as
+objects. `ma.nonlinear_test` separates "is there an effect?" from "is it
+non-linear?", `ma.wald_test` runs the same joint test over any subset of
+coefficients, and `ma.predict_curve` returns the curve with a confidence band
+and a prediction band.
 
-Missing: the basis itself. There is no `rcs()` and no fractional-polynomial
-expansion, and the formula parser splits on `+` and `:` without understanding
-function calls, so `~ rcs(dose, 4)` cannot be written. Also missing: the
-non-linearity test (Wald over the whole block, and the linear-versus-non-linear
-partition), and a `predict_curve()` convenience wrapper.
+Pinned by `tests/test_basis.py` against `rms` 8.1.1 for the basis matrices and
+`metafor` 5.2.1 for the fit, the `anova` tests and `predict`.
 
-Estimated cost: small. The expensive half of this feature is already in the
-tree.
+What the audit changed: the formula parser, the design-matrix builder and
+`predict(newmods=...)` were already in the tree, so this was a basis and two
+tests rather than a new regression layer.
+
+Still missing, on purpose: automatic selection of the number of knots or of the
+power set. Both are model-selection procedures (with their own multiplicity
+problems), not bases, and neither is a one-liner done honestly.
 
 ### 2. Dose–response meta-analysis — **no**
 
@@ -100,8 +101,9 @@ estimators. Two behaviours are deliberately corrected rather than copied; see
 Not a gap: `mada`'s function surface. `pimeta` implements the methods, not
 another package's API.
 
-There is no SROC plotting helper yet, which is a small genuine gap: the curve
-exists, drawing it is three lines of matplotlib.
+`ma.plot_sroc` draws the picture `mada` splits across two functions: one dot per
+study, the summary curve, and the summary point as a crosshair with the
+confidence interval on each axis.
 
 ### 6. Robust variance estimation — **yes**
 
@@ -187,7 +189,7 @@ model twice.
 
 | # | Area | Status | Guard test |
 |---|---|---|---|
-| 1 | non-linear meta-regression | partial | `tests/test_data_compat.py` (formulas), `tests/test_coverage_gaps.py` (`predict`) |
+| 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
 | 2 | dose–response | no | — |
 | 3 | two-stage IPD | no | — |
 | 4 | one-stage IPD | no | — |
@@ -201,10 +203,10 @@ model twice.
 | 12 | time-varying effects | no | — |
 
 Five of these twelve turned out to be further along than the roadmap assumed:
-items 5 and 6 are finished, item 10 was already finished, item 9 is missing only
-its convenience layer, and item 1 is missing only a basis matrix. Items 5 and 6
-were completed in the current development cycle, which is why the planning
-documents written before it overstate the work remaining.
+items 5, 6 and 10 are finished, item 1 needed only a basis rather than a
+regression layer, and item 9 is missing only its convenience layer. All of
+items 1, 5 and 6 were completed in the current development cycle, which is why
+the planning documents written before it overstate the work remaining.
 
 ## Dependency policy
 
@@ -236,7 +238,7 @@ numerics*, not by topic:
 | Stage | Work | Why here |
 |---|---|---|
 | 0 | this page | cheap, and it stops the next three stages from being built twice |
-| 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | item 1 is 80% done; this is the remaining 20% and it unblocks items 2 and 3 |
+| 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | **done** — item 1 is finished; it unblocks items 2 and 3 |
 | 2 | dose–response | item 1 plus one covariance construction; same readers as item 3 |
 | 3 | IPD data layer and two-stage | reuses stage 1 for the non-linear case, nothing else new |
 | 4 | one-stage IPD, continuous then binary | first genuinely new likelihood |

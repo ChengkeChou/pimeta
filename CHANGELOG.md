@@ -6,6 +6,46 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Non-linear meta-regression: restricted cubic splines and fractional
+  polynomials.** The estimator is linear in the parameters, not in the
+  moderator, so a curved dose-response only needs a basis expansion — which is
+  what the new `pimeta.basis` module provides:
+  - `rcs` is Harrell's restricted cubic spline, with knots at his recommended
+    percentiles unless they are given explicitly, and the fit forced linear
+    beyond the outer knots.
+  - `fp` is the Royston–Sauerbrei fractional polynomial: arbitrary powers
+    including negative and fractional ones, with `log(x)` for the power 0 and a
+    second term multiplied by `log(x)` when a power repeats.
+  - Both return a `Basis`, which is array-like (so it can go straight to
+    `mods=`) and can re-evaluate itself at new values (so a curve can be
+    predicted from it).
+  - Both can be written *inside a formula*: `mods="~ rcs(dose, 4)"` or
+    `mods="~ fp(dose, [-1, 0]) + year"`. The formula parser now tracks
+    parentheses, so a negative number inside a call no longer splits the term,
+    and the coefficients are named `rcs(dose, 4)[2]` rather than `mods[2]`.
+  - `wald_test` is the joint test that a subset of coefficients is zero
+    (`metafor::anova`), and `nonlinear_test` splits it into "is there any
+    effect?" and "is the effect non-linear?".
+  - `predict_curve` evaluates a fitted basis over a grid and returns the curve
+    with a confidence band and a prediction band.
+  - Verified against `rms` 8.1.1 (basis matrices, 13 digits), `metafor` 5.2.1
+    (coefficients, τ², Q, `anova`, `predict`), and against R's own
+    `rma(mods=~x)` / `rma(mods=~log(x))` equivalents for the fractional
+    polynomials.
+- **`plot_sroc`: the picture the DTA model implies.** One dot per study sized by
+  the number of diseased participants, the Rutter–Gatsonis summary curve, and
+  the summary point as a crosshair whose arms are the confidence interval on
+  each axis, with the AUC and partial AUC annotated. `mada` splits this across
+  `crosshair` and `ROCellipse`; here it is one axes.
+- **A capability matrix** (`docs/guide/capability-matrix.md`): twelve method
+  areas marked implemented / partial / absent, each naming the function and the
+  guard test. It was written by reading the source rather than the changelog,
+  and it changed the roadmap — the formula parser, the design matrix,
+  `predict(newmods=...)`, the mixed-model kernel, `netcomb` and the multivariate
+  machinery were all already present.
+
 ### Changed
 
 - **Network meta-analysis records now capture the τ² estimator.** `_SETTING_ATTRS`
