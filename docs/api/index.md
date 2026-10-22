@@ -1,6 +1,6 @@
 # API reference
 
-All 393 public names in `pimeta.__all__`, generated from the source docstrings.
+All 412 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -330,6 +330,25 @@ All 393 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`ReviewDataResult`](io.md#reviewdataresult) | Input, output and interoperability | — |
 | [`REVIEW_COLUMNS`](io.md#review_columns) | Input, output and interoperability | — |
 | [`interop`](io.md#interop) | Input, output and interoperability | — |
+| [`record`](io.md#record) | Input, output and interoperability | — |
+| [`RECORD_SCHEMA`](io.md#record_schema) | Input, output and interoperability | — |
+| [`STORE_SCHEMA`](io.md#store_schema) | Input, output and interoperability | — |
+| [`AnalysisRecord`](io.md#analysisrecord) | Input, output and interoperability | — |
+| [`build_record`](io.md#build_record) | Input, output and interoperability | — |
+| [`save_record`](io.md#save_record) | Input, output and interoperability | — |
+| [`load_record`](io.md#load_record) | Input, output and interoperability | — |
+| [`compare_results`](io.md#compare_results) | Input, output and interoperability | — |
+| [`environment`](io.md#environment) | Input, output and interoperability | — |
+| [`RecordError`](io.md#recorderror) | Input, output and interoperability | — |
+| [`RecordMismatch`](io.md#recordmismatch) | Input, output and interoperability | — |
+| [`fingerprint`](io.md#fingerprint) | Input, output and interoperability | — |
+| [`source_fingerprint`](io.md#source_fingerprint) | Input, output and interoperability | — |
+| [`analysis_fingerprint`](io.md#analysis_fingerprint) | Input, output and interoperability | — |
+| [`EstimatesStore`](io.md#estimatesstore) | Input, output and interoperability | — |
+| [`StoredModel`](io.md#storedmodel) | Input, output and interoperability | — |
+| [`estimates_store`](io.md#estimates_store) | Input, output and interoperability | — |
+| [`read_table`](io.md#read_table) | Input, output and interoperability | — |
+| [`write_table`](io.md#write_table) | Input, output and interoperability | — |
 | [`as_columns`](io.md#as_columns) | Input, output and interoperability | — |
 | [`column_names`](io.md#column_names) | Input, output and interoperability | — |
 | [`lookup`](io.md#lookup) | Input, output and interoperability | — |

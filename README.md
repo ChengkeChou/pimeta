@@ -126,6 +126,46 @@ pimeta network nma.csv --te TE --se seTE --treat1 t1 --treat2 t2 --sm MD
 Output is TSV on stdout, `--format csv|json` or `-o file.csv` otherwise.  See
 [the guide](docs/guide/cli.md).
 
+### Reproducible, traceable output — `pimeta.record`
+
+Every analysis can be saved as a single self-describing JSON file, then
+verified and replayed later:
+
+```python
+import pimeta as ma
+from pimeta.record import save_record, load_record
+
+fit = ma.rma(df["TE"], vi=df["seTE2"], method="REML", slab=df["study"])
+
+save_record("m1.json", fit, data=df, mode="bundle",
+            function="rma",
+            call={"yi": "TE", "vi": "seTE2", "method": "REML", "slab": "study"})
+
+record = load_record("m1.json")
+record.verify()      # does the data still hash to the recorded digests?
+record.replay()      # re-fit and compare every number (raises on any drift)
+```
+
+Each record carries five blocks — inputs (输入数据), analysis settings
+(分析配置), run process (运算过程), environment (运行环境) and results
+(结果与诊断). Two independent SHA-256 fingerprints separate "is this the same
+file?" from "would the same numbers come out?", so relabelling a study does not
+change the latter. `NaN` and infinity are written as tagged values rather than
+invalid `NaN`/`Infinity` tokens, so the file is strict JSON and still lossless.
+
+```python
+from pimeta.record import EstimatesStore
+
+models = EstimatesStore("primary")        # the estimates-store equivalent
+models.store("fe", ma.rma(df["TE"], vi=df["seTE2"], method="FE"))
+models.store("re", fit)
+models.compare()
+models.save("estimates.json")
+```
+
+`read_table` / `write_table` cover CSV, TSV, JSON, JSONL and NPZ in both
+directions. See [the guide](docs/guide/reproducibility.md).
+
 ### Network meta-analysis (`netmeta`)
 
 ```text

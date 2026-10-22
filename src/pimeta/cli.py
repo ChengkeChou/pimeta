@@ -29,76 +29,32 @@ from typing import Any
 import numpy as np
 
 from . import __version__
+from .record.table import read_table as read_table_impl
 
 __all__ = ["main", "build_parser"]
-
-_DELIMS = {".csv": ",", ".tsv": "\t", ".tab": "\t", ".txt": None}
 
 
 # --------------------------------------------------------------------------- #
 # input / output
 # --------------------------------------------------------------------------- #
 def read_table(path: str, delimiter: str | None = None) -> dict:
-    """Read a CSV/TSV/JSON/JSONL file into ``{column: list}``.
+    """Read a CSV/TSV/JSON/JSONL/NPZ file into ``{column: list}``.
+
+    The parsing lives in :func:`pimeta.record.table.read_table` so the CLI and
+    the analysis record share one implementation; see that function for the
+    format rules.  Cells stay as text here -- ``_to_float`` does the numeric
+    conversion, which keeps the error message ("non-numeric value at row 3")
+    in the CLI where it is actionable.
 
     Args:
         path: file to read; the extension selects the parser.
-        delimiter: CSV delimiter; ``None`` uses the extension (comma for
-            ``.csv``, tab for ``.tsv``/``.tab``) and otherwise sniffs.
+        delimiter: CSV delimiter; ``None`` uses the extension and otherwise
+            sniffs.
 
     Returns:
         A dict of columns.  Blank fields become ``None``.
-
-    Raises:
-        FileNotFoundError: when ``path`` does not exist.
-        ValueError: when the file is not a recognised table.
     """
-    file = Path(path)
-    if not file.exists():
-        raise FileNotFoundError(f"no such file: {path}")
-    suffix = file.suffix.lower()
-
-    if suffix in (".json", ".jsonl"):
-        raw = file.read_text(encoding="utf-8").strip()
-        if suffix == ".jsonl":
-            records = [json.loads(line) for line in raw.splitlines() if line.strip()]
-        else:
-            data = json.loads(raw)
-            if isinstance(data, list):
-                records = data
-            elif isinstance(data, dict):
-                return {str(k): list(v) if isinstance(v, list) else [v]
-                        for k, v in data.items()}
-            else:
-                raise ValueError(f"{path}: expected a list of records or a column dict")
-        if not records:
-            return {}
-        names: list[str] = []
-        for rec in records:
-            for key in rec:
-                if str(key) not in names:
-                    names.append(str(key))
-        return {n: [rec.get(n) for rec in records] for n in names}
-
-    delim = delimiter if delimiter is not None else _DELIMS.get(suffix, None)
-    with file.open(newline="", encoding="utf-8-sig") as handle:
-        if delim is None:
-            sample = handle.read(8192)
-            handle.seek(0)
-            try:
-                delim = csv.Sniffer().sniff(sample, delimiters=",\t;|").delimiter
-            except csv.Error:
-                delim = ","
-        reader = csv.DictReader(handle, delimiter=delim)
-        if reader.fieldnames is None:
-            raise ValueError(f"{path}: empty file")
-        columns: dict[str, list] = {name: [] for name in reader.fieldnames}
-        for row in reader:
-            for name in reader.fieldnames:
-                value = row.get(name)
-                columns[name].append(None if value in ("", "NA", "NaN", "nan")
-                                     else value)
-    return columns
+    return read_table_impl(path, delimiter)
 
 
 def _to_float(columns: dict, name: str) -> list[float]:

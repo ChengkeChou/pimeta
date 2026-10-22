@@ -220,6 +220,26 @@ from .publication_bias import (
     trimfill,
 )
 from .readers import REVIEW_COLUMNS, ReviewDataResult, read_cdir, read_mtv, read_rm5
+from .record import (
+    RECORD_SCHEMA,
+    STORE_SCHEMA,
+    AnalysisRecord,
+    EstimatesStore,
+    RecordError,
+    RecordMismatch,
+    StoredModel,
+    analysis_fingerprint,
+    build_record,
+    compare_results,
+    environment,
+    estimates_store,
+    fingerprint,
+    load_record,
+    read_table,
+    save_record,
+    source_fingerprint,
+    write_table,
+)
 from .report import (
     CidpropResult,
     LongarmResult,
@@ -737,6 +757,14 @@ __all__ = [
     "META_DEFAULTS", "NETMETA_DEFAULTS",
     # ecosystem interoperability
     "interop",
+    # standardised, traceable input/output
+    "record",
+    "RECORD_SCHEMA", "STORE_SCHEMA",
+    "AnalysisRecord", "build_record", "save_record", "load_record",
+    "compare_results", "environment", "RecordError", "RecordMismatch",
+    "fingerprint", "source_fingerprint", "analysis_fingerprint",
+    "EstimatesStore", "StoredModel", "estimates_store",
+    "read_table", "write_table",
     # data-frame interoperability
     "as_columns", "column_names", "lookup", "resolve", "resolve_mods",
     "FormulaSpec", "parse_formula", "design_matrix", "model_frame",

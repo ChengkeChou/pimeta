@@ -8,6 +8,42 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **`pimeta.record` — standardised, traceable, reproducible input and output.**
+  A new subpackage that makes a result carry its own evidence instead of
+  relying on a saved script:
+  - `save_record` / `load_record` write and read a single JSON file with five
+    blocks: `inputs` (输入数据), `analysis` (分析配置), `process` (运算过程),
+    `environment` (运行环境) and `results` (结果与诊断).
+  - Two storage modes. `mode="digest"` (default) keeps fingerprints, column
+    names and row count only, so no participant-level data is copied;
+    `mode="bundle"` stores the table as well, which makes the record
+    self-verifying (`record.verify()`) and self-replaying (`record.replay()`,
+    which re-fits and compares every numeric field).
+  - **Two independent SHA-256 fingerprints**, because one hash cannot answer
+    both questions. `source_fingerprint` covers every column in file order, so
+    it changes when a study is relabelled. `analysis_fingerprint` covers only
+    the columns that entered the model (sorted by name) plus the settings that
+    can move a number, so relabelling `slab` — or reordering columns, or adding
+    an unused one — leaves it unchanged while changing `method` or a value does
+    not. Digests are computed over a canonical form, so they are identical
+    across platforms.
+  - `pimeta.record.jsonio` writes **strict JSON**: `NaN` and `±Infinity` are
+    emitted as tagged `{"$pimeta": "nan"}` objects instead of the invalid
+    `NaN`/`Infinity` tokens that `json.dumps` produces. The file is readable by
+    any strict parser *and* lossless — `tau2 = 0`, `I2 = nan` and `H2 = inf`
+    stay three different facts. Writes are atomic and line endings are forced
+    to `\n`.
+  - `read_table` / `write_table` handle CSV, TSV, JSON, JSONL and NPZ in both
+    directions. Text output defaults to the shortest round-trip float
+    representation instead of truncating at six significant digits, so a table
+    written and read back reproduces the analysis. `.npz` stores numeric and
+    string columns and refuses object columns rather than enabling `pickle`.
+  - **`EstimatesStore`** is the `estimates store` equivalent: named fits,
+    `compare()` across models, `restore()`, and JSON persistence. A loaded store
+    keeps the records but not the live objects, and says so instead of
+    pretending otherwise.
+  - `pimeta.cli.read_table` now delegates to the shared implementation, so the
+    CLI and the record layer parse files identically.
 - **An R parity fixture for the network side.**
   `tools/r_reference/netmeta_senn2013.R` dumps every quantity that matters from
   R (netmeta 3.7-0, metafor 5.2-1) on `Senn2013` into
