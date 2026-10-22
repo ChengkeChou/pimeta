@@ -223,6 +223,41 @@ reloaded["re"].coef_table()
 reloaded["re"].record.replay()
 ```
 
+## Recording a network meta-analysis
+
+`netmeta()` takes column names, so nothing extra is needed — the same pattern
+as `rma()`:
+
+```python
+import pimeta as ma
+from pimeta.record import save_record
+
+nm = ma.netmeta("TE", "seTE", "treat1", "treat2", data=df, sm="MD")
+
+save_record(
+    "nma.json", nm,
+    data=df,
+    mode="bundle",
+    function="netmeta",
+    call={"TE": "TE", "seTE": "seTE",
+          "treat1": "treat1", "treat2": "treat2", "sm": "MD"},
+)
+```
+
+`replay()` re-fits the network and compares every numeric field of the fitted
+object — the contrast matrices, `TE.random`, the decomposition `Q` terms and
+the P-scores — so a drift anywhere in the network is caught, not just in the
+headline estimate.
+
+The τ² estimator is part of the analysis fingerprint: a DL fit and a REML fit
+of the same table get different `analysis` digests, because they are different
+analyses. `reference_group` and `baseline_reference` are recorded for the same
+reason — they change which contrasts are reported.
+
+A network has no coefficient vector, so `EstimatesStore.coef_table()` returns
+an empty table for one. That is deliberate: `compare()` simply contributes no
+rows rather than inventing a coefficient that does not exist.
+
 ## What replay actually proves
 
 `replay()` re-runs the recorded call with the recorded data and compares every

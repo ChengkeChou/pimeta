@@ -95,6 +95,12 @@ _SETTING_ATTRS = (
     "alpha",
     "model",
     "struct",
+    # network meta-analysis: the tau^2 estimator and the direction of the
+    # reported contrasts both change the numbers, so they belong in the
+    # fingerprint rather than only in the recorded call.
+    "method_tau",
+    "reference_group",
+    "baseline_reference",
 )
 
 #: Attributes of a result worth keeping under "process" when present.

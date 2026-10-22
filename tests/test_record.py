@@ -439,3 +439,92 @@ def test_save_without_a_path_complains(fit):
     store.store("re", fit)
     with pytest.raises(ValueError, match="pass save"):
         store.save()
+
+
+# --------------------------------------------------------------------------- #
+# network meta-analysis
+# --------------------------------------------------------------------------- #
+NETWORK = {
+    "TE": [0.10, 0.20, 0.05, 0.15, 0.30, 0.25, 0.12, 0.18],
+    "seTE": [0.04, 0.05, 0.03, 0.06, 0.05, 0.07, 0.04, 0.06],
+    "treat1": ["A", "B", "A", "C", "A", "B", "A", "C"],
+    "treat2": ["B", "C", "C", "D", "D", "D", "B", "D"],
+}
+NETWORK_CALL = {
+    "TE": "TE",
+    "seTE": "seTE",
+    "treat1": "treat1",
+    "treat2": "treat2",
+    "sm": "MD",
+}
+
+
+def _network(**kwargs):
+    return ma.netmeta(**NETWORK_CALL, data=NETWORK, **kwargs)
+
+
+def test_a_network_fit_round_trips_through_a_bundle_record(tmp_path):
+    fit = _network()
+    record = build_record(fit, data=NETWORK, mode="bundle",
+                          function="netmeta", call=NETWORK_CALL)
+    # netmeta() takes column names, so the existing inference already sees
+    # that the bundled table has to be injected again.
+    assert record.analysis["pass_data"] is True
+
+    path = record.save(tmp_path / "nma.json")
+    assert "NaN" not in path.read_text(encoding="utf-8")
+
+    loaded = AnalysisRecord.load(path)
+    assert loaded.kind == "netmeta"
+    assert loaded.inputs["n_rows"] == 8
+    loaded.verify()
+
+    again = loaded.replay()
+    assert np.allclose(
+        np.asarray(again.TE_random, dtype=float),
+        np.asarray(fit.TE_random, dtype=float),
+        rtol=1e-9,
+        equal_nan=True,
+    )
+    assert again.Q == pytest.approx(fit.Q, rel=1e-12)
+
+
+def test_the_tau_estimator_is_part_of_the_fingerprint():
+    digests = {}
+    for method in ("DL", "REML"):
+        record = build_record(_network(method_tau=method), data=NETWORK,
+                              mode="digest", function="netmeta",
+                              call=NETWORK_CALL)
+        assert record.analysis["settings"]["method_tau"] == method
+        digests[method] = record.fingerprint["analysis"]
+    # Different estimator, different analysis -- even though the source table
+    # is byte-identical.
+    assert digests["DL"] != digests["REML"]
+
+
+def test_the_tau_estimator_does_not_change_the_source_fingerprint():
+    digests = {
+        method: build_record(_network(method_tau=method), data=NETWORK,
+                             mode="digest").fingerprint["source"]
+        for method in ("DL", "REML")
+    }
+    assert digests["DL"] == digests["REML"]
+
+
+def test_network_replay_catches_an_edited_estimate(tmp_path):
+    record = build_record(_network(), data=NETWORK, mode="bundle",
+                          function="netmeta", call=NETWORK_CALL)
+    record.save(tmp_path / "nma.json")
+    loaded = AnalysisRecord.load(tmp_path / "nma.json")
+    loaded.results["values"]["Q"] = 999.0
+    with pytest.raises(RecordMismatch, match="replayed"):
+        loaded.replay()
+
+
+def test_a_network_fit_has_no_coefficient_table():
+    store = EstimatesStore("networks")
+    store.store("dl", _network())
+    # A network has no coefficient vector, so compare() contributes no rows
+    # rather than inventing a table.
+    assert store["dl"].coef_table() == {}
+    assert store.compare() == {}

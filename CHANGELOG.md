@@ -8,6 +8,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **Network meta-analysis records now capture the τ² estimator.** `_SETTING_ATTRS`
+  gained `method_tau`, `reference_group` and `baseline_reference`, so a DL fit
+  and a REML fit of the same table get different `analysis` fingerprints and
+  different `settings` blocks. Without them the two were indistinguishable by
+  digest even though they are different analyses. `netmeta()` takes column
+  names, so it needed no other change: `save_record(..., function="netmeta",
+  call={"TE": ..., "treat1": ...})` verifies and replays as it stands, comparing
+  every numeric field of the fitted network object.
 - **The four example notebooks are now bilingual.** Every markdown cell leads
   with English and keeps the original Chinese underneath as a `**中文**`
   blockquote, so the runnable examples read the same way as the rest of the
