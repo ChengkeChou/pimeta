@@ -175,7 +175,7 @@ One analysis, fully described.
 ## `build_record`
 
 ```python
-build_record(result: 'Any', *, kind: 'str | None' = None, data: 'Any' = None, mode: 'str' = 'digest', columns: 'Sequence[str] | None' = None, analysis_columns: 'Sequence[str] | None' = None, settings: 'Mapping[str, Any] | None' = None, function: 'str | None' = None, call: 'Mapping[str, Any] | None' = None, process: 'Mapping[str, Any] | None' = None, diagnostics: 'Mapping[str, Any] | None' = None, seed: 'int | None' = None) -> 'AnalysisRecord'
+build_record(result: 'Any', *, kind: 'str | None' = None, data: 'Any' = None, mode: 'str' = 'digest', columns: 'Sequence[str] | None' = None, analysis_columns: 'Sequence[str] | None' = None, settings: 'Mapping[str, Any] | None' = None, function: 'str | None' = None, call: 'Mapping[str, Any] | None' = None, pass_data: 'bool | None' = None, process: 'Mapping[str, Any] | None' = None, diagnostics: 'Mapping[str, Any] | None' = None, seed: 'int | None' = None) -> 'AnalysisRecord'
 ```
 
 Wrap a fitted result in an `AnalysisRecord`.
@@ -191,6 +191,7 @@ Wrap a fitted result in an `AnalysisRecord`.
 - `settings` — values that can move a number.  Defaults to the result's own ``method``/``test``/``level``/... attributes.
 - `function` — name of the pimeta function that was called, for `AnalysisRecord.replay`.
 - `call` — the keyword arguments that were passed.  Column names are looked up in ``data`` again on replay.
+- `pass_data` — force the bundled data to be injected as ``data=`` on replay.  ``None`` (default) infers it: the data is injected only when the recorded call refers to columns by name.  Set it to ``True`` for a function that takes a whole table -- ``reitsma``, for example, whose ``data=`` is the counts table itself rather than a set of column names.
 - `process` — extra ``运算过程`` entries (iterations, convergence, timings).
 - `diagnostics` — extra ``结果与诊断`` entries.
 - `seed` — random seed in force, recorded in the environment block.

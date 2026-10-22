@@ -379,14 +379,15 @@ print(f"{len(AUDITC['TP'])} studies; zero cells in studies {zero}")"""),
 `escalc_dta` turns the four counts into logit sensitivity and logit FPR with
 delta-method variances.
 
-The continuity correction is the surprise. With `mada`'s default
-`correction_control="all"`, **one** zero cell anywhere means **every** study
-gets 0.5 added to all four cells — not only the studies that need it. That
-changes the estimates, so it is reproduced rather than quietly "fixed".
+The continuity correction is where packages differ. `mada` adds 0.5 to **every**
+study as soon as **one** table anywhere has a zero cell. That is not a
+correction any more — it moves studies that were fine, and it moves them most
+where the sample is smallest. Here the correction is per study, and any
+correction that changes the counts says so out loud.
 
 > **中文**　`escalc_dta` 把四个计数变成 logit 敏感度和 logit FPR，方差用 delta 法。
 >
-> 意外之处在连续性校正：`mada` 的默认值是 `correction_control="all"` —— **只要有一格为零**，**所有**研究的四格都加 0.5，不只是需要救的那些。这会改变估计值，所以照搬而不是悄悄「修好」。
+> 各包在连续性校正上不一致：`mada` 是只要**有一格为零**就给**所有**研究加 0.5。那就不叫校正了 —— 它会动那些本来没问题的研究，而且样本越小动得越厉害。这里默认只校正需要救的研究，并且只要改了计数就出声。
 """),
     ("code", """dta = ma.escalc_dta(AUDITC)
 
@@ -396,16 +397,19 @@ print(f"study 1: TP {dta.tp[0]:.1f}, FN {dta.fn[0]:.1f} "
 print(f"sensitivity range {dta.sens.min():.3f} .. {dta.sens.max():.3f}")
 print(f"FPR range         {dta.fpr.min():.3f} .. {dta.fpr.max():.3f}")
 
-only_broken = ma.escalc_dta(AUDITC, correction_control="single")
-print(f"with 'single', only {int(only_broken.corrected.sum())} studies "
-      "are corrected")"""),
+# mada's global version is one argument away, if you need its numbers.
+mada_style = ma.escalc_dta(AUDITC, correction_control="all")
+print(f"mada's correction_control='all' corrects "
+      f"{int(mada_style.corrected.sum())} studies")"""),
     ("markdown", """## The bivariate model
 
-The summary point is the back-transformed mean pair. `Psi` is the study-level
-covariance, and `rho` is usually strongly positive: a study that uses a lower
-threshold buys sensitivity with false positives, so the two move together.
+The second component is the **specificity**, the way the DTA literature reports
+it, so a threshold effect shows up as a *negative* `rho`: a study that lowers
+its threshold buys sensitivity by giving up specificity. (Model it as the false
+positive rate instead — which is what `mada` does — and the same correlation
+comes out positive. It is the same model; only the sign convention changes.)
 
-> **中文**　汇总点是反变换后的均值对。`Psi` 是研究间协方差；`rho` 通常显著为正 —— 阈值低的研究用假阳性换敏感度，两者同向变动。
+> **中文**　第二个分量用**特异度**，和 DTA 文献一致，所以阈值效应表现为**负**的 `rho`：降低阈值的研究用特异度换敏感度。（改用假阳性率建模 —— 也就是 `mada` 的做法 —— 同一个相关性会变成正的。模型完全一样，只是符号约定不同。）
 """),
     ("code", """fit = ma.reitsma(dta)          # REML, mada's default
 

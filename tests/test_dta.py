@@ -17,11 +17,14 @@ AIC is built on.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 import pytest
 
 import pimeta as ma
 from pimeta.dta import (
+    DtaCorrectionWarning,
     DtaData,
     HsrocResult,
     ReitsmaResult,
@@ -31,6 +34,18 @@ from pimeta.dta import (
     hsroc,
     reitsma,
     sroc,
+)
+
+
+def _mada(data, method="reml", **kwargs):
+    """Fit exactly the way mada does, for comparing numbers with R."""
+    return reitsma(data, method=method, correction_control="all", **kwargs)
+
+
+# Most tests do not care that a correction fired; two of them assert on it
+# explicitly with ``pytest.warns``, which sets its own filter.
+pytestmark = pytest.mark.filterwarnings(
+    "ignore::pimeta.dta.DtaCorrectionWarning"
 )
 
 #: mada::AuditC
@@ -121,13 +136,31 @@ DEMENTIA_REF = {
 # --------------------------------------------------------------------------- #
 # data preparation
 # --------------------------------------------------------------------------- #
-def test_zero_cells_correct_every_study_because_that_is_what_mada_does():
+def test_the_default_correction_touches_only_the_studies_that_need_it():
     data = escalc_dta(AUDITC)
-    # Two studies have FN == 0, so mada's default correction.control="all"
-    # adds 0.5 to all four cells of *every* study, not only those two.
+    # Two studies have FN == 0.  Correcting the other twelve as well is what
+    # mada does; it is not what this package does, and not what the method
+    # says.
+    assert data.corrected.sum() == 2
+    assert data.tp[0] == 47
+    assert data.fn[6] == pytest.approx(0.5)
+
+
+def test_mada_global_correction_is_available_but_has_to_be_asked_for():
+    with pytest.warns(DtaCorrectionWarning, match="all 14 studies"):
+        data = escalc_dta(AUDITC, correction_control="all")
     assert data.corrected.all()
     assert data.tp[0] == pytest.approx(47.5)
-    assert data.fn[6] == pytest.approx(0.5)
+
+
+def test_a_correction_is_never_applied_silently():
+    with pytest.warns(DtaCorrectionWarning, match="2 of 14 studies"):
+        escalc_dta(AUDITC)
+    # No zero cell, nothing to say.
+    clean = {"TP": [10, 20], "FN": [2, 3], "FP": [4, 5], "TN": [40, 50]}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DtaCorrectionWarning)
+        escalc_dta(clean)
 
 
 def test_correction_control_single_touches_only_the_broken_studies():
@@ -144,7 +177,7 @@ def test_correction_control_none_leaves_the_counts_alone():
 
 
 def test_uncorrected_sensitivity_and_fpr_are_kept_for_the_partial_auc():
-    data = escalc_dta(AUDITC)
+    data = escalc_dta(AUDITC, correction_control="all")
     assert data.fpr_raw[0] == pytest.approx(101 / (101 + 738))
     assert data.fpr[0] == pytest.approx(101.5 / (101.5 + 738.5))
     assert data.fpr_raw[0] != data.fpr[0]
@@ -177,16 +210,23 @@ def test_counts_can_arrive_as_a_mapping_or_as_arguments():
 def test_reitsma_matches_mada(dataset, ref, method):
     data = AUDITC if dataset == "auditc" else DEMENTIA
     expected = ref[method]
-    fit = reitsma(data, method=method)
+    fit = _mada(data, method)
 
     # The means agree to 1e-7.  The variance components are allowed 1e-5
     # because mvmeta stops earlier than this implementation does: evaluating
     # the likelihood at mada's own parameters gives the identical value (see
     # test_likelihood_agrees_at_madas_optimum), so the gap is the stopping
     # rule, not a different model.
-    assert fit.mu == pytest.approx(expected["coef"], rel=1e-6)
+    #
+    # mada fits logit(sensitivity) and logit(FPR); this package reports
+    # logit(specificity), so the second component and the covariance come out
+    # negated.  mu_fpr is the value mada prints.
+    assert fit.mu_fpr == pytest.approx(expected["coef"], rel=1e-6)
+    assert fit.mu[0] == pytest.approx(expected["coef"][0], rel=1e-6)
+    assert fit.mu[1] == pytest.approx(-expected["coef"][1], rel=1e-6)
+    assert fit.Psi_fpr[0, 1] == pytest.approx(expected["Psi"][1], rel=1e-5)
     assert fit.Psi[0, 0] == pytest.approx(expected["Psi"][0], rel=1e-5)
-    assert fit.Psi[0, 1] == pytest.approx(expected["Psi"][1], rel=1e-5)
+    assert fit.Psi[0, 1] == pytest.approx(-expected["Psi"][1], rel=1e-5)
     assert fit.Psi[1, 1] == pytest.approx(expected["Psi"][2], rel=1e-5)
     assert fit.loglik == pytest.approx(expected["loglik"], rel=1e-6)
     assert fit.loglik_raw == pytest.approx(expected["loglik_raw"], rel=1e-6)
@@ -212,7 +252,7 @@ def test_likelihood_agrees_at_madas_optimum(dataset, ref, method):
 
     data = AUDITC if dataset == "auditc" else DEMENTIA
     expected = ref[method]
-    prepared = escalc_dta(data)
+    prepared = escalc_dta(data, correction_control="all")
     y = np.column_stack([_logit(prepared.sens), _logit(prepared.fpr)])
     V = np.zeros((prepared.k, 2, 2))
     V[:, 0, 0] = prepared.var_sens
@@ -240,7 +280,7 @@ def test_likelihood_agrees_at_madas_optimum(dataset, ref, method):
 def test_hsroc_matches_madas_reparameterisation(dataset, ref, method):
     data = AUDITC if dataset == "auditc" else DEMENTIA
     expected = ref[method]
-    fit = reitsma(data, method=method)
+    fit = _mada(data, method)
     h = hsroc(fit)
     got = [h.Theta, h.Lambda, h.beta, h.sigma2theta, h.sigma2alpha]
     # Derived quantities amplify the variance-component gap: beta is a log
@@ -257,7 +297,7 @@ def test_hsroc_matches_madas_reparameterisation(dataset, ref, method):
 def test_summary_point_matches_mada(dataset, ref, method):
     data = AUDITC if dataset == "auditc" else DEMENTIA
     expected = ref[method]
-    fit = reitsma(data, method=method)
+    fit = _mada(data, method)
     assert fit.summary_sens == pytest.approx(expected["sens"], rel=1e-6)
     assert fit.summary_fpr == pytest.approx(expected["fpr"], rel=1e-6)
     assert fit.summary_spec == pytest.approx(1 - expected["fpr"], rel=1e-6)
@@ -271,7 +311,7 @@ def test_summary_point_matches_mada(dataset, ref, method):
 def test_auc_matches_mada(dataset, ref, method):
     data = AUDITC if dataset == "auditc" else DEMENTIA
     expected = ref[method]
-    got = auc(reitsma(data, method=method))
+    got = auc(_mada(data, method))
     assert got["auc"] == pytest.approx(expected["auc"], abs=1e-5)
     assert got["pauc"] == pytest.approx(expected["pauc"], abs=1e-5)
 
@@ -281,7 +321,7 @@ def test_auc_matches_mada(dataset, ref, method):
 # --------------------------------------------------------------------------- #
 def test_sroc_reproduces_madas_first_grid_point():
     # mada::sroc(fit) evaluated at fpr = 0.01 gives 0.01742666 for AuditC.
-    curve = sroc(reitsma(AUDITC))
+    curve = sroc(_mada(AUDITC))
     assert isinstance(curve, SrocResult)
     assert curve.fpr.size == 99
     assert curve.tpr[0] == pytest.approx(0.01742666, abs=1e-7)
@@ -498,8 +538,8 @@ def test_a_dta_fit_goes_into_an_estimates_store():
     from pimeta.record import EstimatesStore
 
     store = EstimatesStore("auditc")
-    store.store("reml", reitsma(AUDITC))
-    store.store("ml", reitsma(AUDITC, method="ml"))
+    store.store("reml", _mada(AUDITC))
+    store.store("ml", _mada(AUDITC, "ml"))
 
     table = store.compare()
     assert table["model"] == ["reml", "reml", "ml", "ml"]

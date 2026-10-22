@@ -176,8 +176,8 @@ import pimeta as ma
 
 data = ma.escalc_dta(tp, fn, fp, tn, slab=studies)
 fit = ma.reitsma(data)                      # REML bivariate model
-print(fit.summary_sens, fit.summary_fpr)
-print(fit.tau, fit.rho, fit.AIC)
+print(fit.summary_sens, fit.summary_spec)
+print(fit.tau, fit.rho, fit.AIC)             # rho < 0 under a threshold effect
 
 h = ma.hsroc(fit)                           # same likelihood, HSROC parameters
 print(h.Theta, h.Lambda, h.beta, h.dor)
@@ -188,7 +188,10 @@ ma.sroc(fit)                                # 99-point Rutter-Gatsonis curve
 
 Matches `mada` 0.5.12 on its `AuditC` and `Dementia` datasets under both REML
 and ML — coefficients, study-level covariance, log-likelihood, AIC/BIC, HSROC
-parameters, summary point, AUC and partial AUC. See
+parameters, summary point, AUC and partial AUC. Two things differ on purpose:
+the continuity correction touches only the studies that need it (and warns),
+and the model is parameterised on specificity rather than FPR so that `rho`
+carries the negative sign the literature uses. See
 [the guide](docs/guide/diagnostic-accuracy.md).
 
 ### Network meta-analysis (`netmeta`)

@@ -35,14 +35,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 - **Diagnostic test accuracy: the bivariate model and HSROC.** `pimeta.dta`
   synthesises 2x2 diagnostic tables the way `mada` does:
-  - `escalc_dta` turns TP/FN/FP/TN into logit sensitivity and logit FPR with
-    delta-method variances, including `mada`'s continuity-correction
-    behaviour — with the default `correction_control="all"` a single zero cell
-    anywhere corrects **every** study, which changes the estimates and so is
-    reproduced rather than "fixed".
-  - `reitsma` fits the bivariate random-effects model by REML (mada's default)
-    or ML, reporting the mean logit pair, the 2x2 study-level covariance, the
-    summary sensitivity/FPR/specificity with intervals, and the
+  - `escalc_dta` turns TP/FN/FP/TN into logit sensitivity and logit
+    specificity with delta-method variances. A zero cell gives an infinite
+    variance, so `correction_control` decides what happens: the default
+    (`"single"`) corrects only the studies that need it, `"none"` never, and
+    `"all"` reproduces `mada`'s behaviour. Every correction raises a
+    `DtaCorrectionWarning` rather than changing the counts silently.
+  - `reitsma` fits the bivariate random-effects model by REML or ML,
+    reporting the mean logit pair, the 2x2 study-level covariance, the
+    summary sensitivity/specificity/FPR with intervals, and the
     Jacobian-corrected log-likelihood, AIC and BIC that `mada` reports.
   - `hsroc` returns the Rutter–Gatsonis parameters (threshold, accuracy,
     asymmetry, both variance components). Because the two models are
@@ -57,6 +58,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     `tests/test_dta.py` additionally evaluates the likelihood at mada's
     reported variance components and matches it to 1e-6, which shows the two
     implementations are optimising the same function.
+  - Two places diverge from `mada` on purpose, because copying it would be
+    wrong:
+    1. **Continuity correction is per study.** `mada` applies it to every
+       study once any table has a zero cell (an `ifelse` where an `if` was
+       meant). That breaks locality — adding one study changes every other
+       study's contribution — and hits hardest where the sample is smallest,
+       i.e. exactly where no correction was needed. On `AuditC`, two of
+       fourteen studies need it and the global rule moves the other twelve by
+       up to 0.013 in sensitivity and `tau_sens` by 6.7%. Available as
+       `correction_control="all"` for exact reproduction.
+    2. **The second component is specificity, not FPR.** Same model, sign
+       flip, but specificity puts `rho` on the scale the literature uses: a
+       threshold effect is a *negative* correlation. `mada`'s FPR-scale values
+       are still reported as `mu_fpr`, `Psi_fpr`, `vcov_fpr` and `rho_fpr`,
+       so its printed output can be compared term by term.
   - A DTA fit drops straight into `pimeta.record`: `save_record(..., mode=
     "bundle", function="reitsma", call=..., pass_data=True)` gives a record
     that can be `verify()`-ed and `replay()`-ed without the original counts,

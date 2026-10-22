@@ -39,9 +39,10 @@ def main() -> None:
     fit = ma.reitsma(COUNT)
     print("bivariate model, REML")
     print(f"  mean logit(sens) = {fit.mu[0]:.4f}  (se {fit.se[0]:.4f})")
-    print(f"  mean logit(fpr)  = {fit.mu[1]:.4f}  (se {fit.se[1]:.4f})")
+    print(f"  mean logit(spec) = {fit.mu[1]:.4f}  (se {fit.se[1]:.4f})")
     print(f"  summary point    = sens {fit.summary_sens:.3f}, "
           f"spec {fit.summary_spec:.3f}")
+    # rho is on the specificity scale, so a threshold effect makes it negative.
     print(f"  tau              = {fit.tau[0]:.3f}, {fit.tau[1]:.3f}   rho = {fit.rho:.3f}")
     print(f"  AIC = {fit.AIC:.3f}")
 

@@ -26,34 +26,53 @@ data = ma.escalc_dta(
 `escalc_dta` returns a `DtaData` holding the four cells, sensitivity, FPR and
 the variance of each on the logit scale ($1/TP + 1/FN$ and $1/FP + 1/TN$).
 
-### The continuity correction has a surprising default
+### The continuity correction is per study, and it is never silent
 
-A zero cell gives an infinite logit variance. `mada`'s default,
-`correction_control="all"`, adds the correction to **every** study as soon as
-**any** table in the dataset has a zero cell — not only to the studies that
-need it. That changes the estimates, so `pimeta` reproduces it:
+A zero cell gives an infinite logit variance. `pimeta` corrects **only the
+studies that need it** (the default), and raises a `DtaCorrectionWarning`
+whenever a correction actually changes the counts:
 
 ```python
-ma.escalc_dta(tp, fn, fp, tn)                              # "all" (mada's default)
-ma.escalc_dta(tp, fn, fp, tn, correction_control="single")  # only the broken ones
+ma.escalc_dta(tp, fn, fp, tn)                              # only the broken ones
 ma.escalc_dta(tp, fn, fp, tn, correction_control="none")    # never
+ma.escalc_dta(tp, fn, fp, tn, correction_control="all")     # mada's behaviour
 ```
+
+`"all"` reproduces `mada`, which adds the correction to **every** study as
+soon as **any** table has a zero cell. It is not the default here, because it
+is hard to defend:
+
+- it moves studies that had no problem, so adding one study with a zero cell
+  changes every other study's contribution;
+- the damage is largest where the sample is smallest — exactly where the
+  correction was not needed;
+- no DTA text proposes a correction that depends on the rest of the dataset.
+
+On `mada::AuditC` two of fourteen studies need it, yet `"all"` shifts the
+other twelve by up to 0.013 in sensitivity and moves `tau_sens` by 6.7%.
 
 ## The bivariate model
 
 ```python
-fit = ma.reitsma(data)                 # REML, mada's default
-print(fit.mu)                          # mean logit sensitivity, mean logit FPR
+fit = ma.reitsma(data)                 # REML
+print(fit.mu)                          # mean logit sensitivity, mean logit SPECIFICITY
 print(fit.Psi)                         # 2x2 study-level covariance
-print(fit.summary_sens, fit.summary_fpr, fit.summary_spec)
+print(fit.summary_sens, fit.summary_spec, fit.summary_fpr)
 print(fit.AIC)
 ```
+
+The second component is the **specificity**, not the false positive rate. The
+two are the same model with a sign flip, but specificity keeps `rho` on the
+scale the literature uses: a threshold effect is a **negative** correlation.
+`mada` uses the FPR scale and therefore reports the mirror image; the values
+it prints are available as `fit.mu_fpr`, `fit.Psi_fpr`, `fit.vcov_fpr` and
+`fit.rho_fpr`.
 
 The summary point is the back-transformed mean pair, and its interval comes
 from the fixed-effects covariance:
 
 ```python
-print(fit.sens_ci, fit.fpr_ci)
+print(fit.sens_ci, fit.spec_ci, fit.fpr_ci)
 ```
 
 Use `method="ml"` for maximum likelihood. Other estimation methods that
@@ -79,8 +98,8 @@ same log-likelihood and the same AIC, as they must.
 
 | | bivariate | HSROC |
 |---|---|---|
-| Mean structure | `mu = (mu_sens, mu_fpr)` | `Theta`, `Lambda` |
-| Heterogeneity | `tau_sens`, `tau_fpr`, `rho` | `sigma_theta`, `sigma_alpha` |
+| Mean structure | `mu = (mu_sens, mu_spec)` | `Theta`, `Lambda` |
+| Heterogeneity | `tau_sens`, `tau_spec`, `rho` | `sigma_theta`, `sigma_alpha` |
 | Asymmetry | carried by `rho` | `beta` |
 | Parameters | 5 | 5 |
 
@@ -169,13 +188,28 @@ share one likelihood.
 ## Parity with `mada`
 
 The numbers are checked against `mada` 0.5.12 on its own `AuditC` (14 studies)
-and `Dementia` (33 studies) datasets, under both REML and ML:
-coefficients, the study-level covariance, the Jacobian-corrected
-log-likelihood, AIC/BIC, the HSROC parameters, the summary point and both
-AUCs. `tests/test_dta.py` also evaluates the likelihood at `mada`'s reported
+and `Dementia` (33 studies) datasets, under both REML and ML: coefficients, the
+study-level covariance, the Jacobian-corrected log-likelihood, AIC/BIC, the
+HSROC parameters, the summary point and both AUCs. The tests fit with
+`correction_control="all"` and compare `mu_fpr` / `Psi_fpr` against mada, so
+the parity claim is about the estimator, not about the defaults.
+
+Two things deliberately differ from `mada`, both on scientific grounds rather
+than for convenience:
+
+| | `mada` | `pimeta` |
+|---|---|---|
+| continuity correction | every study once any cell is zero | only the studies that need it, with a warning |
+| second component | logit FPR | logit specificity |
+| sign of `rho` | positive under a threshold effect | negative |
+
+`tests/test_dta.py` also evaluates the likelihood at `mada`'s reported
 variance components and asserts it matches to $10^{-6}$, which is the strong
 statement: the two implementations are optimising the same function, and the
 small parameter differences are `mvmeta`'s stopping tolerance.
+
+> **中文**　数值与 `mada` 0.5.12 逐项对拍。有两处**刻意**不跟随 mada，理由都是科学性的而非便利性：第一，连续性校正只动需要救的研究（mada 是一个零格污染全体）；第二，第二个分量用特异度（mada 用假阳性率），因此 `rho` 的符号与文献一致。
+
 
 ## See also
 

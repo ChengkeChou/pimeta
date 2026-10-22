@@ -58,6 +58,7 @@ from .diagnostics import (
     vif,
 )
 from .dta import (
+    DtaCorrectionWarning,
     DtaData,
     HsrocResult,
     ReitsmaResult,
@@ -764,7 +765,7 @@ __all__ = [
     # given; the aliases below make ``pimeta.dfbetas(res)`` work like R.
     "dfbetas", "rstandard",
     # diagnostic test accuracy
-    "DtaData", "ReitsmaResult", "HsrocResult", "SrocResult",
+    "DtaData", "DtaCorrectionWarning", "ReitsmaResult", "HsrocResult", "SrocResult",
     "escalc_dta", "reitsma", "hsroc", "sroc", "auc",
     # settings
     "gs", "setvals", "settings_meta", "settings_netmeta",

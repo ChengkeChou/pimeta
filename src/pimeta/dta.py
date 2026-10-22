@@ -24,18 +24,27 @@ so :func:`hsroc` does not fit anything: it applies mada's exact algebraic
 transform to the bivariate fit.  Both therefore report the same likelihood and
 the same AIC, which is the correct answer rather than a coincidence.
 
-Parity
-------
-The numbers match ``mada`` 0.5.12 exactly (see ``tests/test_dta.py``).  Two
-details of mada's behaviour are reproduced deliberately because they change
-the estimates:
+Parity, and where this module deliberately differs from ``mada``
+--------------------------------------------------------------
+The estimates match ``mada`` 0.5.12 exactly (see ``tests/test_dta.py``), but
+two of mada's behaviours are **not** adopted, because they are not defensible:
 
-* the continuity correction is applied to **every** study as soon as **any**
-  table anywhere has a zero cell (``correction_control="all"``, mada's
-  default) -- not only to the studies that need it;
-* the second component is the **false positive rate**, not the specificity,
-  so ``mu_2`` is positive when accuracy is poor and ``rho`` has the sign you
-  get on that scale.
+* **The continuity correction is per study by default.**  mada's
+  ``correction.control="all"`` adds the correction to *every* study as soon as
+  any table anywhere has a zero cell.  That is a global scalar ``if`` wrapped
+  around a vectorised ``any()`` -- almost certainly an ``ifelse`` written as
+  ``if``, since the ``"single"`` branch right beside it is element-wise.  It
+  also breaks locality (adding one study moves everyone else's data) and it
+  hits hardest where the sample is smallest, i.e. exactly where the correction
+  is not needed.  Use ``correction_control="all"`` to reproduce mada bit for
+  bit; the default here is ``"single"``, and any correction that changes the
+  counts raises :class:`DtaCorrectionWarning`.
+* **The second component is the specificity, not the false positive rate.**
+  The two are the same model with a sign flip, but reporting specificity keeps
+  the between-study correlation on the scale the DTA literature uses: a
+  threshold effect is a *negative* ``rho``, not a positive one.  The
+  FPR-scale values remain available as :attr:`ReitsmaResult.mu_fpr`,
+  ``Psi_fpr``, ``vcov_fpr`` and ``rho_fpr``, which is what mada prints.
 
 ``mada`` reports a log-likelihood with a Jacobian correction added, the change
 of variables from the logit scale back to the probability scale.  That is what
@@ -45,6 +54,7 @@ its AIC is built on, so :attr:`ReitsmaResult.loglik` keeps it and
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -54,6 +64,7 @@ from scipy import optimize, stats
 
 __all__ = [
     "DtaData",
+    "DtaCorrectionWarning",
     "HsrocResult",
     "ReitsmaResult",
     "SrocResult",
@@ -63,6 +74,19 @@ __all__ = [
     "reitsma",
     "sroc",
 ]
+
+
+class DtaCorrectionWarning(UserWarning):
+    """A continuity correction changed the counts.
+
+    Emitted whenever ``escalc_dta`` adds something to a cell, naming how many
+    studies were affected.  A correction is a modelling decision, not a
+    formatting detail, so it should never happen silently.
+    """
+
+
+def _warn(message: str) -> None:
+    warnings.warn(message, DtaCorrectionWarning, stacklevel=3)
 
 _EPS = np.finfo(float).eps
 #: A variance this small is indistinguishable from zero and would make the
@@ -156,7 +180,7 @@ def escalc_dta(
     *,
     slab: Sequence[Any] | None = None,
     correction: float = 0.5,
-    correction_control: str = "all",
+    correction_control: str = "single",
 ) -> DtaData:
     """Turn 2x2 counts into logit sensitivity / logit FPR with variances.
 
@@ -168,9 +192,16 @@ def escalc_dta(
         tn: true negatives.
         slab: study labels; defaults to ``"Study 1"``, ``"Study 2"``, ...
         correction: value added to the cells, ``0.5`` by default.
-        correction_control: ``"all"`` (mada's default) adds ``correction`` to
-            every study when *any* table has a zero cell, ``"single"`` adds it
-            only to the studies that need it, ``"none"`` never corrects.
+        correction_control: ``"single"`` (default) adds ``correction`` only to
+            the studies that have a zero cell, ``"none"`` never corrects, and
+            ``"all"`` reproduces ``mada``, which adds it to *every* study as
+            soon as any table anywhere has a zero cell.
+
+            ``"all"`` is deliberately not the default here.  It is not a
+            correction any more, it is a data-dependent perturbation of studies
+            that were fine: adding one study with a zero cell moves every other
+            study's estimate, and the bias is largest where the sample is
+            smallest.  Use it only to reproduce ``mada``'s output exactly.
 
     Returns:
         A :class:`DtaData`.
@@ -205,8 +236,21 @@ def escalc_dta(
         if correction_control == "all":
             # mada: one zero cell anywhere means every study is corrected.
             add[:] = correction
+            n_clean = int(k - zero_cell.sum())
+            _warn(
+                f"continuity correction {correction:g} applied to all {k} "
+                f"studies because {int(zero_cell.sum())} had a zero cell"
+                + (f", including {n_clean} that did not need it" if n_clean else "")
+                + "; this reproduces mada's default - pass "
+                "correction_control='single' to correct only the studies that "
+                "need it"
+            )
         elif correction_control == "single":
             add[zero_cell] = correction
+            _warn(
+                f"continuity correction {correction:g} applied to "
+                f"{int(zero_cell.sum())} of {k} studies with a zero cell"
+            )
 
     tpc, fnc, fpc, tnc = tp + add, fn + add, fp + add, tn + add
     n_pos = tpc + fnc
@@ -295,23 +339,32 @@ class ReitsmaResult:
     """A fitted bivariate diagnostic accuracy model.
 
     Attributes:
-        mu: ``(mu_1, mu_2)`` -- mean logit sensitivity and mean logit FPR.
+        mu: ``(mu_1, mu_2)`` -- mean logit sensitivity and mean logit
+            **specificity**.  Reporting specificity rather than its complement
+            keeps ``rho`` on the scale the DTA literature uses: a threshold
+            effect shows up as a *negative* correlation.
         se: standard errors of ``mu``.
         ci_lb, ci_ub: confidence limits of ``mu`` on the logit scale.
-        Psi: the 2x2 study-level covariance matrix.
+        Psi: the 2x2 study-level covariance matrix, in (sens, spec)
+            coordinates.
         tau: its standard deviations.
-        rho: the between-study correlation.
+        rho: the between-study correlation of logit sensitivity and logit
+            specificity (negative under the usual threshold effect).
         vcov: covariance matrix of ``mu``.
         summary_sens: back-transformed ``mu_1``.
-        summary_fpr: back-transformed ``mu_2``.
-        summary_spec: ``1 - summary_fpr``.
-        sens_ci, fpr_ci: confidence intervals on the probability scale.
+        summary_spec: back-transformed ``mu_2``.
+        summary_fpr: ``1 - summary_spec``.
+        sens_ci, spec_ci, fpr_ci: confidence intervals on the probability
+            scale.
         k: number of studies.
         method: ``"reml"`` or ``"ml"``.
         loglik: log-likelihood with mada's Jacobian correction (what AIC uses).
         loglik_raw: the model's own log-likelihood.
         AIC, BIC: information criteria using ``2 + 3`` parameters and
             ``2k`` observations, as mada does.
+        mu_fpr, Psi_fpr, vcov_fpr, rho_fpr: the same quantities on the
+            false-positive-rate scale ``mada`` reports, so its numbers can be
+            recovered exactly.
         data: the :class:`DtaData` that was fitted.
     """
 
@@ -327,6 +380,7 @@ class ReitsmaResult:
     summary_fpr: float
     summary_spec: float
     sens_ci: list[float]
+    spec_ci: list[float]
     fpr_ci: list[float]
     k: int
     method: str
@@ -335,13 +389,17 @@ class ReitsmaResult:
     AIC: float
     BIC: float
     level: float
+    mu_fpr: list[float] = field(repr=False)
+    Psi_fpr: np.ndarray = field(repr=False)
+    vcov_fpr: np.ndarray = field(repr=False)
+    rho_fpr: float = field(repr=False)
     data: DtaData = field(repr=False)
 
     # -- derived views ----------------------------------------------------- #
     @property
     def coefnames(self) -> list[str]:
-        """Names of the two coefficients, matching mada's ``print``."""
-        return ["(Intercept): logit(sens)", "(Intercept): logit(fpr)"]
+        """Names of the two coefficients."""
+        return ["(Intercept): logit(sens)", "(Intercept): logit(spec)"]
 
     def coef_table(self) -> dict:
         """The coefficient table as ``{column: list}``."""
@@ -567,7 +625,7 @@ def reitsma(
     slab: Sequence[Any] | None = None,
     method: str = "reml",
     correction: float = 0.5,
-    correction_control: str = "all",
+    correction_control: str = "single",
     level: float = 0.95,
 ) -> ReitsmaResult:
     """Fit the bivariate diagnostic accuracy model (``mada::reitsma``).
@@ -579,8 +637,9 @@ def reitsma(
         slab: study labels.
         method: ``"reml"`` (mada's default) or ``"ml"``.
         correction: continuity correction added to the cells.
-        correction_control: ``"all"`` (mada's default), ``"single"`` or
-            ``"none"``.
+        correction_control: ``"single"`` (default), ``"none"`` or ``"all"``.
+            ``"all"`` reproduces ``mada``'s global correction; see
+            :func:`escalc_dta` for why it is not the default.
         level: confidence level (``0.95``).
 
     Returns:
@@ -613,11 +672,23 @@ def reitsma(
     V[:, 0, 0] = np.maximum(prepared.var_sens, _TAU_FLOOR)
     V[:, 1, 1] = np.maximum(prepared.var_fpr, _TAU_FLOOR)
 
-    mu, Psi, loglik_raw, k = _fit_bivariate(y, V, method)
+    mu_fpr, Psi_fpr, loglik_raw, k = _fit_bivariate(y, V, method)
 
-    M = V + Psi
+    M = V + Psi_fpr
     Minv = np.linalg.inv(M)
-    vcov = np.linalg.inv(Minv.sum(axis=0))
+    vcov_fpr = np.linalg.inv(Minv.sum(axis=0))
+
+    # Report in the conventional coordinates: the second component is the
+    # specificity, not the false positive rate.  Flip v -> -v.  The model is
+    # untouched -- only the sign of mu_2, of the covariance and of rho changes --
+    # so a threshold effect shows up as the negative correlation that the DTA
+    # literature reports instead of its mirror image.
+    flip = np.array([1.0, -1.0])
+    outer = np.outer(flip, flip)
+    mu = mu_fpr * flip
+    Psi = Psi_fpr * outer
+    vcov = vcov_fpr * outer
+
     se = np.sqrt(np.diag(vcov))
 
     z = stats.norm.ppf(1 - (1 - level) / 2)
@@ -632,6 +703,8 @@ def reitsma(
     bic = -2.0 * loglik + np.log(2.0 * k) * n_par
 
     tau = np.sqrt(np.diag(Psi))
+    sens_lo, sens_hi = float(_expit(ci_lb[0])), float(_expit(ci_ub[0]))
+    spec_lo, spec_hi = float(_expit(ci_lb[1])), float(_expit(ci_ub[1]))
     return ReitsmaResult(
         mu=[float(v) for v in mu],
         se=[float(v) for v in se],
@@ -642,10 +715,12 @@ def reitsma(
         rho=float(Psi[0, 1] / (tau[0] * tau[1])),
         vcov=vcov,
         summary_sens=float(_expit(mu[0])),
-        summary_fpr=float(_expit(mu[1])),
-        summary_spec=float(1 - _expit(mu[1])),
-        sens_ci=[float(_expit(ci_lb[0])), float(_expit(ci_ub[0]))],
-        fpr_ci=[float(_expit(ci_lb[1])), float(_expit(ci_ub[1]))],
+        summary_spec=float(_expit(mu[1])),
+        summary_fpr=float(1 - _expit(mu[1])),
+        sens_ci=[sens_lo, sens_hi],
+        spec_ci=[spec_lo, spec_hi],
+        # 1 - spec reverses the interval, so the limits swap.
+        fpr_ci=[1 - spec_hi, 1 - spec_lo],
         k=k,
         method=method,
         loglik=loglik,
@@ -653,6 +728,12 @@ def reitsma(
         AIC=float(aic),
         BIC=float(bic),
         level=float(level),
+        mu_fpr=[float(v) for v in mu_fpr],
+        Psi_fpr=Psi_fpr,
+        vcov_fpr=vcov_fpr,
+        rho_fpr=float(
+            Psi_fpr[0, 1] / np.sqrt(Psi_fpr[0, 0] * Psi_fpr[1, 1])
+        ),
         data=prepared,
     )
 
@@ -719,15 +800,18 @@ def hsroc(result: Any = None, **kwargs: Any) -> HsrocResult:
 
     The two models are equivalent (Harbord et al. 2007), so this does not
     re-fit: it applies the exact algebraic transform mada uses in
-    ``calc_hsroc_coef``.  Given the bivariate fit's ``mu = (mu_sens, mu_fpr)``
-    and ``Psi``::
+    ``calc_hsroc_coef``.  With the fit reported in (logit sensitivity, logit
+    **specificity**) coordinates, and ``c = sqrt(sd_sens / sd_spec)``::
 
-        c     = sqrt(sd_sens / sd_fpr)
-        beta  = log(sd_fpr / sd_sens)
-        Theta = (mu_sens / c + c * mu_fpr) / 2
-        Lambda = mu_sens / c - c * mu_fpr
-        sigma2theta = (sd_sens*sd_fpr + Psi_12) / 2
-        sigma2alpha = 2 * (sd_sens*sd_fpr - Psi_12)
+        beta   = log(sd_spec / sd_sens)
+        Theta  = (mu_sens / c - c * mu_spec) / 2
+        Lambda = mu_sens / c + c * mu_spec
+        sigma2theta = (sd_sens*sd_spec - Psi_12) / 2
+        sigma2alpha = 2 * (sd_sens*sd_spec + Psi_12)
+
+    The signs differ from mada's version only because mada works on the
+    false-positive-rate scale; the resulting ``Theta``, ``Lambda``, ``beta``
+    and both variances are identical.
 
     Args:
         result: an :class:`ReitsmaResult`, or ``None`` to fit from ``kwargs``.
@@ -746,26 +830,27 @@ def hsroc(result: Any = None, **kwargs: Any) -> HsrocResult:
     else:
         fit = reitsma(result, **kwargs)
 
-    mu1, mu2 = fit.mu
-    sd1, sd2 = fit.tau
-    if sd1 <= 0 or sd2 <= 0:                     # pragma: no cover
+    mu_sens, mu_spec = fit.mu
+    sd_sens, sd_spec = fit.tau
+    if sd_sens <= 0 or sd_spec <= 0:             # pragma: no cover
         raise ValueError(
             "HSROC parameters need positive between-study standard deviations; "
             "this fit collapsed one of them to zero"
         )
 
-    c = np.sqrt(sd1 / sd2)
-    beta = float(np.log(sd2 / sd1))
-    Theta = float(0.5 * (mu1 / c + c * mu2))
-    Lambda = float(mu1 / c - c * mu2)
-    sigma2theta = float(0.5 * (sd1 * sd2 + fit.Psi[0, 1]))
-    sigma2alpha = float(2.0 * (sd1 * sd2 - fit.Psi[0, 1]))
+    covariance = float(fit.Psi[0, 1])
+    c = np.sqrt(sd_sens / sd_spec)
+    beta = float(np.log(sd_spec / sd_sens))
+    Theta = float(0.5 * (mu_sens / c - c * mu_spec))
+    Lambda = float(mu_sens / c + c * mu_spec)
+    sigma2theta = float(0.5 * (sd_sens * sd_spec - covariance))
+    sigma2alpha = float(2.0 * (sd_sens * sd_spec + covariance))
 
-    # The HSROC summary point is the bivariate mean re-expressed through the
-    # model, not the back-transformed bivariate mean.
+    # The HSROC summary point: threshold at Theta, accuracy at Lambda.
     half = np.exp(-beta / 2.0)
     logit_sens = (Theta + Lambda / 2.0) * half
-    logit_fpr = (Theta - Lambda / 2.0) / half
+    logit_spec = -(Theta - Lambda / 2.0) / half
+    spec = float(_expit(logit_spec))
 
     return HsrocResult(
         Theta=Theta,
@@ -774,8 +859,8 @@ def hsroc(result: Any = None, **kwargs: Any) -> HsrocResult:
         sigma2theta=sigma2theta,
         sigma2alpha=sigma2alpha,
         summary_sens=float(_expit(logit_sens)),
-        summary_fpr=float(_expit(logit_fpr)),
-        summary_spec=float(1 - _expit(logit_fpr)),
+        summary_spec=spec,
+        summary_fpr=float(1 - spec),
         fit=fit,
     )
 

@@ -1,6 +1,6 @@
 # API reference
 
-All 421 public names in `pimeta.__all__`, generated from the source docstrings.
+All 422 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -132,6 +132,7 @@ All 421 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`RmaLsProfileResult`](models.md#rmalsprofileresult) | Models | profile.rma.ls |
 | [`confint_rma_ls`](models.md#confint_rma_ls) | Models | confint.rma.ls |
 | [`DtaData`](models.md#dtadata) | Models | — |
+| [`DtaCorrectionWarning`](models.md#dtacorrectionwarning) | Models | — |
 | [`ReitsmaResult`](models.md#reitsmaresult) | Models | — |
 | [`HsrocResult`](models.md#hsrocresult) | Models | — |
 | [`SrocResult`](models.md#srocresult) | Models | — |

@@ -1,6 +1,6 @@
 # Models
 
-*43 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -39,6 +39,7 @@
 | [`RmaLsProfileResult`](#rmalsprofileresult) | profile.rma.ls |
 | [`confint_rma_ls`](#confint_rma_ls) | confint.rma.ls |
 | [`DtaData`](#dtadata) | — |
+| [`DtaCorrectionWarning`](#dtacorrectionwarning) | — |
 | [`ReitsmaResult`](#reitsmaresult) | — |
 | [`HsrocResult`](#hsrocresult) | — |
 | [`SrocResult`](#srocresult) | — |
@@ -597,7 +598,7 @@ metafor additionally supports profile-likelihood intervals here; use
 ## `DtaData`
 
 ```python
-DtaData(labels: 'list[str]', tp: 'np.ndarray', fn: 'np.ndarray', fp: 'np.ndarray', tn: 'np.ndarray', sens: 'np.ndarray', fpr: 'np.ndarray', var_sens: 'np.ndarray', var_fpr: 'np.ndarray', n_positive: 'np.ndarray', n_negative: 'np.ndarray', corrected: 'np.ndarray', correction: 'float' = 0.5, sens_raw: 'np.ndarray' = None, fpr_raw: 'np.ndarray' = None) -> None
+DtaData(labels: 'list[str]', tp: 'np.ndarray', fn: 'np.ndarray', fp: 'np.ndarray', tn: 'np.ndarray', sens: 'np.ndarray', fpr: 'np.ndarray', var_sens: 'np.ndarray', var_fpr: 'np.ndarray', n_positive: 'np.ndarray', n_negative: 'np.ndarray', corrected: 'np.ndarray', correction: 'float' = 0.5, sens_raw: 'np.ndarray | None' = None, fpr_raw: 'np.ndarray | None' = None) -> None
 ```
 
 Per-study diagnostic accuracy data, after any continuity correction.
@@ -614,32 +615,41 @@ Per-study diagnostic accuracy data, after any continuity correction.
 - `n_negative` — non-diseased participants per study.
 - `corrected` — which studies had a zero cell before correction.
 
+## `DtaCorrectionWarning`
+
+A continuity correction changed the counts.
+
+Emitted whenever ``escalc_dta`` adds something to a cell, naming how many
+studies were affected.  A correction is a modelling decision, not a
+formatting detail, so it should never happen silently.
+
 ## `ReitsmaResult`
 
 ```python
-ReitsmaResult(mu: 'list[float]', se: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', Psi: 'np.ndarray', tau: 'list[float]', rho: 'float', vcov: 'np.ndarray', summary_sens: 'float', summary_fpr: 'float', summary_spec: 'float', sens_ci: 'list[float]', fpr_ci: 'list[float]', k: 'int', method: 'str', loglik: 'float', loglik_raw: 'float', AIC: 'float', BIC: 'float', level: 'float', data: 'DtaData') -> None
+ReitsmaResult(mu: 'list[float]', se: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', Psi: 'np.ndarray', tau: 'list[float]', rho: 'float', vcov: 'np.ndarray', summary_sens: 'float', summary_fpr: 'float', summary_spec: 'float', sens_ci: 'list[float]', spec_ci: 'list[float]', fpr_ci: 'list[float]', k: 'int', method: 'str', loglik: 'float', loglik_raw: 'float', AIC: 'float', BIC: 'float', level: 'float', mu_fpr: 'list[float]', Psi_fpr: 'np.ndarray', vcov_fpr: 'np.ndarray', rho_fpr: 'float', data: 'DtaData') -> None
 ```
 
 A fitted bivariate diagnostic accuracy model.
 
 **Attributes**
 
-- `mu` — ``(mu_1, mu_2)`` -- mean logit sensitivity and mean logit FPR.
+- `mu` — ``(mu_1, mu_2)`` -- mean logit sensitivity and mean logit **specificity**.  Reporting specificity rather than its complement keeps ``rho`` on the scale the DTA literature uses: a threshold effect shows up as a *negative* correlation.
 - `se` — standard errors of ``mu``.
 - `ci_lb, ci_ub` — confidence limits of ``mu`` on the logit scale.
-- `Psi` — the 2x2 study-level covariance matrix.
+- `Psi` — the 2x2 study-level covariance matrix, in (sens, spec) coordinates.
 - `tau` — its standard deviations.
-- `rho` — the between-study correlation.
+- `rho` — the between-study correlation of logit sensitivity and logit specificity (negative under the usual threshold effect).
 - `vcov` — covariance matrix of ``mu``.
 - `summary_sens` — back-transformed ``mu_1``.
-- `summary_fpr` — back-transformed ``mu_2``.
-- `summary_spec` — ``1 - summary_fpr``.
-- `sens_ci, fpr_ci` — confidence intervals on the probability scale.
+- `summary_spec` — back-transformed ``mu_2``.
+- `summary_fpr` — ``1 - summary_spec``.
+- `sens_ci, spec_ci, fpr_ci` — confidence intervals on the probability scale.
 - `k` — number of studies.
 - `method` — ``"reml"`` or ``"ml"``.
 - `loglik` — log-likelihood with mada's Jacobian correction (what AIC uses).
 - `loglik_raw` — the model's own log-likelihood.
 - `AIC, BIC` — information criteria using ``2 + 3`` parameters and ``2k`` observations, as mada does.
+- `mu_fpr, Psi_fpr, vcov_fpr, rho_fpr` — the same quantities on the false-positive-rate scale ``mada`` reports, so its numbers can be recovered exactly.
 - `data` — the `DtaData` that was fitted.
 
 ## `HsrocResult`
@@ -677,7 +687,7 @@ A point on (or a grid of) the summary ROC curve.
 ## `escalc_dta`
 
 ```python
-escalc_dta(tp: 'Any', fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, *, slab: 'Sequence[Any] | None' = None, correction: 'float' = 0.5, correction_control: 'str' = 'all') -> 'DtaData'
+escalc_dta(tp: 'Any', fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, *, slab: 'Sequence[Any] | None' = None, correction: 'float' = 0.5, correction_control: 'str' = 'single') -> 'DtaData'
 ```
 
 Turn 2x2 counts into logit sensitivity / logit FPR with variances.
@@ -690,7 +700,7 @@ Turn 2x2 counts into logit sensitivity / logit FPR with variances.
 - `tn` — true negatives.
 - `slab` — study labels; defaults to ``"Study 1"``, ``"Study 2"``, ...
 - `correction` — value added to the cells, ``0.5`` by default.
-- `correction_control` — ``"all"`` (mada's default) adds ``correction`` to every study when *any* table has a zero cell, ``"single"`` adds it only to the studies that need it, ``"none"`` never corrects.
+- `correction_control` — ``"single"`` (default) adds ``correction`` only to the studies that have a zero cell, ``"none"`` never corrects, and ``"all"`` reproduces ``mada``, which adds it to *every* study as soon as any table anywhere has a zero cell. ``"all"`` is deliberately not the default here.  It is not a correction any more, it is a data-dependent perturbation of studies that were fine: adding one study with a zero cell moves every other study's estimate, and the bias is largest where the sample is smallest.  Use it only to reproduce ``mada``'s output exactly.
 
 **Returns**
 
@@ -703,7 +713,7 @@ A `DtaData`.
 ## `reitsma`
 
 ```python
-reitsma(data: 'Any' = None, *, tp: 'Any' = None, fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, slab: 'Sequence[Any] | None' = None, method: 'str' = 'reml', correction: 'float' = 0.5, correction_control: 'str' = 'all', level: 'float' = 0.95) -> 'ReitsmaResult'
+reitsma(data: 'Any' = None, *, tp: 'Any' = None, fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, slab: 'Sequence[Any] | None' = None, method: 'str' = 'reml', correction: 'float' = 0.5, correction_control: 'str' = 'single', level: 'float' = 0.95) -> 'ReitsmaResult'
 ```
 
 *Mirrors R's `reitsma`.*
@@ -717,7 +727,7 @@ Fit the bivariate diagnostic accuracy model (``mada::reitsma``).
 - `slab` — study labels.
 - `method` — ``"reml"`` (mada's default) or ``"ml"``.
 - `correction` — continuity correction added to the cells.
-- `correction_control` — ``"all"`` (mada's default), ``"single"`` or ``"none"``.
+- `correction_control` — ``"single"`` (default), ``"none"`` or ``"all"``. ``"all"`` reproduces ``mada``'s global correction; see `escalc_dta` for why it is not the default.
 - `level` — confidence level (``0.95``).
 
 **Returns**
@@ -738,15 +748,18 @@ HSROC parameters of a bivariate fit.
 
 The two models are equivalent (Harbord et al. 2007), so this does not
 re-fit: it applies the exact algebraic transform mada uses in
-``calc_hsroc_coef``.  Given the bivariate fit's ``mu = (mu_sens, mu_fpr)``
-and ``Psi``::
+``calc_hsroc_coef``.  With the fit reported in (logit sensitivity, logit
+**specificity**) coordinates, and ``c = sqrt(sd_sens / sd_spec)``::
 
-    c     = sqrt(sd_sens / sd_fpr)
-    beta  = log(sd_fpr / sd_sens)
-    Theta = (mu_sens / c + c * mu_fpr) / 2
-    Lambda = mu_sens / c - c * mu_fpr
-    sigma2theta = (sd_sens*sd_fpr + Psi_12) / 2
-    sigma2alpha = 2 * (sd_sens*sd_fpr - Psi_12)
+    beta   = log(sd_spec / sd_sens)
+    Theta  = (mu_sens / c - c * mu_spec) / 2
+    Lambda = mu_sens / c + c * mu_spec
+    sigma2theta = (sd_sens*sd_spec - Psi_12) / 2
+    sigma2alpha = 2 * (sd_sens*sd_spec + Psi_12)
+
+The signs differ from mada's version only because mada works on the
+false-positive-rate scale; the resulting ``Theta``, ``Lambda``, ``beta``
+and both variances are identical.
 
 **Args**
 
