@@ -1,6 +1,6 @@
 # Models
 
-*34 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*43 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -22,7 +22,7 @@
 | [`RmaMvResult`](#rmamvresult) | rma.mv |
 | [`anova_rma`](#anova_rma) | — |
 | [`ranef`](#ranef) | — |
-| [`robust`](#robust) | robust |
+| [`robust`](#robust) | rma.mv |
 | [`rma_peto`](#rma_peto) | rma.peto |
 | [`RmaPetoResult`](#rmapetoresult) | rma.peto |
 | [`rma_mh`](#rma_mh) | rma.mh |
@@ -38,6 +38,15 @@
 | [`profile_rma_ls`](#profile_rma_ls) | profile.rma.ls |
 | [`RmaLsProfileResult`](#rmalsprofileresult) | profile.rma.ls |
 | [`confint_rma_ls`](#confint_rma_ls) | confint.rma.ls |
+| [`DtaData`](#dtadata) | — |
+| [`ReitsmaResult`](#reitsmaresult) | — |
+| [`HsrocResult`](#hsrocresult) | — |
+| [`SrocResult`](#srocresult) | — |
+| [`escalc_dta`](#escalc_dta) | — |
+| [`reitsma`](#reitsma) | reitsma |
+| [`hsroc`](#hsroc) | — |
+| [`sroc`](#sroc) | sroc |
+| [`auc`](#auc) | AUC |
 
 ## `StudyEffect`
 
@@ -301,28 +310,30 @@ holds a ``pred`` matrix (outer groups x random-effect variables) with
 ## `robust`
 
 ```python
-robust(result: 'RmaMvResult', cluster=None, adjust: 'bool' = True, clubSandwich: 'bool' = False, vcov: 'str' = 'CR2', coef_test: 'str' = 'Satterthwaite', level: 'float | None' = None)
+robust(result: 'Any', cluster=None, adjust: 'bool | str' = True, clubSandwich: 'bool' = False, vcov: 'str' = 'CR2', coef_test: 'str' = 'Satterthwaite', level: 'float | None' = None)
 ```
 
-*Mirrors R's `robust`.*
+*Mirrors R's `rma.mv`.*
 
-Cluster-robust inference for an ``rma.mv`` fit (``metafor::robust``).
+Cluster-robust inference for an ``rma`` or ``rma.mv`` fit.
 
-``cluster`` is required, exactly as in R (``robust.rma.mv`` has no
-default); when the fit stored one, it is reused.
+**Args**
 
-Default path (``clubSandwich=False``) — metafor's CR0/CR1 sandwich over
-the full marginal var-cov matrix: ``bread = vb X' M^-1``, block-diagonal
-meat from per-cluster residual outer products, then ``n/(n-p)`` scaling.
+- `result` — a fitted result.  Both the univariate and the multilevel model are accepted; the sandwich is the same, only the marginal var-cov matrix differs.
+- `cluster` — cluster label per estimate.  Required for a univariate fit (``robust.rma.uni`` has no default either); a multilevel fit reuses the ``cluster=`` it was fitted with when omitted.
+- `adjust` — small-sample adjustment for the metafor sandwich. ``True`` (default) is CR1 (``n/(n-p)``), ``False`` is CR0, ``"Stata"``/``"Stata1"`` is CR1.S1 (``n/(n-1) * (k-1)/(k-p)``) and ``"Stata2"`` is CR1.S2 (``n/(n-1)``).  Ignored when ``clubSandwich=True``.
+- `clubSandwich` — use the CR2/CR3 bias-reduced sandwich and the Satterthwaite degrees of freedom instead of metafor's own.
+- `vcov` — ``"CR2"`` (default) or ``"CR3"``; only read when ``clubSandwich=True``.
+- `coef_test` — ``"Satterthwaite"`` (default), ``"naive-t"``, ``"naive-tp"`` or ``"z"``.
+- `level` — confidence level; ``None`` reuses the fit's.  Both ``0.95`` and ``95`` are accepted.
 
-- ``adjust=True``  -> "CR1" (``n/(n-p)``)
-- ``adjust=False`` -> "CR0"
-- ``adjust="Stata"``/"Stata1" -> "CR1.S1" (``n/(n-1) * (k-1)/(k-p)``)
-- ``adjust="Stata2"``         -> "CR1.S2" (``n/(n-1)``)
+**Returns**
 
-``clubSandwich=True`` reproduces ``clubSandwich::vcovCR`` (CR2/CR3) with
-the working covariance equal to the full marginal matrix ``M``, plus
-``coef_test`` in {"Satterthwaite", "naive-t", "naive-tp", "z"}.
+A dict with ``vbest``, ``beta``, ``se``, ``zval``, ``pval``, ``ci_lb``, ``ci_ub``, ``dfs``, ``n``, ``vb`` and -- for univariate fits -- the omnibus test ``QM``/``QMdf``/``QMp``.  The omnibus entries are ``None`` on the clubSandwich path, where clubSandwich's own small-sample reference distribution would be needed to report them honestly.
+
+**Raises**
+
+- `ValueError` — when no cluster is supplied, when the cluster vector does not match the number of estimates, or when there are not more clusters than coefficients.
 
 ## `rma_peto`
 
@@ -401,7 +412,7 @@ Fit a univariate meta-analysis model (``metafor::rma``).
 ## `RmaResult`
 
 ```python
-RmaResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float | None', tau2_fix: 'bool', I2: 'float', H2: 'float', R2: 'float | None', vt: 'float', QE: 'float', QEp: 'float', QM: 'float', QMdf: 'list', QMp: 'float', k: 'int', k_f: 'int', k_eff: 'int', k_all: 'int', p: 'int', p_eff: 'int', parms: 'int', int_only: 'bool', int_incl: 'bool', yi: 'list[float]', vi: 'list[float]', X: 'np.ndarray', mods: 'np.ndarray | None', weights: 'list[float]', weights_pct: 'list[float]', fitted: 'list[float]', residuals: 'list[float]', method: 'str', test: 'str', dfs: 'float | None', ddf: 'float | None', s2w: 'float', measure: 'str', slab: 'list[str]', not_na: 'list[bool]', level: 'float', coefnames: 'list[str] | None' = None) -> None
+RmaResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', tau2: 'float', se_tau2: 'float | None', tau2_fix: 'bool', I2: 'float', H2: 'float', R2: 'float | None', vt: 'float', QE: 'float', QEp: 'float', QM: 'float', QMdf: 'list', QMp: 'float', k: 'int', k_f: 'int', k_eff: 'int', k_all: 'int', p: 'int', p_eff: 'int', parms: 'int', int_only: 'bool', int_incl: 'bool', yi: 'list[float]', vi: 'list[float]', X: 'np.ndarray', mods: 'np.ndarray | None', weights: 'list[float]', weights_pct: 'list[float]', fitted: 'list[float]', residuals: 'list[float]', method: 'str', test: 'str', dfs: 'float | None', ddf: 'float | None', s2w: 'float', measure: 'str', slab: 'list[str]', not_na: 'list[bool]', level: 'float', coefnames: 'list[str] | None' = None, btt: 'list[int] | None' = None) -> None
 ```
 
 *Mirrors R's `rma.uni`.*
@@ -582,3 +593,219 @@ confint_rma_ls(x, parm=None, level=None, digits=4)
 
 metafor additionally supports profile-likelihood intervals here; use
 `profile_rma_ls` and invert the profile yourself for those.
+
+## `DtaData`
+
+```python
+DtaData(labels: 'list[str]', tp: 'np.ndarray', fn: 'np.ndarray', fp: 'np.ndarray', tn: 'np.ndarray', sens: 'np.ndarray', fpr: 'np.ndarray', var_sens: 'np.ndarray', var_fpr: 'np.ndarray', n_positive: 'np.ndarray', n_negative: 'np.ndarray', corrected: 'np.ndarray', correction: 'float' = 0.5, sens_raw: 'np.ndarray' = None, fpr_raw: 'np.ndarray' = None) -> None
+```
+
+Per-study diagnostic accuracy data, after any continuity correction.
+
+**Attributes**
+
+- `labels` — study labels.
+- `tp, fn, fp, tn` — the four cells *after* correction.
+- `sens` — sensitivity ``tp / (tp + fn)``.
+- `fpr` — false positive rate ``fp / (fp + tn)``.
+- `var_sens` — variance of ``logit(sens)``.
+- `var_fpr` — variance of ``logit(fpr)``.
+- `n_positive` — diseased participants per study.
+- `n_negative` — non-diseased participants per study.
+- `corrected` — which studies had a zero cell before correction.
+
+## `ReitsmaResult`
+
+```python
+ReitsmaResult(mu: 'list[float]', se: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', Psi: 'np.ndarray', tau: 'list[float]', rho: 'float', vcov: 'np.ndarray', summary_sens: 'float', summary_fpr: 'float', summary_spec: 'float', sens_ci: 'list[float]', fpr_ci: 'list[float]', k: 'int', method: 'str', loglik: 'float', loglik_raw: 'float', AIC: 'float', BIC: 'float', level: 'float', data: 'DtaData') -> None
+```
+
+A fitted bivariate diagnostic accuracy model.
+
+**Attributes**
+
+- `mu` — ``(mu_1, mu_2)`` -- mean logit sensitivity and mean logit FPR.
+- `se` — standard errors of ``mu``.
+- `ci_lb, ci_ub` — confidence limits of ``mu`` on the logit scale.
+- `Psi` — the 2x2 study-level covariance matrix.
+- `tau` — its standard deviations.
+- `rho` — the between-study correlation.
+- `vcov` — covariance matrix of ``mu``.
+- `summary_sens` — back-transformed ``mu_1``.
+- `summary_fpr` — back-transformed ``mu_2``.
+- `summary_spec` — ``1 - summary_fpr``.
+- `sens_ci, fpr_ci` — confidence intervals on the probability scale.
+- `k` — number of studies.
+- `method` — ``"reml"`` or ``"ml"``.
+- `loglik` — log-likelihood with mada's Jacobian correction (what AIC uses).
+- `loglik_raw` — the model's own log-likelihood.
+- `AIC, BIC` — information criteria using ``2 + 3`` parameters and ``2k`` observations, as mada does.
+- `data` — the `DtaData` that was fitted.
+
+## `HsrocResult`
+
+```python
+HsrocResult(Theta: 'float', Lambda: 'float', beta: 'float', sigma2theta: 'float', sigma2alpha: 'float', summary_sens: 'float', summary_fpr: 'float', summary_spec: 'float', fit: 'ReitsmaResult') -> None
+```
+
+HSROC parameters (Rutter & Gatsonis), derived from a bivariate fit.
+
+**Attributes**
+
+- `Theta` — mean threshold ``theta`` (positive = stricter threshold).
+- `Lambda` — mean accuracy ``alpha``; ``exp(Lambda)`` is the diagnostic odds ratio at ``beta = 0``.
+- `beta` — the asymmetry parameter; ``0`` means a symmetric SROC.
+- `sigma2theta` — variance of the threshold random effect.
+- `sigma2alpha` — variance of the accuracy random effect.
+- `summary_sens, summary_fpr` — the summary point implied by the HSROC parameters.
+- `fit` — the `ReitsmaResult` this was derived from.
+
+## `SrocResult`
+
+```python
+SrocResult(fpr: 'np.ndarray', tpr: 'np.ndarray', type: 'str' = 'ruttergatsonis') -> None
+```
+
+A point on (or a grid of) the summary ROC curve.
+
+**Attributes**
+
+- `fpr` — false positive rates.
+- `tpr` — the corresponding sensitivities.
+- `type` — ``"ruttergatsonis"`` (the HSROC curve through the fitted parameters) or ``"naive"``.
+
+## `escalc_dta`
+
+```python
+escalc_dta(tp: 'Any', fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, *, slab: 'Sequence[Any] | None' = None, correction: 'float' = 0.5, correction_control: 'str' = 'all') -> 'DtaData'
+```
+
+Turn 2x2 counts into logit sensitivity / logit FPR with variances.
+
+**Args**
+
+- `tp` — true positives, or a mapping with ``TP``/``FN``/``FP``/``TN`` keys (when the other three arguments are omitted).
+- `fn` — false negatives.
+- `fp` — false positives.
+- `tn` — true negatives.
+- `slab` — study labels; defaults to ``"Study 1"``, ``"Study 2"``, ...
+- `correction` — value added to the cells, ``0.5`` by default.
+- `correction_control` — ``"all"`` (mada's default) adds ``correction`` to every study when *any* table has a zero cell, ``"single"`` adds it only to the studies that need it, ``"none"`` never corrects.
+
+**Returns**
+
+A `DtaData`.
+
+**Raises**
+
+- `ValueError` — for inconsistent input or an unknown ``correction_control``.
+
+## `reitsma`
+
+```python
+reitsma(data: 'Any' = None, *, tp: 'Any' = None, fn: 'Any' = None, fp: 'Any' = None, tn: 'Any' = None, slab: 'Sequence[Any] | None' = None, method: 'str' = 'reml', correction: 'float' = 0.5, correction_control: 'str' = 'all', level: 'float' = 0.95) -> 'ReitsmaResult'
+```
+
+*Mirrors R's `reitsma`.*
+
+Fit the bivariate diagnostic accuracy model (``mada::reitsma``).
+
+**Args**
+
+- `data` — a `DtaData`, or a mapping/frame with ``TP``/``FN``/``FP``/ ``TN`` columns (optionally ``study``).
+- `tp, fn, fp, tn` — counts, used instead of ``data``.
+- `slab` — study labels.
+- `method` — ``"reml"`` (mada's default) or ``"ml"``.
+- `correction` — continuity correction added to the cells.
+- `correction_control` — ``"all"`` (mada's default), ``"single"`` or ``"none"``.
+- `level` — confidence level (``0.95``).
+
+**Returns**
+
+A `ReitsmaResult`.
+
+**Raises**
+
+- `ValueError` — for an unknown method or unusable counts.
+
+## `hsroc`
+
+```python
+hsroc(result: 'Any' = None, **kwargs: 'Any') -> 'HsrocResult'
+```
+
+HSROC parameters of a bivariate fit.
+
+The two models are equivalent (Harbord et al. 2007), so this does not
+re-fit: it applies the exact algebraic transform mada uses in
+``calc_hsroc_coef``.  Given the bivariate fit's ``mu = (mu_sens, mu_fpr)``
+and ``Psi``::
+
+    c     = sqrt(sd_sens / sd_fpr)
+    beta  = log(sd_fpr / sd_sens)
+    Theta = (mu_sens / c + c * mu_fpr) / 2
+    Lambda = mu_sens / c - c * mu_fpr
+    sigma2theta = (sd_sens*sd_fpr + Psi_12) / 2
+    sigma2alpha = 2 * (sd_sens*sd_fpr - Psi_12)
+
+**Args**
+
+- `result` — an `ReitsmaResult`, or ``None`` to fit from ``kwargs``.
+- `**kwargs` — forwarded to `reitsma` when ``result`` is not a fit.
+
+**Returns**
+
+An `HsrocResult`.
+
+**Raises**
+
+- `TypeError` — when ``result`` is not a bivariate fit.
+
+## `sroc`
+
+```python
+sroc(fit: 'ReitsmaResult', fpr: 'Any' = None, *, type: 'str' = 'ruttergatsonis') -> 'SrocResult'
+```
+
+*Mirrors R's `sroc`.*
+
+The summary ROC curve (``mada::sroc``).
+
+**Args**
+
+- `fit` — a `ReitsmaResult`.
+- `fpr` — false positive rates to evaluate; defaults to ``0.01, ..., 0.99``.
+- `type` — ``"ruttergatsonis"`` (default) uses the HSROC curve implied by the fit, which is the line ``logit(TPR) = Lambda*exp(-beta/2) + exp(-beta)*logit(FPR)``. ``"naive"`` joins the observed points without smoothing.
+
+**Returns**
+
+A `SrocResult`.
+
+**Raises**
+
+- `ValueError` — for an unknown ``type``.
+
+## `auc`
+
+```python
+auc(fit: 'ReitsmaResult', fpr: 'Any' = None) -> 'dict'
+```
+
+*Mirrors R's `AUC`.*
+
+Area under the SROC curve (``mada::AUC``).
+
+**Args**
+
+- `fit` — a `ReitsmaResult`.
+- `fpr` — grid of false positive rates; defaults to ``0.01, ..., 0.99``.
+
+**Returns**
+
+- ```{"auc"` — ..., "pauc": ...}``.  The partial AUC restricts the grid to
+the range of FPRs actually observed, which is the number a reader
+should quote when the studies cluster at one end of the range.
+
+**Raises**
+
+- `ValueError` — when fewer than 10 grid points are supplied.

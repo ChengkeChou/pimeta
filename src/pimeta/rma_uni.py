@@ -226,6 +226,10 @@ class RmaResult:
     not_na: list[bool]
     level: float
     coefnames: list[str] | None = None
+    #: 1-based indices of the coefficients the omnibus ``QM`` test covers
+    #: (metafor's ``btt``).  Stored so ``robust()`` can reproduce the same
+    #: test on the cluster-robust covariance instead of guessing the default.
+    btt: list[int] | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -670,6 +674,7 @@ def rma(
         not_na=not_na,
         level=level,
         coefnames=coefnames,
+        btt=[i + 1 for i in btt_idx],
     )
 
 

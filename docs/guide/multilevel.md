@@ -63,12 +63,32 @@ ma.plot_mv_profile(prof)
 
 ### Robust variance estimation
 
+Cluster-robust (sandwich) standard errors work on both fit types — a `rma`
+fit is the special case where the marginal covariance happens to be diagonal.
+
 ```python
 import pimeta as ma
 
-rob = ma.robust(fit, cluster=study)
-print(rob.b, rob.se, rob.pval)
+fit = ma.rma(yi, vi=vi, data=df)
+rob = ma.robust(fit, cluster=df["study"])
+print(rob["se"], rob["pval"], rob["ci_lb"], rob["ci_ub"])
+
+# Small-sample variants (metafor's CR0 / CR1 / CR1.S1 / CR1.S2).
+ma.robust(fit, cluster=df["study"], adjust=False)        # CR0
+ma.robust(fit, cluster=df["study"], adjust="Stata2")     # CR1.S2
+
+# Bias-reduced CR2/CR3 with Satterthwaite degrees of freedom
+# (clubSandwich's default).
+ma.robust(fit, cluster=df["study"], clubSandwich=True,
+          vcov="CR2", coef_test="Satterthwaite")
 ```
+
+The result is a dict: `vbest`, `beta`, `se`, `zval`, `pval`, `ci_lb`, `ci_ub`,
+`dfs`, `n` and `vb`. For a `rma` fit on the metafor path it also carries the
+omnibus test as `QM`, `QMdf` and `QMp`.
+
+For an `rma.mv` fit the `cluster=` argument can be omitted when the model
+stored one. For an `rma` fit it is required, as in R.
 
 ### Random effects and model comparison
 

@@ -8,6 +8,40 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Diagnostic test accuracy: the bivariate model and HSROC.** `pimeta.dta`
+  synthesises 2x2 diagnostic tables the way `mada` does:
+  - `escalc_dta` turns TP/FN/FP/TN into logit sensitivity and logit FPR with
+    delta-method variances, including `mada`'s continuity-correction
+    behaviour — with the default `correction_control="all"` a single zero cell
+    anywhere corrects **every** study, which changes the estimates and so is
+    reproduced rather than "fixed".
+  - `reitsma` fits the bivariate random-effects model by REML (mada's default)
+    or ML, reporting the mean logit pair, the 2x2 study-level covariance, the
+    summary sensitivity/FPR/specificity with intervals, and the
+    Jacobian-corrected log-likelihood, AIC and BIC that `mada` reports.
+  - `hsroc` returns the Rutter–Gatsonis parameters (threshold, accuracy,
+    asymmetry, both variance components). Because the two models are
+    reparameterisations of one another, it applies the exact algebraic
+    transform instead of re-fitting, so both report the same likelihood.
+  - `sroc` draws the Rutter–Gatsonis summary curve and `auc` computes the
+    AUC and the partial AUC over the observed FPR range, reproducing
+    `mada::AUC`'s grid convention exactly.
+  - Verified against `mada` 0.5.12 on its own `AuditC` (14 studies) and
+    `Dementia` (33 studies) datasets, REML and ML: coefficients, `Psi`,
+    log-likelihood, AIC/BIC, HSROC parameters, summary point and both AUCs.
+    `tests/test_dta.py` additionally evaluates the likelihood at mada's
+    reported variance components and matches it to 1e-6, which shows the two
+    implementations are optimising the same function.
+- **Cluster-robust variance estimation for `rma`.** `robust()` previously only
+  accepted an `rma.mv` fit; `metafor::robust.rma.uni` had no counterpart, so
+  calling it on a univariate fit raised `AttributeError`. The estimator moved
+  to the new `pimeta.rve` module and now serves both fit classes through one
+  sandwich implementation — a univariate fit is only the case where the
+  marginal var-cov matrix is diagonal. CR0/CR1/CR1.S1/CR1.S2 and the
+  clubSandwich CR2/CR3 + Satterthwaite path all reproduce metafor 5.2.1 and
+  clubSandwich 0.7.0 to the printed precision, including the robust omnibus
+  test. `rma.uni` fits now record their `btt`, so the omnibus covers the same
+  coefficients metafor would test.
 - **`pimeta.record` — standardised, traceable, reproducible input and output.**
   A new subpackage that makes a result carry its own evidence instead of
   relying on a saved script:

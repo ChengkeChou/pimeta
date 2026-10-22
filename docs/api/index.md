@@ -1,6 +1,6 @@
 # API reference
 
-All 412 public names in `pimeta.__all__`, generated from the source docstrings.
+All 421 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -115,7 +115,7 @@ All 412 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`RmaMvResult`](models.md#rmamvresult) | Models | rma.mv |
 | [`anova_rma`](models.md#anova_rma) | Models | — |
 | [`ranef`](models.md#ranef) | Models | — |
-| [`robust`](models.md#robust) | Models | robust |
+| [`robust`](models.md#robust) | Models | rma.mv |
 | [`rma_peto`](models.md#rma_peto) | Models | rma.peto |
 | [`RmaPetoResult`](models.md#rmapetoresult) | Models | rma.peto |
 | [`rma_mh`](models.md#rma_mh) | Models | rma.mh |
@@ -131,6 +131,15 @@ All 412 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`profile_rma_ls`](models.md#profile_rma_ls) | Models | profile.rma.ls |
 | [`RmaLsProfileResult`](models.md#rmalsprofileresult) | Models | profile.rma.ls |
 | [`confint_rma_ls`](models.md#confint_rma_ls) | Models | confint.rma.ls |
+| [`DtaData`](models.md#dtadata) | Models | — |
+| [`ReitsmaResult`](models.md#reitsmaresult) | Models | — |
+| [`HsrocResult`](models.md#hsrocresult) | Models | — |
+| [`SrocResult`](models.md#srocresult) | Models | — |
+| [`escalc_dta`](models.md#escalc_dta) | Models | — |
+| [`reitsma`](models.md#reitsma) | Models | reitsma |
+| [`hsroc`](models.md#hsroc) | Models | — |
+| [`sroc`](models.md#sroc) | Models | sroc |
+| [`auc`](models.md#auc) | Models | AUC |
 | [`metabin`](drivers.md#metabin) | High-level drivers | metabin |
 | [`MetabResult`](drivers.md#metabresult) | High-level drivers | — |
 | [`metacont`](drivers.md#metacont) | High-level drivers | metacont |

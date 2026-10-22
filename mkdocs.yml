@@ -69,6 +69,7 @@ nav:
       - Network meta-analysis: guide/network-meta-analysis.md
       - Multilevel models: guide/multilevel.md
       - Selection and scale models: guide/selection-models.md
+      - Diagnostic test accuracy: guide/diagnostic-accuracy.md
       - Plots: guide/plots.md
       - Data frames and formulas: guide/data-frames.md
       - Interoperability: guide/interop.md

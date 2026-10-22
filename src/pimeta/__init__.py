@@ -57,6 +57,17 @@ from .diagnostics import (
     tes,
     vif,
 )
+from .dta import (
+    DtaData,
+    HsrocResult,
+    ReitsmaResult,
+    SrocResult,
+    auc,
+    escalc_dta,
+    hsroc,
+    reitsma,
+    sroc,
+)
 from .escalc import EscalcResult, escalc
 from .extras import (
     HettestResult,
@@ -752,6 +763,9 @@ __all__ = [
     # metafor names these generics without the "_rma" suffix once a model is
     # given; the aliases below make ``pimeta.dfbetas(res)`` work like R.
     "dfbetas", "rstandard",
+    # diagnostic test accuracy
+    "DtaData", "ReitsmaResult", "HsrocResult", "SrocResult",
+    "escalc_dta", "reitsma", "hsroc", "sroc", "auc",
     # settings
     "gs", "setvals", "settings_meta", "settings_netmeta",
     "META_DEFAULTS", "NETMETA_DEFAULTS",

@@ -69,6 +69,9 @@ Cell-continuity corrections: add, to = "only0" | "all" | "IF0", drop00.
 - τ² estimators: DL, HE, HS, SJ, ML, REML, PM, EB, GENQ, GENQM, QGENQ, QGENQM
 - Hartung–Knapp adjustment / Knapp–Hartung (test = "knha" or "adhoc")
 - Prediction intervals, QE / I² / H² / R², QE-based CIs, profile-likelihood τ² CI
+- Cluster-robust (sandwich) variance estimation for both `rma` and `rma.mv`:
+  CR0 / CR1 / CR1.S1 / CR1.S2, plus CR2 / CR3 with Satterthwaite degrees of
+  freedom; see [the guide](docs/guide/multilevel.md)
 
 ### High-level drivers (R-function parity)
 
@@ -166,8 +169,29 @@ models.save("estimates.json")
 `read_table` / `write_table` cover CSV, TSV, JSON, JSONL and NPZ in both
 directions. See [the guide](docs/guide/reproducibility.md).
 
-### Network meta-analysis (`netmeta`)
+### Diagnostic test accuracy — bivariate model and HSROC
 
+```python
+import pimeta as ma
+
+data = ma.escalc_dta(tp, fn, fp, tn, slab=studies)
+fit = ma.reitsma(data)                      # REML bivariate model
+print(fit.summary_sens, fit.summary_fpr)
+print(fit.tau, fit.rho, fit.AIC)
+
+h = ma.hsroc(fit)                           # same likelihood, HSROC parameters
+print(h.Theta, h.Lambda, h.beta, h.dor)
+
+print(ma.auc(fit))                          # {"auc": ..., "pauc": ...}
+ma.sroc(fit)                                # 99-point Rutter-Gatsonis curve
+```
+
+Matches `mada` 0.5.12 on its `AuditC` and `Dementia` datasets under both REML
+and ML — coefficients, study-level covariance, log-likelihood, AIC/BIC, HSROC
+parameters, summary point, AUC and partial AUC. See
+[the guide](docs/guide/diagnostic-accuracy.md).
+
+### Network meta-analysis (`netmeta`)
 ```text
 core         netmeta       netmetabin     netcomb        discomb
              netcomplex    netcomplexity  netmetareg     netmeasure

@@ -396,8 +396,9 @@ class AnalysisRecord:
                     arrays=self.inputs["arrays"],
                 ),
             }
-            if "analysis" in stored and not matches(stored["analysis"],
-                                                    fresh["analysis"]):
+            if "analysis" in stored and not matches(
+                str(stored["analysis"]), str(fresh["analysis"])
+            ):
                 raise RecordMismatch(
                     "the stored analysed vectors no longer hash to the recorded "
                     "digest; the record has been edited", []
@@ -430,11 +431,11 @@ class AnalysisRecord:
             ),
         }
         problems = [k for k in ("source", "analysis")
-                    if k in stored and not matches(stored[k], fresh[k])]
+                    if k in stored and not matches(str(stored[k]), str(fresh[k]))]
         if problems:
             detail = ", ".join(
-                f"{k}: recorded {stored.get(k, '-')[:19]}... but recomputed "
-                f"{fresh[k][:19]}..."
+                f"{k}: recorded {str(stored.get(k, '-'))[:19]}... but recomputed "
+                f"{str(fresh[k])[:19]}..."
                 for k in problems
             )
             raise RecordMismatch(
