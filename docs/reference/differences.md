@@ -105,11 +105,36 @@ covers with `coef_table()` / `summary_text()` / `to_dict()`.
 | `predv_d`, `predv_r` (posterior-predictive checks) | not ported; the standardised-residual and BLUP diagnostics in `mv_diagnostics` cover the same ground |
 | `forest`, `forestmada`, `crosshair`, `ROCellipse`, `mcsroc`, `mslSROC`, `rsSROC` | `plot_forest()`, `plot_sroc()`, `plot_baujat()` — pimeta's plotting convention (returns an `Axes`) |
 
-Two things *are* deliberately different from `mada`, on scientific grounds:
-the continuity correction touches only the studies that need it (and warns),
-and the model is parameterised on specificity so `rho` is negative under a
-threshold effect. `correction_control="all"` and the `*_fpr` mirror fields
-reproduce `mada` exactly when that is what you need.
+The two `mada` behaviours that *are* different are statistical, not interface:
+they are listed in section 4 with the switches that reproduce them.
+
+## 4. Where pimeta corrects R
+
+Parity is the default: a port that silently improves on its reference is
+impossible to verify, so a difference has to earn its place. But parity is not
+the top rule — **science is**. Where R's behaviour is not merely different but
+wrong, `pimeta` corrects it, provided all three of these hold:
+
+1. the flaw is **reproduced and confirmed more than once** — on more than one
+dataset, and against the R source rather than against its printed output;
+2. the corrected behaviour is the one the literature actually specifies;
+3. the R behaviour stays reachable, so old analyses can still be reproduced
+   bit for bit.
+
+Every correction is listed here with its opt-out.
+
+| R behaviour | why it is wrong | pimeta | reproduce R with |
+|---|---|---|---|
+| `mada::escalc` applies the continuity correction to *every* study once *any* table has a zero cell | an `ifelse` where an `if` was meant: it breaks locality and hits hardest where the sample is smallest, i.e. where nothing needed correcting | only the studies that need it, plus a `DtaCorrectionWarning` | `correction_control="all"` |
+| `mada::reitsma` parameterises the second outcome as logit FPR | the same model, but `rho` then carries the opposite sign to every DTA paper, and a threshold effect reads as *positive* dependence | logit specificity, so `rho` is negative under a threshold effect | `mu_fpr` / `Psi_fpr` / `vcov_fpr` / `rho_fpr` |
+| `rma.ls` stops `optim()` on a relative *function* tolerance | the gradient at metafor's reported estimate is around 1e-4–1e-3, i.e. not converged | damped Newton polish to a gradient near 1e-9; our log-likelihood is always ≥ R's | — (same model, better optimum) |
+| `profile.rma.uni.selmodel` fixes τ² at the full-model estimate on every grid point | that is a conditional profile, not a profile likelihood | τ² is re-estimated at each grid point | — |
+| `selmodel`'s truncated / step-function fits stop on a likelihood plateau | the score is exactly zero across whole intervals, so `optim()` returns a point that is not the maximum of its own objective | one derivative-free restart | — |
+
+Note that the third, fourth and fifth rows were already in this document before
+the rule was written down: the version of this page that claimed "R's quirks are
+reproduced rather than fixed" contradicted its own section 2. The policy above
+is what the code had been doing all along.
 
 ## Numerical validation
 
@@ -121,8 +146,23 @@ Coverage: `meta` 59/59, `netmeta` 38/38 and `metafor` 278/279 exported
 functions. The single exception is `metafor.news()`, a changelog viewer with no
 analytic content.
 
-Where R has quirks (non-convergence, `NA` subsets, sign conventions of
-`contrmat`), the behaviour is reproduced rather than "fixed" — the reasoning
-being that a port which silently improves on its reference is impossible to
-verify. The one exception is `mada`, which is not a port and is corrected
-rather than copied; see above.
+Where R has quirks in *presentation* (non-convergence warnings, `NA` subsets,
+sign conventions of `contrmat`), the behaviour is reproduced rather than
+"fixed". Where the quirk is in the *statistics*, section 4 applies.
+
+### Reference implementations on hand
+
+Every method pimeta adds is validated against an R implementation, not against a
+derivation alone. Installed and used for that purpose:
+
+| R package | version | what it validates |
+|---|---|---|
+| `metafor` | 5.2.1 | the bulk of the estimators |
+| `meta`, `netmeta` | 8.5.0, 3.7.0 | the `meta` and `netmeta` surfaces |
+| `clubSandwich` | 0.7.0 | `rve` — CR2/CR3 and the Satterthwaite degrees of freedom |
+| `mada` | 0.5.12 | `dta` — estimator only, see section 4 for the two corrections |
+| `rms` | 8.1.1 | restricted cubic splines (`rcs`) for non-linear meta-regression |
+| `dosresmeta` | 2.2.0 | dose–response meta-analysis, including the within-study covariance |
+| `metamisc` | 0.4.0 | prediction-model performance meta-analysis |
+| `IPDfromKM` | 0.1.10 | Guyot's Kaplan–Meier reconstruction and RMST |
+| `mvmeta`, `lme4` | 1.0.3, 2.0.6 | multivariate and mixed-model cross-checks |
