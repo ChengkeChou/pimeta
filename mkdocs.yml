@@ -61,6 +61,7 @@ nav:
   - Usage manual: usage.md
   - Coming from R: migration-from-r.md
   - Guides:
+      - Capability matrix: guide/capability-matrix.md
       - Effect sizes: guide/effect-sizes.md
       - Pooling: guide/pooling.md
       - Meta-regression: guide/meta-regression.md

@@ -103,7 +103,8 @@ covers with `coef_table()` / `summary_text()` / `to_dict()`.
 | `cochran.Q` | use `rma_mv` on the prepared table |
 | `phm` (proportional hazards DTA) | not ported — a separate likelihood family, outside the scope above |
 | `predv_d`, `predv_r` (posterior-predictive checks) | not ported; the standardised-residual and BLUP diagnostics in `mv_diagnostics` cover the same ground |
-| `forest`, `forestmada`, `crosshair`, `ROCellipse`, `mcsroc`, `mslSROC`, `rsSROC` | `plot_forest()`, `plot_sroc()`, `plot_baujat()` — pimeta's plotting convention (returns an `Axes`) |
+| `forest`, `forestmada` | `ma.forest()` — same idea, returns an `Axes` instead of drawing to a device |
+| `crosshair`, `ROCellipse`, `mcsroc`, `mslSROC`, `rsSROC` | not ported; `ma.sroc()` gives the curve, which matplotlib can draw. There is no SROC plotting helper yet |
 
 The two `mada` behaviours that *are* different are statistical, not interface:
 they are listed in section 4 with the switches that reproduce them.
