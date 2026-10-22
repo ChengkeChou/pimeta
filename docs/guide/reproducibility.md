@@ -8,6 +8,14 @@ software was, what came out, and whether re-running it gives the same answer.
 Nothing here is required to fit a model. It is what you add when the number has
 to survive a reviewer, a co-author, or yourself in two years.
 
+**Every analysis in `pimeta` has to be recordable.** That is a design rule, not
+an optional extra: if a function can produce a number, the number must be able
+to leave the process with enough context to be rebuilt — the data fingerprint,
+the arguments, the settings that can move it, and the values themselves. A new
+model is not finished until `save_record` → `verify` → `replay` round-trips it,
+and its test file proves it. The sections below describe that machinery; the
+rest of the manual assumes it.
+
 ## The idea in one example
 
 ```python

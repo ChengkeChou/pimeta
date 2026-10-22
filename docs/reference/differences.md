@@ -86,6 +86,31 @@ about 1e-6, the residual being R's adaptive-quadrature tolerance.
 | `profile.rma.uni.selmodel` fixes τ² at the full-model estimate on every grid point | τ² is re-estimated at each point, which is the proper profile likelihood |
 | `metafor::news()` (changelog viewer) | not implemented — no analytic content |
 
+### `mada` is not ported
+
+`pimeta.dta` implements the **methods** — bivariate random-effects model, HSROC,
+SROC, AUC / partial AUC — not `mada`'s function surface. The package's scope is
+`meta`, `netmeta` and `metafor`; adding a fourth dependency on another package's
+API would make "which numbers should match R" unanswerable, and several `mada`
+exports are display code (`print.*`, `summary.*`, `vcov.*`) that pimeta already
+covers with `coef_table()` / `summary_text()` / `to_dict()`.
+
+| `mada` export | pimeta |
+|---|---|
+| `madad`, `madauni` | not ported — per-outcome and multivariate diagnostics already exist as `rma`, `rma_mv` and `mv_diagnostics` |
+| `print.*`, `summary.*`, `vcov.*` | S3 display and accessors; use `coef_table()`, `summary_text()`, `to_dict()`, `.vcov` |
+| `talpha`, `CIrho`, `sens`, `spec`, `fpr`, `SummaryPts` | numbers, not names: `ReitsmaResult` already carries `summary_sens`, `summary_spec`, `summary_fpr`, `sens_ci`, `spec_ci`, `fpr_ci`, `rho` |
+| `cochran.Q` | use `rma_mv` on the prepared table |
+| `phm` (proportional hazards DTA) | not ported — a separate likelihood family, outside the scope above |
+| `predv_d`, `predv_r` (posterior-predictive checks) | not ported; the standardised-residual and BLUP diagnostics in `mv_diagnostics` cover the same ground |
+| `forest`, `forestmada`, `crosshair`, `ROCellipse`, `mcsroc`, `mslSROC`, `rsSROC` | `plot_forest()`, `plot_sroc()`, `plot_baujat()` — pimeta's plotting convention (returns an `Axes`) |
+
+Two things *are* deliberately different from `mada`, on scientific grounds:
+the continuity correction touches only the studies that need it (and warns),
+and the model is parameterised on specificity so `rho` is negative under a
+threshold effect. `correction_control="all"` and the `*_fpr` mirror fields
+reproduce `mada` exactly when that is what you need.
+
 ## Numerical validation
 
 The library is developed against a differential test suite: identical datasets
@@ -97,4 +122,7 @@ functions. The single exception is `metafor.news()`, a changelog viewer with no
 analytic content.
 
 Where R has quirks (non-convergence, `NA` subsets, sign conventions of
-`contrmat`), the behaviour is reproduced rather than "fixed".
+`contrmat`), the behaviour is reproduced rather than "fixed" — the reasoning
+being that a port which silently improves on its reference is impossible to
+verify. The one exception is `mada`, which is not a port and is corrected
+rather than copied; see above.
