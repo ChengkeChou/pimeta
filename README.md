@@ -638,7 +638,7 @@ python examples/bcg_meta_analysis.py
 
 ### Notebooks (already executed)
 
-Four Jupyter notebooks ship with their outputs and figures baked in, so they
+Five Jupyter notebooks ship with their outputs and figures baked in, so they
 read like a tutorial on GitHub without running anything:
 
 | Notebook | What it shows |
@@ -647,6 +647,7 @@ read like a tutorial on GitHub without running anything:
 | [`02-meta-regression.ipynb`](examples/02-meta-regression.ipynb) | moderator, subgroup split, Egger's test, trim-and-fill, funnel and Baujat plots |
 | [`03-network-meta-analysis.ipynb`](examples/03-network-meta-analysis.ipynb) | `netmeta()`: n×n effect matrix, P-score ranking, league table, direct vs indirect |
 | [`04-ecosystem.ipynb`](examples/04-ecosystem.ipynb) | pandas in/out, scikit-learn `Pipeline` + `GridSearchCV`, xarray and networkx export |
+| [`05-diagnostic-accuracy.ipynb`](examples/05-diagnostic-accuracy.ipynb) | `escalc_dta()` / `reitsma()` / `hsroc()`, SROC and AUC, cluster-robust standard errors, a replayable record |
 
 They are generated and really run by `tools/build_example_notebooks.py` (no
 Jupyter needed), and `tests/test_example_notebooks.py` re-executes every cell so
@@ -764,6 +765,7 @@ print(ma.trimfill(d.yi, d.vi).k0)   # 剪补法
 | [`02-meta-regression.ipynb`](examples/02-meta-regression.ipynb) | 调节变量、亚组、Egger 检验、剪补法、漏斗图与 Baujat 图 |
 | [`03-network-meta-analysis.ipynb`](examples/03-network-meta-analysis.ipynb) | `netmeta()`：n×n 效应矩阵、P-score 排名、联赛表、直接 vs 间接证据 |
 | [`04-ecosystem.ipynb`](examples/04-ecosystem.ipynb) | pandas 进出、scikit-learn `Pipeline` + `GridSearchCV`、xarray / networkx 导出 |
+| [`05-diagnostic-accuracy.ipynb`](examples/05-diagnostic-accuracy.ipynb) | `escalc_dta()` / `reitsma()` / `hsroc()`、SROC 与 AUC、聚类稳健标准误、可重放的记录 |
 
 由 `tools/build_example_notebooks.py` 真实执行后生成（不需要装 Jupyter），
 `tests/test_example_notebooks.py` 会重跑每个单元格，保证示例不会过期。
