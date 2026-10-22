@@ -32,6 +32,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     `tests/test_dta.py` additionally evaluates the likelihood at mada's
     reported variance components and matches it to 1e-6, which shows the two
     implementations are optimising the same function.
+  - A DTA fit drops straight into `pimeta.record`: `save_record(..., mode=
+    "bundle", function="reitsma", call=..., pass_data=True)` gives a record
+    that can be `verify()`-ed and `replay()`-ed without the original counts,
+    and `EstimatesStore` compares several fits in one table. `pass_data` is a
+    new `build_record()` argument for functions that take the whole table as
+    their `data=` rather than column names — the column-name inference cannot
+    see that case. `examples/dta_record.py` runs the whole loop.
 - **Cluster-robust variance estimation for `rma`.** `robust()` previously only
   accepted an `rma.mv` fit; `metafor::robust.rma.uni` had no counterpart, so
   calling it on a univariate fit raised `AttributeError`. The estimator moved

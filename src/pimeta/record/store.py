@@ -39,7 +39,7 @@ __all__ = ["EstimatesStore", "STORE_SCHEMA", "StoredModel", "estimates_store"]
 STORE_SCHEMA = "pimeta.store/1"
 
 #: Alternate spellings used across the package for the coefficient table.
-_ESTIMATE_KEYS = ("b", "estimate", "coef", "TE")
+_ESTIMATE_KEYS = ("b", "estimate", "coef", "TE", "mu")
 _SE_KEYS = ("se", "SE")
 _STAT_KEYS = ("zval", "z", "statistic", "tval")
 _PVAL_KEYS = ("pval", "p", "pval_z")

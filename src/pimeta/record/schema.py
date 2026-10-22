@@ -611,6 +611,7 @@ def build_record(
     settings: Mapping[str, Any] | None = None,
     function: str | None = None,
     call: Mapping[str, Any] | None = None,
+    pass_data: bool | None = None,
     process: Mapping[str, Any] | None = None,
     diagnostics: Mapping[str, Any] | None = None,
     seed: int | None = None,
@@ -635,6 +636,12 @@ def build_record(
             :meth:`AnalysisRecord.replay`.
         call: the keyword arguments that were passed.  Column names are
             looked up in ``data`` again on replay.
+        pass_data: force the bundled data to be injected as ``data=`` on
+            replay.  ``None`` (default) infers it: the data is injected only
+            when the recorded call refers to columns by name.  Set it to
+            ``True`` for a function that takes a whole table -- ``reitsma``,
+            for example, whose ``data=`` is the counts table itself rather
+            than a set of column names.
         process: extra ``运算过程`` entries (iterations, convergence, timings).
         diagnostics: extra ``结果与诊断`` entries.
         seed: random seed in force, recorded in the environment block.
@@ -699,18 +706,21 @@ def build_record(
 
     call_payload = dict(call or {})
     # The original call used column names; replay has to resolve them again,
-    # which only works when the data travels with the record.
+    # which only works when the data travels with the record.  A caller that
+    # knows its function takes the whole table (pass_data=True) overrides the
+    # guess.
     known = cols or {}
-    pass_data = bool(known) and any(
-        isinstance(v, str) and v in known for v in call_payload.values()
-    )
+    if pass_data is None:
+        pass_data = bool(known) and any(
+            isinstance(v, str) and v in known for v in call_payload.values()
+        )
 
     analysis_block: dict[str, Any] = {"settings": resolved_settings}
     if function:
         analysis_block["function"] = function
     if call_payload:
         analysis_block["call"] = call_payload
-        analysis_block["pass_data"] = pass_data
+        analysis_block["pass_data"] = bool(pass_data)
 
     process_block = _process_from(result)
     process_block.update(process or {})

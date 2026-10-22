@@ -237,6 +237,29 @@ numeric field. It is a strong check, not a total one:
   `environment` records them and `replay()` compares with a tolerance
   (`rtol=1e-9`, `atol=1e-12` by default).
 
+### When `call=` uses column names, and when it does not
+
+Most functions take column *names* plus a `data=` frame, so the record infers
+that the bundled table should be passed back as `data=` on replay:
+
+```python
+save_record("m1.json", fit, data=df,
+            function="rma", call={"yi": "TE", "vi": "seTE2", "method": "REML"})
+```
+
+Some functions take the whole table as their `data=` argument — `reitsma()` is
+the clearest case. The inference cannot tell, because the call contains no
+column names, so say so explicitly:
+
+```python
+save_record("dta.json", dta_fit, data=counts,
+            mode="bundle", function="reitsma",
+            call={"method": "reml"}, pass_data=True)
+```
+
+`pass_data=True` always injects the bundled data. `pass_data=False` never
+does, which is what you want for a function that takes no data at all.
+
 ## Practical advice
 
 1. **Save one record per model, in the repository that holds the paper.** A

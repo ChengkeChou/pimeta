@@ -345,13 +345,14 @@ class ReitsmaResult:
 
     def coef_table(self) -> dict:
         """The coefficient table as ``{column: list}``."""
+        zval = [m / s for m, s in zip(self.mu, self.se)]
         return {
             "model": ["reitsma"] * 2,
             "term": self.coefnames,
             "estimate": list(self.mu),
             "se": list(self.se),
-            "statistic": [m / s for m, s in zip(self.mu, self.se)],
-            "pval": [2 * stats.norm.sf(abs(m / s)) for m, s in zip(self.mu, self.se)],
+            "statistic": zval,
+            "pval": [float(2 * stats.norm.sf(abs(z))) for z in zval],
             "ci_lb": list(self.ci_lb),
             "ci_ub": list(self.ci_ub),
         }
@@ -370,6 +371,9 @@ class ReitsmaResult:
             "coefnames": self.coefnames,
             "mu": list(self.mu),
             "se": list(self.se),
+            "zval": [m / s for m, s in zip(self.mu, self.se)],
+            "pval": [float(2 * stats.norm.sf(abs(m / s)))
+                     for m, s in zip(self.mu, self.se)],
             "ci_lb": list(self.ci_lb),
             "ci_ub": list(self.ci_ub),
             "Psi": np.asarray(self.Psi).tolist(),

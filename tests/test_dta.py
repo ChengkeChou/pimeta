@@ -20,6 +20,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+import pimeta as ma
 from pimeta.dta import (
     DtaData,
     HsrocResult,
@@ -416,3 +417,94 @@ def test_result_objects_expose_sroc_and_auc():
     h = hsroc(fit)
     assert isinstance(h, HsrocResult)
     assert h.auc()["auc"] == pytest.approx(auc(fit)["auc"])
+
+
+# --------------------------------------------------------------------------- #
+# integration with pimeta.record
+# --------------------------------------------------------------------------- #
+def _recorded(tmp_path, **kwargs):
+    from pimeta.record import save_record
+
+    fit = reitsma(AUDITC)
+    path = tmp_path / "dta.json"
+    save_record(path, fit, data=AUDITC, mode="bundle", function="reitsma",
+                call={"method": "reml"}, pass_data=True, **kwargs)
+    return fit, path
+
+
+def test_a_dta_fit_round_trips_through_a_bundle_record(tmp_path):
+    from pimeta.record import load_record
+
+    fit, path = _recorded(tmp_path)
+    loaded = load_record(path)
+
+    assert loaded.kind == "reitsma"
+    assert loaded.inputs["mode"] == "bundle"
+    assert loaded.inputs["n_rows"] == 14
+    assert loaded.analysis["pass_data"] is True
+    assert loaded.environment["pimeta"] == ma.__version__
+
+    # The bundled counts still hash to the recorded digests.
+    fresh = loaded.verify()
+    assert fresh["analysis"] == loaded.fingerprint["analysis"]
+
+    # Re-fitting from the file reproduces the coefficients exactly.
+    again = loaded.replay()
+    assert again.mu == pytest.approx(fit.mu, rel=1e-12)
+    assert again.Psi.ravel() == pytest.approx(fit.Psi.ravel(), rel=1e-12)
+    assert again.AIC == pytest.approx(fit.AIC, rel=1e-12)
+
+
+def test_replay_catches_an_edited_coefficient(tmp_path):
+    from pimeta.record import RecordMismatch, load_record
+
+    _, path = _recorded(tmp_path)
+    loaded = load_record(path)
+    loaded.results["values"]["mu"] = [9.9, -9.9]
+    with pytest.raises(RecordMismatch, match="replayed"):
+        loaded.replay()
+
+
+def test_the_counts_are_not_copied_in_digest_mode(tmp_path):
+    from pimeta.record import RecordError, build_record
+
+    fit = reitsma(AUDITC)
+    record = build_record(fit, data=AUDITC, mode="digest", function="reitsma",
+                          call={"method": "reml"}, pass_data=True)
+    assert "data" not in record.inputs
+    with pytest.raises(RecordError, match="digest"):
+        record.verify()
+    # ... but the record can still be checked against the original table.
+    assert record.verify(AUDITC)["source"] == record.fingerprint["source"]
+
+
+def test_pass_data_defaults_to_false_when_no_column_names_are_used():
+    from pimeta.record import build_record
+
+    fit = reitsma(AUDITC)
+    auto = build_record(fit, data=AUDITC, mode="bundle", function="reitsma",
+                        call={"method": "reml"})
+    # reitsma() takes the whole table, not column names, so the inference
+    # cannot see that the data is needed -- which is why pass_data exists.
+    assert auto.analysis["pass_data"] is False
+
+    forced = build_record(fit, data=AUDITC, mode="bundle", function="reitsma",
+                          call={"method": "reml"}, pass_data=True)
+    assert forced.analysis["pass_data"] is True
+    assert forced.replay().mu == pytest.approx(fit.mu, rel=1e-12)
+
+
+def test_a_dta_fit_goes_into_an_estimates_store():
+    from pimeta.record import EstimatesStore
+
+    store = EstimatesStore("auditc")
+    store.store("reml", reitsma(AUDITC))
+    store.store("ml", reitsma(AUDITC, method="ml"))
+
+    table = store.compare()
+    assert table["model"] == ["reml", "reml", "ml", "ml"]
+    assert table["term"][0] == "(Intercept): logit(sens)"
+    assert table["estimate"][0] == pytest.approx(2.0997422, abs=1e-6)
+    assert table["estimate"][2] == pytest.approx(2.0762591, abs=1e-6)
+    assert len(table["pval"]) == 4
+

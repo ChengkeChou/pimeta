@@ -107,17 +107,64 @@ sits at one end of the range.
 detail that the trapezoid sum is divided by the number of grid points rather
 than by the number of intervals.
 
-## Using a fit in a record
+## Making a fit reproducible
 
-Both result types carry a `to_dict()`, so they drop straight into
-`pimeta.record`:
+A diagnostic meta-analysis is exactly the kind of result someone will ask you
+to defend five years later, so it drops straight into `pimeta.record`. One
+difference from the usual case: `reitsma()` takes the whole counts table
+rather than column names, so the record needs `pass_data=True` to know that
+the bundled table is the `data=` argument.
 
 ```python
-from pimeta.record import save_record
+from pimeta.record import load_record, save_record
 
-save_record("dta.json", fit, data=data.to_dict(), function="reitsma",
-            call={"method": "reml"})
+save_record(
+    "dta.json", fit,
+    data=counts,              # {"TP": [...], "FN": [...], "FP": [...], "TN": [...]}
+    mode="bundle",            # copy the counts so the file stands alone
+    function="reitsma",
+    call={"method": "reml"},
+    pass_data=True,
+)
 ```
+
+The file then carries all five blocks — the counts with their fingerprints,
+the settings, the run, the environment, and the fitted values — and can be
+re-checked and re-run without the original data:
+
+```python
+record = load_record("dta.json")
+print(record.summary())
+record.verify()      # do the bundled counts still hash to the recorded digests?
+again = record.replay()   # re-fit; raises RecordMismatch on any drift
+```
+
+`replay()` re-fits from the bundled counts and compares every numeric field of
+`to_dict()` — both means, both standard errors, all four entries of `Psi`,
+tau, rho, the summary point and AIC/BIC. If any of them moved, it raises and
+names the first differences.
+
+To compare several fits, use the store:
+
+```python
+from pimeta.record import EstimatesStore
+
+models = EstimatesStore("auditc")
+models.store("reml", fit, data=counts, mode="bundle",
+             function="reitsma", call={"method": "reml"}, pass_data=True)
+models.store("ml", ma.reitsma(counts, method="ml"), data=counts,
+             mode="bundle", function="reitsma", call={"method": "ml"},
+             pass_data=True)
+models.compare()          # one long table across the two fits
+models.save("estimates.json")
+```
+
+A runnable version of all of this is in `examples/dta_record.py`.
+
+HSROC is a pure function of the bivariate fit, so there is nothing extra to
+record: store the `reitsma()` result and derive `hsroc()` from it when you
+need it. That also keeps the two from disagreeing — they cannot, since they
+share one likelihood.
 
 ## Parity with `mada`
 
