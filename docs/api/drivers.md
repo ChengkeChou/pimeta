@@ -1,9 +1,13 @@
 # High-level drivers
 
-*27 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*31 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
+| [`DosresResult`](#dosresresult) | — |
+| [`dose_cov`](#dose_cov) | — |
+| [`dosres`](#dosres) | — |
+| [`greenland_counts`](#greenland_counts) | — |
 | [`metabin`](#metabin) | metabin |
 | [`MetabResult`](#metabresult) | — |
 | [`metacont`](#metacont) | metacont |
@@ -31,6 +35,145 @@
 | [`MetabindResult`](#metabindresult) | — |
 | [`metacr`](#metacr) | metacr |
 | [`MetacrResult`](#metacrresult) | metacr |
+
+## `DosresResult`
+
+```python
+DosresResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', coefnames: 'list[str]', tau2: 'float', QE: 'float', QE_df: 'int', QE_p: 'float', k: 'int', studies: 'int', method: 'str', level: 'float', basis: 'Basis | None', covariance: 'str', test: 'str', fit: 'Any', dose: 'np.ndarray' = <factory>) -> None
+```
+
+A pooled dose-response curve.
+
+**Attributes**
+
+- `b` — fixed-effect coefficients of the dose basis (intercept first).
+- `se, zval, pval, ci_lb, ci_ub` — one entry per coefficient.
+- `vb` — their covariance matrix.
+- `coefnames` — names, e.g. ``["intrcpt", "dose[1]", "dose[2]"]``.
+- `tau2` — between-study variance of the random intercept.
+- `QE, QE_df, QE_p` — residual heterogeneity.
+- `k` — number of contrasts fitted (reference levels excluded).
+- `studies` — number of studies.
+- `method` — τ² estimator.
+- `level` — confidence level.
+- `basis` — the `basis.Basis` that was fitted.
+- `covariance` — ``"greenland"``, ``"constant"`` or ``"independent"``.
+- `test` — reference distribution of the coefficient tests.
+- `fit` — the underlying `rma_mv.RmaMvResult`.
+- `dose` — the doses that were modelled, and ``study`` their study labels.
+
+## `dose_cov`
+
+```python
+dose_cov(dose, events=None, totals=None, *, effects=None, variances=None, type: 'str' = 'cc', rho: 'float | None' = None, tol: 'float' = 1e-12, max_iter: 'int' = 500) -> 'np.ndarray'
+```
+
+Within-study covariance of the log contrasts of one dose-response study.
+
+**Args**
+
+- `dose` — the dose levels, ascending or not; used for ordering only.
+- `events` — cases/events per level; required for the Greenland correction.
+- `totals` — participants or person-time per level.
+- `effects` — log relative effect per level (needed by the correction).
+- `variances` — variance per level; zero/``NaN`` marks the reference level.
+- `type` — ``"cc"``, ``"ci"`` or ``"ir"``.
+- `rho` — use a constant within-study correlation instead of the correction. The covariance is then ``rho * sqrt(vi_i * vi_j)`` and `variances` must be given.
+- `tol, max_iter` — passed to `greenland_counts`.
+
+**Returns**
+
+``(m, m)`` covariance matrix over the **non-reference** levels, in the input order.
+
+**Raises**
+
+- `ValueError` — when neither route is available, or the inputs disagree.
+
+**Example**
+
+>>> cov = ma.dose_cov(dose, events, totals, effects=logrr, variances=v) >>> cov.shape (3, 3)
+
+## `dosres`
+
+```python
+dosres(yi, *, study, dose, vi=None, cases=None, n=None, type: 'str' = 'cc', basis: 'Basis | None' = None, knots=None, nk: 'int | None' = 3, df: 'int | None' = None, rho: 'float | None' = None, method: 'str' = 'REML', level: 'float' = 0.95, tol: 'float' = 1e-12) -> 'DosresResult'
+```
+
+Pool a dose-response curve across studies.
+
+Two-stage in spirit and one-stage in form: each study contributes its own
+within-study covariance block, and the studies are pooled by a random
+intercept. That is the model the dose-response literature calls one-stage;
+the alternative — fit each study and pool the coefficients — is available by
+fitting the basis per study and handing the coefficients to ``rma_mv``.
+
+**Args**
+
+- `yi` — log relative effect per contrast.
+- `study` — study identifier per row.
+- `dose` — dose per row.
+- `vi` — variance of ``yi``. Rows with zero or missing ``vi`` are the reference levels: they are used to build the covariance and then excluded from the fit, exactly as a published table's reference row is.
+- `cases` — cases per dose level, for the Greenland correction.
+- `n` — participants or person-time per dose level.
+- `type` — ``"cc"``, ``"ci"`` or ``"ir"`` — see `dose_cov`.
+- `basis` — a `basis.Basis` over dose. When omitted one is built by `basis.rcs` from ``knots``/``nk``/``df``.
+- `knots, nk, df` — passed to `basis.rcs` when ``basis`` is not given.
+- `rho` — constant within-study correlation, used instead of the Greenland correction.
+- `method` — τ² estimator (``"REML"`` by default).
+- `level` — confidence level.
+- `tol` — Greenland convergence tolerance.
+
+**Returns**
+
+`DosresResult`.
+
+**Raises**
+
+- `ValueError` — when the rows do not line up, when a study has fewer than two levels, or when no covariance route is available.
+
+**Example**
+
+>>> fit = ma.dosres(logrr, study=id, dose=dose, vi=se**2, ...                 cases=cases, n=n, knots=[5, 15, 30])
+
+## `greenland_counts`
+
+```python
+greenland_counts(events, totals, effects, variances=None, *, type: 'str' = 'cc', tol: 'float' = 1e-12, max_iter: 'int' = 500) -> 'np.ndarray'
+```
+
+Greenland–Longnecker adjusted case counts for one study.
+
+A published table reports relative risks to two or three decimals, so the
+reported reference count and the reported contrasts are not exactly
+consistent. Greenland & Longnecker (1992) solve for the counts that *are*
+consistent by iterating
+
+.. math::
+
+    A^{(m+1)} = A^{(m)} + H^{-1}\big[\, y + \log(A_0)
+                + \log(n_i - A_i) - \log(A_i) - \log(n_0 - A_0)\big]
+
+where :math:`H` is the covariance matrix implied by those counts. The
+result is used to build the covariance and nothing else — the fitted
+effects stay the ones the paper reported.
+
+**Args**
+
+- `events` — cases (``cc``/``ci``) or events (``ir``) per dose level.
+- `totals` — total participants (``cc``/``ci``) or person-time (``ir``).
+- `effects` — log relative effect per dose level. The reference level(s) may be given as ``0``.
+- `variances` — variance of each log effect. ``0``, ``None`` or ``NaN`` marks the reference level, whose variance is taken to be zero.
+- `type` — ``"cc"`` (case-control), ``"ci"`` (cumulative incidence) or ``"ir"`` (incidence rate).
+- `tol` — convergence tolerance on the squared change in the adjusted counts. The default is tighter than ``dosresmeta``'s 1e-5, which leaves the counts good to about five decimals; the fixed point is the same.
+- `max_iter` — iteration cap.
+
+**Returns**
+
+Adjusted counts, one per dose level, in the input order.
+
+**Raises**
+
+- `ValueError` — for fewer than two dose levels, one reference level, or a negative/zero count.
 
 ## `metabin`
 

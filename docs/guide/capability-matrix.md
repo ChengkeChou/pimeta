@@ -44,18 +44,37 @@ Still missing, on purpose: automatic selection of the number of knots or of the
 power set. Both are model-selection procedures (with their own multiplicity
 problems), not bases, and neither is a one-liner done honestly.
 
-### 2. Dose–response meta-analysis — **no**
+### 2. Dose–response meta-analysis — **yes**
 
 Wanted: the non-linear dose–response curve with the within-study covariance
 handled.
 
-Already there: the two pieces it would sit on — `ma.vcalc` builds a
-block-diagonal sampling covariance matrix from an assumed within-study
-correlation, and `ma.rma_mv` fits it with every metafor variance structure.
+`pimeta.dose` has the two pieces that make this a different problem from
+ordinary meta-regression:
 
-Missing: the Greenland–Longnecker covariance for contrasts that share a
-control group (only a single `rho` is supported, not one per comparison pair),
-the reference-dose convention, the dose grid, and the spline design over dose.
+- `dose_cov` builds the within-study covariance of contrasts that share a
+  control group. With `cases` and `n` it applies the Greenland–Longnecker
+  correction, which re-derives the reference group's case count from the
+  reported relative risks (a published table reports them rounded, so the naive
+  count is not consistent with them). With `rho` it builds a constant-correlation
+  block for a paper that prints no counts. `greenland_counts` is exposed on its
+  own for checking a table.
+- `dosres` assembles the block-diagonal covariance, puts a spline over dose,
+  and fits the whole thing as a multilevel model with a random intercept per
+  study — then reports the coefficients, the between-study variance and the
+  residual heterogeneity.
+
+Pinned by `tests/test_dose.py` against `dosresmeta` 2.2.0 (the adjustment) and
+against `metafor` 5.2.1 `rma.mv` with the same covariance (the fit).
+
+One deliberate difference: `dosresmeta`'s default also puts random effects on
+the spline coefficients, so its `Psi` is a *matrix* over the basis rather than a
+single variance. That is a different estimator, not a different implementation,
+and `pimeta` uses the random-intercept model; the `random=` argument of
+`rma_mv` is available if a random-slope version is wanted.
+
+Still missing: selecting the number of knots and the reference dose
+automatically, and dose–response *network* meta-analysis.
 
 ### 3. Two-stage IPD — **no**
 
@@ -190,7 +209,7 @@ model twice.
 | # | Area | Status | Guard test |
 |---|---|---|---|
 | 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
-| 2 | dose–response | no | — |
+| 2 | dose–response | yes | `tests/test_dose.py` |
 | 3 | two-stage IPD | no | — |
 | 4 | one-stage IPD | no | — |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
@@ -239,7 +258,7 @@ numerics*, not by topic:
 |---|---|---|
 | 0 | this page | cheap, and it stops the next three stages from being built twice |
 | 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | **done** — item 1 is finished; it unblocks items 2 and 3 |
-| 2 | dose–response | item 1 plus one covariance construction; same readers as item 3 |
+| 2 | dose–response | item 1 plus the covariance construction; **done** — it needed the covariance, not a new estimator |
 | 3 | IPD data layer and two-stage | reuses stage 1 for the non-linear case, nothing else new |
 | 4 | one-stage IPD, continuous then binary | first genuinely new likelihood |
 | 5 | KM reconstruction and RMST | data layer, strictly verifiable, feeds item 3 |

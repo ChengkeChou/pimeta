@@ -69,6 +69,7 @@ from .diagnostics import (
     tes,
     vif,
 )
+from .dose import DosresResult, dose_cov, dosres, greenland_counts
 from .dta import (
     DtaCorrectionWarning,
     DtaData,
@@ -591,6 +592,10 @@ __all__ = [
     "NonlinearTestResult",
     "WaldResult",
     "default_knots",
+    "DosresResult",
+    "dose_cov",
+    "dosres",
+    "greenland_counts",
     "fp",
     "nonlinear_test",
     "predict_curve",

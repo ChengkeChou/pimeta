@@ -1,6 +1,6 @@
 # API reference
 
-All 433 public names in `pimeta.__all__`, generated from the source docstrings.
+All 437 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -151,6 +151,10 @@ All 433 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`hsroc`](models.md#hsroc) | Models | — |
 | [`sroc`](models.md#sroc) | Models | sroc |
 | [`auc`](models.md#auc) | Models | AUC |
+| [`DosresResult`](drivers.md#dosresresult) | High-level drivers | — |
+| [`dose_cov`](drivers.md#dose_cov) | High-level drivers | — |
+| [`dosres`](drivers.md#dosres) | High-level drivers | — |
+| [`greenland_counts`](drivers.md#greenland_counts) | High-level drivers | — |
 | [`metabin`](drivers.md#metabin) | High-level drivers | metabin |
 | [`MetabResult`](drivers.md#metabresult) | High-level drivers | — |
 | [`metacont`](drivers.md#metacont) | High-level drivers | metacont |

@@ -8,6 +8,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Dose-response meta-analysis.** A dose-response study contributes several
+  contrasts against the same reference group, so the inverse-variance pool of
+  them is wrong. `pimeta.dose` supplies the two missing pieces:
+  - `dose_cov` builds the within-study covariance. Given `cases` and `n` it
+    applies the Greenland–Longnecker correction — re-deriving the reference
+    group's case count from the reported relative risks, because a published
+    table rounds them and the naive count is not consistent with them — and
+    `greenland_counts` exposes the adjusted counts on their own. Given `rho` it
+    builds a constant-correlation block instead, for a paper that reports no
+    counts.
+  - `dosres` assembles the block-diagonal covariance, puts a spline (or
+    fractional polynomial, or anything else from `pimeta.basis`) over dose, and
+    fits the model with a random intercept per study. The result is an ordinary
+    multilevel fit, so `wald_test`, `nonlinear_test`, `predict_curve` and the
+    record layer all work on it.
+  - Verified against `dosresmeta` 2.2.0 for the adjustment and `metafor` 5.2.1
+    `rma.mv` for the fit. `dosresmeta`'s default also randomises the spline
+    coefficients, which is a different estimator; the reference here is the
+    `rma.mv` call with the same covariance.
 - **Non-linear meta-regression: restricted cubic splines and fractional
   polynomials.** The estimator is linear in the parameters, not in the
   moderator, so a curved dose-response only needs a basis expansion — which is
