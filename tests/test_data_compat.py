@@ -368,3 +368,19 @@ def test_metabin_accepts_column_names():
     b = ma.metabin(frame["e1"], frame["n1"], frame["e2"], frame["n2"])
     assert np.allclose(float(a.random.pooled_est), float(b.random.pooled_est), atol=1e-12)
     assert np.allclose(float(a.random.pooled_se), float(b.random.pooled_se), atol=1e-12)
+
+
+def test_a_factor_term_without_an_intercept_keeps_every_level():
+    """R's model.matrix(~ f - 1) is a full indicator matrix, not L-1 dummies.
+
+    Dropping the reference level is only correct when an intercept is present;
+    doing it unconditionally silently merges one level into another.
+    """
+    frame = {"g": ["a", "b", "c", "a", "b", "c"], "yi": [1.0, 2, 3, 4, 5, 6]}
+    X, names = design_matrix("~ g - 1", frame)
+    assert names == ["g[a]", "g[b]", "g[c]"]
+    assert X.shape == (6, 3)
+    assert np.allclose(X.sum(axis=1), 1.0)
+    X, names = design_matrix("~ g", frame)
+    assert names == ["(Intercept)", "g[b]", "g[c]"]
+    assert X.shape == (6, 3)

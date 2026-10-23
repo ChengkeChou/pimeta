@@ -196,7 +196,7 @@ Missing: the within-study covariance between an AUC and a calibration slope
 reported by the same study, which a joint model would need. Pooling them
 separately avoids the problem rather than solving it.
 
-### 9. Multivariate meta-analysis — **partial**
+### 9. Multivariate meta-analysis — **yes**
 
 Already there: the estimator is complete. `ma.rma_mv` implements every metafor
 variance structure (CS, HCS, AR, TOEP, UN, GEN), random slopes, custom weight
@@ -205,9 +205,43 @@ between studies. `ma.vcalc` builds the sampling covariance. `ma.aggregate_escalc
 aggregates dependent effect sizes within a cluster. `ma.sigma_matreg` recovers
 the coefficient covariance.
 
-Missing, and small in each case: `vcalc` takes one `rho`, not one per comparison
-pair; there is no helper that returns the between-study correlation matrix with
-intervals; and there is no multivariate prediction region.
+The reporting layer is in `pimeta.mv`:
+
+- **the sampling covariance** (`ma.vcalc`) covers all four dependency
+  structures metafor documents — the same construct measured several ways
+  (`obs` + `rho`), different constructs (`type` + `rho`), independent subgroups
+  within a study (`subgroup`), and contrasts that share a condition
+  (`grp1` / `grp2`). The last one is derived, not assumed: two contrasts
+  against the same control share that arm's sampling variance, so
+  $\rho = (1/w_C)/\sqrt{(1/w_A+1/w_C)(1/w_B+1/w_C)}$, which is exactly 0.5
+  for equal arms. `ma.shared_control_corr` exposes that formula.
+- **`ma.tau_cor`** returns the between-outcome covariance `G` of a
+  `struct="UN"` fit and the correlation matrix on top of it, with outcome
+  labels — the number a reader wants, since `G` itself is on the effect-size
+  scale. It reproduces `cov2cor(fit$G)` exactly.
+- **`ma.rho_sensitivity`** refits the model along a grid of assumed
+  within-study correlations and reports every pooled estimate with its
+  interval. This is the obligation the scalar `rho` creates: the correlation
+  cannot be estimated from the data (each study contributes a handful of
+  estimates), so what has to be shown is what the assumption is worth.
+
+Two things metafor does *not* report here, and neither does pimeta: `rma.mv`
+returns no `se.tau2` / `se.rho` for these models, and `predict()` returns `NA`
+prediction bounds for a multilevel fit. Interval estimates of the
+between-outcome correlation, and a joint prediction region, would have no R
+reference to check against, so they are not offered rather than offered
+unverified.
+
+Pinned by `tests/test_mv.py` against `metafor` 5.2.1 on the Berkey 1998
+dataset — the example metafor's own `vcalc` documentation uses.
+
+One behaviour is corrected rather than copied: metafor silently discards `rho`
+when neither `obs` nor `type` is given, returning a correlation of 1. See
+[the differences page](../reference/differences.md) §4.
+
+Not a gap: grouped correlation structures beyond `obs` / `type` / `grp1` /
+`grp2`, and within-subject designs (`time1` / `time2` with `phi`). The latter
+raises rather than being approximated.
 
 ### 10. Component network meta-analysis — **yes**
 
@@ -256,14 +290,14 @@ model twice.
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
 | 7 | survival outcomes | partial | `tests/test_surv.py` |
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
-| 9 | multivariate | partial | `tests/test_rma_mv_methods.py`, `tests/test_matreg_r_parity.py` |
+| 9 | multivariate | yes | `tests/test_mv.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | partial | `tests/test_selmodel_models.py`, `tests/test_metabias.py` |
 | 12 | time-varying effects | no | — |
 
 Five of these twelve turned out to be further along than the roadmap assumed:
 items 5, 6 and 10 are finished, item 1 needed only a basis rather than a
-regression layer, and item 9 is missing only its convenience layer. All of
+regression layer, and item 9 was missing only its reporting layer. All of
 items 1, 5 and 6 were completed in the current development cycle, which is why
 the planning documents written before it overstate the work remaining.
 

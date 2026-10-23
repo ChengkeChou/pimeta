@@ -1,7 +1,8 @@
-"""Additional metafor utilities: simulation, V-matrix construction, hettest, matreg.
+"""Additional metafor utilities: simulation, hettest, matreg, profile.
 
-Implements ``metafor::simulate.rma``, ``metafor::vcalc``, ``metafor::hettest``
-and ``metafor::matreg``.
+Implements ``metafor::simulate.rma``, ``metafor::hettest``, ``metafor::matreg``
+and ``profile.rma.uni``.  ``metafor::vcalc`` lives in :mod:`pimeta.mv.vcov` and
+is re-exported here so that the long-standing ``ma.vcalc`` name keeps working.
 """
 
 from __future__ import annotations
@@ -11,6 +12,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy import stats
+
+from .mv.vcov import vcalc
 
 __all__ = [
     "simulate_rma", "vcalc", "hettest", "HettestResult",
@@ -54,54 +57,6 @@ def simulate_rma(result, nsim=1, seed=None):
         theta = rng.normal(mu, math.sqrt(tau2) if tau2 > 0 else 0.0)
         out[:, s] = rng.normal(theta, np.sqrt(vi))
     return out
-
-
-# --------------------------------------------------------------------------- #
-# vcalc
-# --------------------------------------------------------------------------- #
-
-def vcalc(vi, cluster=None, obs=None, rho=0.5, phi=0.0):
-    """``metafor::vcalc`` — build a block-diagonal sampling-variance matrix.
-
-    Within a cluster, the covariance between two effect sizes is
-    ``rho * sqrt(vi_i * vi_j)``; between clusters it is zero.
-
-    Args:
-        vi: sampling variances (length ``k``).
-        cluster: cluster identifiers (length ``k``); ``None`` puts everything
-            in one cluster.
-        obs: observation identifiers used to order the within-cluster blocks
-            (optional; defaults to the input order).
-        rho: within-cluster correlation.
-        phi: optional additive heterogeneity factor (``phi * sqrt(vi_i*vi_j)``
-            used by some ``vcalc`` variants); default 0.
-
-    Returns:
-        ``(k, k)`` float array.
-    """
-    vi = np.asarray(vi, dtype=float).ravel()
-    k = vi.size
-    if cluster is None:
-        cl = np.zeros(k, dtype=int)
-    else:
-        cl = np.asarray(cluster).ravel()
-        if cl.size != k:
-            raise ValueError("length of 'cluster' does not match 'vi'")
-    sd = np.sqrt(vi)
-    V = np.diag(vi).astype(float)
-    for c in np.unique(cl):
-        idx = np.where(cl == c)[0]
-        if idx.size < 2:
-            continue
-        if obs is not None:
-            o = np.asarray(obs).ravel()[idx]
-            idx = idx[np.argsort(o, kind="stable")]
-        for a in range(idx.size):
-            for b in range(a + 1, idx.size):
-                cov = (rho + phi) * sd[idx[a]] * sd[idx[b]]
-                V[idx[a], idx[b]] = cov
-                V[idx[b], idx[a]] = cov
-    return V
 
 
 # --------------------------------------------------------------------------- #

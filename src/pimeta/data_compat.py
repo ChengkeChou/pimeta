@@ -478,7 +478,7 @@ def basis_from_call(factor: str, columns: Mapping) -> Basis | None:
     return _fp_basis(values, name=label, **kw)
 
 
-def _factor_parts(factor: str, columns: Mapping) -> list:
+def _factor_parts(factor: str, columns: Mapping, drop_first: bool = True) -> list:
     """The design-matrix columns contributed by one factor."""
     basis = basis_from_call(factor, columns)
     if basis is not None:
@@ -489,11 +489,17 @@ def _factor_parts(factor: str, columns: Mapping) -> list:
         raise ValueError(
             f"term {factor!r} in the formula does not name a column; "
             f"available columns: {have}")
-    return _design_block(factor, columns[factor])
+    return _design_block(factor, columns[factor], drop_first=drop_first)
 
 
-def _design_block(name: str, values) -> list:
-    """One moderator column, expanded to dummies when it is not numeric."""
+def _design_block(name: str, values, drop_first: bool = True) -> list:
+    """One moderator column, expanded to dummies when it is not numeric.
+
+    ``drop_first`` follows R's contrast coding: a factor term contributes
+    ``L - 1`` dummies when the model has an intercept and all ``L`` when it
+    does not (``~ f - 1`` is the usual way to get one mean per level rather
+    than a difference from a reference level).
+    """
     arr = np.asarray(values)
     if arr.dtype.kind in "biufc":
         return [(name, arr.astype(float).ravel())]
@@ -511,9 +517,10 @@ def _design_block(name: str, values) -> list:
 
     labels = [str(v) for v in arr.ravel()]
     levels = sorted(set(labels))
+    chosen = levels[1:] if drop_first else levels
     return [(f"{name}[{lv}]",
              np.array([1.0 if v == lv else 0.0 for v in labels]))
-            for lv in levels[1:]]           # R drops the first level
+            for lv in chosen]
 
 
 def design_matrix(formula, data, intercept=None):
@@ -548,7 +555,7 @@ def design_matrix(formula, data, intercept=None):
         factors = term.split(":")
         parts: list[list] = []
         for factor in factors:
-            parts.append(_factor_parts(factor, cols))
+            parts.append(_factor_parts(factor, cols, drop_first=intercept))
 
         # Cartesian product of the factor blocks, row-wise.
         acc = list(parts[0])

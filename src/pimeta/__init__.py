@@ -134,6 +134,13 @@ from .metaprop import MetapropResult, metaprop
 from .metarate import MetarateResult, metarate
 from .metareg import MetaregResult, metareg
 from .missing import MissingDataWarning, complete_cases, is_missing
+from .mv import (
+    RhoSensitivityResult,
+    TauCorResult,
+    rho_sensitivity,
+    shared_control_corr,
+    tau_cor,
+)
 from .mv_diagnostics import MvProfileResult, profile_rmamv
 from .netmeta import (
     DecompDesignResult,
@@ -767,6 +774,9 @@ __all__ = [
     # extras
     "simulate_rma", "vcalc", "hettest", "HettestResult",
     "matreg", "MatregResult", "profile_rma", "ProfileResult",
+    # multivariate reporting layer
+    "shared_control_corr", "tau_cor", "TauCorResult",
+    "rho_sensitivity", "RhoSensitivityResult",
     "netcomplex",
     "netcomplexity",
     "netmetareg", "NetmetaregResult",

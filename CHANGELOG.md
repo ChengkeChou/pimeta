@@ -8,6 +8,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Multivariate reporting layer (`pimeta.mv`).** The estimator was already
+  complete; what was missing was everything around it.
+  - `ma.vcalc` now implements all four dependency structures `metafor::vcalc`
+    documents: the same construct measured several ways (`obs` + `rho`),
+    different constructs (`type` + `rho`), independent subgroups inside a
+    study (`subgroup`), and contrasts sharing a condition (`grp1` / `grp2`
+    with `w1` / `w2`). `rho` also accepts a full correlation matrix, so
+    per-pair correlations are available.
+  - `ma.shared_control_corr` exposes the shared-arm formula
+    `(1/w_C)/sqrt((1/w_A + 1/w_C)(1/w_B + 1/w_C))`. It equals 0.5 exactly for
+    equal arms — the 0.5 metafor prints is derived, not assumed.
+  - `ma.tau_cor` returns the between-outcome covariance `G` of a
+    `struct="UN"` fit and the correlation matrix on top of it, with outcome
+    labels.
+  - `ma.rho_sensitivity` refits the model along a grid of assumed
+    within-study correlations and reports each pooled estimate with its
+    interval, which is the sensitivity analysis a scalar `rho` obliges.
+  - `tests/test_mv.py` pins all of it against metafor 5.2.1 on Berkey 1998.
+
 - **Prediction-model performance: discrimination and calibration.**
   `pimeta.prediction` pools five metrics, each on the scale and with the
   variance its own literature specifies:

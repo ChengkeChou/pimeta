@@ -70,6 +70,10 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "onestage": ("models", "Models"),
     "prediction": ("models", "Models"),
     "surv": ("models", "Models"),
+    "mv": ("models", "Models"),
+    "mv.vcov": ("models", "Models"),
+    "mv.corr": ("models", "Models"),
+    "mv.sens": ("models", "Models"),
     "meta_compose": ("drivers", "High-level drivers"),
     # network meta-analysis
     "netmeta": ("network", "Network meta-analysis"),

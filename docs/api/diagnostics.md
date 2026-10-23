@@ -1,6 +1,6 @@
 # Diagnostics and utilities
 
-*58 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*57 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -15,7 +15,6 @@
 | [`permutest`](#permutest) | permutest |
 | [`PermutestResult`](#permutestresult) | permutest |
 | [`simulate_rma`](#simulate_rma) | simulate.rma |
-| [`vcalc`](#vcalc) | vcalc |
 | [`hettest`](#hettest) | hettest |
 | [`HettestResult`](#hettestresult) | — |
 | [`matreg`](#matreg) | matreg |
@@ -288,31 +287,6 @@ heterogeneity.
 **Returns**
 
 ``(k, nsim)`` array of simulated effect sizes.
-
-## `vcalc`
-
-```python
-vcalc(vi, cluster=None, obs=None, rho=0.5, phi=0.0)
-```
-
-*Mirrors R's `vcalc`.*
-
-``metafor::vcalc`` — build a block-diagonal sampling-variance matrix.
-
-Within a cluster, the covariance between two effect sizes is
-``rho * sqrt(vi_i * vi_j)``; between clusters it is zero.
-
-**Args**
-
-- `vi` — sampling variances (length ``k``).
-- `cluster` — cluster identifiers (length ``k``); ``None`` puts everything in one cluster.
-- `obs` — observation identifiers used to order the within-cluster blocks (optional; defaults to the input order).
-- `rho` — within-cluster correlation.
-- `phi` — optional additive heterogeneity factor (``phi * sqrt(vi_i*vi_j)`` used by some ``vcalc`` variants); default 0.
-
-**Returns**
-
-``(k, k)`` float array.
 
 ## `hettest`
 

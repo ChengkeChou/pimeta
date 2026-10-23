@@ -1,6 +1,6 @@
 # API reference
 
-All 454 public names in `pimeta.__all__`, generated from the source docstrings.
+All 459 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -158,6 +158,12 @@ All 454 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`profile_rma_ls`](models.md#profile_rma_ls) | Models | profile.rma.ls |
 | [`RmaLsProfileResult`](models.md#rmalsprofileresult) | Models | profile.rma.ls |
 | [`confint_rma_ls`](models.md#confint_rma_ls) | Models | confint.rma.ls |
+| [`vcalc`](models.md#vcalc) | Models | — |
+| [`shared_control_corr`](models.md#shared_control_corr) | Models | — |
+| [`tau_cor`](models.md#tau_cor) | Models | — |
+| [`TauCorResult`](models.md#taucorresult) | Models | — |
+| [`rho_sensitivity`](models.md#rho_sensitivity) | Models | — |
+| [`RhoSensitivityResult`](models.md#rhosensitivityresult) | Models | — |
 | [`DtaData`](models.md#dtadata) | Models | — |
 | [`DtaCorrectionWarning`](models.md#dtacorrectionwarning) | Models | — |
 | [`ReitsmaResult`](models.md#reitsmaresult) | Models | — |
@@ -295,7 +301,6 @@ All 454 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`permutest`](diagnostics.md#permutest) | Diagnostics and utilities | permutest |
 | [`PermutestResult`](diagnostics.md#permutestresult) | Diagnostics and utilities | permutest |
 | [`simulate_rma`](diagnostics.md#simulate_rma) | Diagnostics and utilities | simulate.rma |
-| [`vcalc`](diagnostics.md#vcalc) | Diagnostics and utilities | vcalc |
 | [`hettest`](diagnostics.md#hettest) | Diagnostics and utilities | hettest |
 | [`HettestResult`](diagnostics.md#hettestresult) | Diagnostics and utilities | — |
 | [`matreg`](diagnostics.md#matreg) | Diagnostics and utilities | matreg |

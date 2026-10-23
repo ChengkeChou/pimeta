@@ -92,6 +92,40 @@ class RmaMvResult:
     # diagnostics (stored under a private name so repr stays short).
     _data: dict | None = field(repr=False, default=None)
 
+    def g_matrix(self):
+        """Between-outcome covariance of the first multivariate random term.
+
+        Returns:
+            ``(G, names)`` — the ``J x J`` covariance matrix and the outcome
+            labels in its order, or ``(None, [])`` when the model has no
+            random term over an inner factor with more than one level.
+        """
+        if not self.components:
+            return None, []
+        offset = 0
+        for comp in self.components:
+            n = comp.n_params
+            block = self.params[offset:offset + n]
+            offset += n
+            J = int(getattr(comp, "J", 1))
+            if J < 2:
+                continue
+            labels = list(getattr(comp, "inner_labels", None) or [])
+            if all(labels):
+                names = [str(x) for x in labels]
+            else:
+                names = [f"y{i + 1}" for i in range(J)]
+            if hasattr(comp, "_G"):
+                return np.asarray(comp._G(block), dtype=float), names
+            # compound symmetry: tau2 on the diagonal, rho off it
+            _s2, tau2, rho = comp.report(block)
+            tau2_val = float(tau2[0]) if tau2 else 0.0
+            rho_val = float(rho[0]) if rho else 0.0
+            G = np.full((J, J), rho_val * tau2_val)
+            np.fill_diagonal(G, tau2_val)
+            return G, names
+        return None, []
+
 
 def _encode_levels(values):
     """Map ``values`` to 0-based level indices (sorted order, R ``factor``)."""

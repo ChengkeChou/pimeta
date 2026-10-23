@@ -1,6 +1,6 @@
 # Models
 
-*71 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*77 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -65,6 +65,12 @@
 | [`profile_rma_ls`](#profile_rma_ls) | profile.rma.ls |
 | [`RmaLsProfileResult`](#rmalsprofileresult) | profile.rma.ls |
 | [`confint_rma_ls`](#confint_rma_ls) | confint.rma.ls |
+| [`vcalc`](#vcalc) | — |
+| [`shared_control_corr`](#shared_control_corr) | — |
+| [`tau_cor`](#tau_cor) | — |
+| [`TauCorResult`](#taucorresult) | — |
+| [`rho_sensitivity`](#rho_sensitivity) | — |
+| [`RhoSensitivityResult`](#rhosensitivityresult) | — |
 | [`DtaData`](#dtadata) | — |
 | [`DtaCorrectionWarning`](#dtacorrectionwarning) | — |
 | [`ReitsmaResult`](#reitsmaresult) | — |
@@ -1307,6 +1313,145 @@ confint_rma_ls(x, parm=None, level=None, digits=4)
 
 metafor additionally supports profile-likelihood intervals here; use
 `profile_rma_ls` and invert the profile yourself for those.
+
+## `vcalc`
+
+```python
+vcalc(vi, cluster=None, subgroup=None, obs=None, type=None, time1=None, time2=None, grp1=None, grp2=None, w1=None, w2=None, rho=None, phi=0.0, rho_names=None, r_compat=False)
+```
+
+Build the ``k x k`` sampling covariance matrix ``V``.
+
+**Args**
+
+- `vi` — sampling variances, length ``k``.
+- `cluster` — cluster identifier (usually the study).  ``None`` treats every row as one cluster, which is a convenience pimeta adds; R requires the argument.
+- `subgroup` — optional independent subgroups within a cluster; rows in different subgroups are independent even inside one cluster.
+- `obs` — optional identifier of the *observation* of one construct, so several measures of the same thing can be told apart.
+- `type` — optional identifier of the *construct*, when several different outcomes were measured on the same subjects.
+- `time1, time2` — not supported; see the module docstring.
+- `grp1, grp2` — the two conditions each effect size compares.  Rows that share one of them are correlated, with the correlation derived from the shared arm's weight.
+- `w1, w2` — weights (group sizes, or inverse sampling variances) of the two conditions; default 1 each, which makes the correlation exactly 0.5.
+- `rho` — correlation among estimates of the same construct (with ``obs``), among different constructs (with ``type``), or among all rows of a cluster (neither given).  A scalar, or a square matrix indexed by the factor's levels.
+- `phi` — accepted for signature compatibility; only meaningful with ``time1`` / ``time2``, which are not implemented.  A nonzero value without a time index is an error rather than a silent no-op.
+- `rho_names` — labels of the rows of a matrix ``rho``, in matrix order. Without it the matrix is indexed in first-appearance order of the factor, which is what R's ``unique()`` produces.
+- `r_compat` — reproduce metafor exactly, including its silent discard of ``rho`` when neither ``obs`` nor ``type`` is given.  Default ``False``: the correlation that was asked for is the one used.
+
+**Returns**
+
+``(k, k)`` float array.
+
+**Raises**
+
+- `ValueError` — inconsistent lengths, a forgotten correlation, or a singular block that no argument explains.
+- `NotImplementedError` — ``time1`` / ``time2`` were supplied.
+
+## `shared_control_corr`
+
+```python
+shared_control_corr(w_shared, w_a, w_b)
+```
+
+Correlation between two contrasts that share one condition.
+
+Effect size ``a`` contrasts arm A against the shared arm C, effect size
+``b`` contrasts arm B against the same C.  With homogeneous within-arm
+variance, ``Cov = sigma^2/w_C`` and ``Var = sigma^2/w_A + sigma^2/w_C``,
+so the variance cancels and the correlation is a function of the weights
+alone.
+
+**Args**
+
+- `w_shared` — weight (or group size) of the shared condition.
+- `w_a` — weight of the first contrast's other condition.
+- `w_b` — weight of the second contrast's other condition.
+
+**Returns**
+
+The correlation in ``[0, 1]``; ``0.5`` when all three weights agree.
+
+## `tau_cor`
+
+```python
+tau_cor(fit)
+```
+
+Between-outcome correlation matrix of a fitted ``rma_mv`` model.
+
+**Args**
+
+- `fit` — `rma_mv.RmaMvResult` from a model with a multivariate random term, e.g. ``random="~ outcome | study", struct="UN"``.
+
+**Returns**
+
+`TauCorResult`.
+
+**Raises**
+
+- `ValueError` — the model has no multivariate random term, so there is no between-outcome covariance to report.
+
+## `TauCorResult`
+
+```python
+TauCorResult(names: 'list[str]', G: 'np.ndarray', R: 'np.ndarray', tau2: 'np.ndarray', rho: 'np.ndarray') -> None
+```
+
+Between-outcome covariance and correlation of the random effects.
+
+**Attributes**
+
+- `names` — outcome labels, in the order of the model's inner factor.
+- `G` — the ``J x J`` random-effects covariance matrix.
+- `R` — the corresponding correlation matrix.
+- `tau2` — ``diag(G)``.
+- `rho` — the off-diagonal correlations, lower triangle, row by row — the order metafor reports in ``$rho``.
+
+## `rho_sensitivity`
+
+```python
+rho_sensitivity(yi, vi, *, study, outcome, mods=None, struct='UN', method='REML', rho_grid=(0.0, 0.25, 0.5, 0.75), level=95.0, test='z')
+```
+
+Refit a multivariate model along a grid of within-study correlations.
+
+**Args**
+
+- `yi` — effect estimates, length ``k``.
+- `vi` — sampling variances, length ``k``.
+- `study` — study identifier; defines the blocks of ``V``.
+- `outcome` — outcome identifier; the inner factor of the random term.
+- `mods` — fixed-effect design — a design matrix, a formula string such as ``"~ outcome - 1"``, or ``None`` for an intercept-only model.
+- `struct` — variance structure passed to ``rma_mv``; ``"UN"`` estimates a free between-outcome correlation, ``"CS"`` one common value.
+- `method` — ``"REML"`` (default) or ``"ML"``.
+- `rho_grid` — the assumed within-study correlations to fit.
+- `level` — confidence level in percent.
+- `test` — ``"z"`` (default), ``"t"``, ``"knha"`` or ``"adhoc"``.
+
+**Returns**
+
+`RhoSensitivityResult`.
+
+**Raises**
+
+- `ValueError` — an empty grid, mismatched lengths, or a design that cannot be resolved.
+
+## `RhoSensitivityResult`
+
+```python
+RhoSensitivityResult(rho: 'np.ndarray', names: 'list[str]', estimate: 'np.ndarray', se: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', tau2: 'np.ndarray', fits: 'list' = <factory>) -> None
+```
+
+Pooled estimates along a grid of within-study correlations.
+
+**Attributes**
+
+- `rho` — the grid that was fitted.
+- `names` — coefficient labels.
+- `estimate` — ``(G, p)`` pooled estimates.
+- `se` — ``(G, p)`` standard errors.
+- `ci_lb, ci_ub` — ``(G, p)`` interval bounds.
+- `tau2` — ``(G, q)`` variance components (``q`` depends on ``struct``).
+- `fits` — the individual model fits, in grid order.
 
 ## `DtaData`
 
