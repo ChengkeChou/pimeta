@@ -1,9 +1,11 @@
 # Diagnostics and utilities
 
-*57 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*59 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
+| [`level_to_alpha`](#level_to_alpha) | — |
+| [`level_to_percent`](#level_to_percent) | — |
 | [`MvProfileResult`](#mvprofileresult) | profile.rma |
 | [`profile_rmamv`](#profile_rmamv) | profile.rma.mv |
 | [`deltamethod`](#deltamethod) | — |
@@ -61,6 +63,34 @@
 | [`MissingDataWarning`](#missingdatawarning) | — |
 | [`complete_cases`](#complete_cases) | — |
 | [`is_missing`](#is_missing) | — |
+
+## `level_to_alpha`
+
+```python
+level_to_alpha(level) -> 'float'
+```
+
+Normalise any of the three spellings to a tail probability.
+
+**Args**
+
+- `level` — ``0.95``, ``95`` or ``0.05``.
+
+**Returns**
+
+The alpha, e.g. ``0.05`` for all three of those inputs.
+
+**Raises**
+
+- `ValueError` — the value is not a usable confidence specification.
+
+## `level_to_percent`
+
+```python
+level_to_percent(level) -> 'float'
+```
+
+Normalise any of the three spellings to a percentage (``95``).
 
 ## `MvProfileResult`
 

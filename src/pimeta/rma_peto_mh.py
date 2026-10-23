@@ -8,8 +8,10 @@ Greenland-Robins (RR) estimators — identical to the ``meta`` package's
 Cochran-Mantel-Haenszel test (continuity-corrected), Breslow-Day and Tarone
 heterogeneity tests for the OR, and a MH-style risk-difference variance.
 
-``level`` is the alpha level (0.05 -> 95%), consistent with the rest of the
-package (``confint_tau2``, ``predict_rma``, ``hc_rma``).
+``level`` is accepted as a confidence level (``95`` or ``0.95``) or as the
+corresponding alpha (``0.05``); see :mod:`pimeta.levels`.  It used to take
+alpha only, which made ``level=0.95`` return a 5%-wide interval and
+``level=95`` return ``nan``.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ import numpy as np
 from scipy import stats
 
 from .escalc import escalc
+from .levels import level_to_alpha
 from .metabin import _mh_or, _mh_rr
 
 _Z_975 = stats.norm.ppf(0.975)
@@ -142,6 +145,7 @@ def rma_peto(
     b = np.asarray(bi, dtype=float)
     c = np.asarray(ci, dtype=float)
     d = np.asarray(di, dtype=float)
+    alpha = level_to_alpha(level)
     n1 = a + b
     n2 = c + d
     N = a + b + c + d
@@ -161,7 +165,7 @@ def rma_peto(
     se = math.sqrt(1.0 / sumVi)
     zval = beta / se
     pval = 2.0 * float(stats.norm.sf(abs(zval)))
-    crit = float(stats.norm.ppf(1.0 - level / 2.0))
+    crit = float(stats.norm.ppf(1.0 - alpha / 2.0))
     ci_lb = beta - crit * se
     ci_ub = beta + crit * se
 
@@ -176,7 +180,7 @@ def rma_peto(
     return RmaPetoResult(
         beta=beta, se=se, zval=zval, pval=pval, ci_lb=ci_lb, ci_ub=ci_ub,
         tau2=0.0, I2=i2, H2=h2, QE=qe, QEp=qep, k=k, k_pos=k_pos,
-        measure="PETO", method="FE", level=level,
+        measure="PETO", method="FE", level=alpha,
         ai=[float(v) for v in a], bi=[float(v) for v in b],
         ci=[float(v) for v in c], di=[float(v) for v in d],
         slab=_slab(slab, k), add=float(add), drop00=bool(drop00),
@@ -211,11 +215,12 @@ def rma_mh(
     b = np.asarray(bi, dtype=float)
     c = np.asarray(ci, dtype=float)
     d = np.asarray(di, dtype=float)
+    alpha = level_to_alpha(level)
     n1 = a + b
     n2 = c + d
     N = a + b + c + d
     a.shape[0]
-    crit = float(stats.norm.ppf(1.0 - level / 2.0))
+    crit = float(stats.norm.ppf(1.0 - alpha / 2.0))
 
     CO = COp = MH = MHp = BD = BDp = TA = TAp = None
     k_pos = None
@@ -303,7 +308,7 @@ def rma_mh(
         beta=beta, se=se, zval=zval, pval=pval, ci_lb=ci_lb, ci_ub=ci_ub,
         tau2=0.0, I2=i2, H2=h2, QE=qe, QEp=qep, k=k_yi, measure=measure,
         method="FE", CO=CO, COp=COp, MH=MH, MHp=MHp, BD=BD, BDp=BDp,
-        TA=TA, TAp=TAp, k_pos=k_pos, level=level,
+        TA=TA, TAp=TAp, k_pos=k_pos, level=alpha,
         ai=[float(v) for v in a], bi=[float(v) for v in b],
         ci=[float(v) for v in c], di=[float(v) for v in d],
         slab=_slab(slab, k_yi), add=float(add), drop00=bool(drop00),
@@ -415,13 +420,7 @@ def mh_confint(x, level=None, transf=None):
     """
     if not is_mh_result(x):
         raise TypeError(f"confint() is not defined for {type(x).__name__}")
-    if level is None:
-        alpha = float(x.level)
-    else:
-        lv = float(level)
-        if lv > 1.0:
-            lv = lv / 100.0
-        alpha = 1.0 - lv if lv >= 0.5 else lv
+    alpha = float(x.level) if level is None else level_to_alpha(level)
     crit = float(stats.norm.isf(alpha / 2.0))
     beta = float(x.beta)
     lo = beta - crit * float(x.se)

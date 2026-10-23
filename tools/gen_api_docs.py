@@ -114,6 +114,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "utils": ("diagnostics", "Diagnostics and utilities"),
     "_firth": ("diagnostics", "Diagnostics and utilities"),
     "_numeric": ("diagnostics", "Diagnostics and utilities"),
+    "levels": ("diagnostics", "Diagnostics and utilities"),
     # plotting
     "plotting": ("plotting", "Figures"),
     # IO and ecosystem

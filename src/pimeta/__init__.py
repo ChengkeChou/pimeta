@@ -98,6 +98,7 @@ from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
 from .fsn import FsnResult, fsn
 from .gosh import GoshResult, gosh
 from .ipd import IpdResult, StudyFit, ipd_two_stage, linear_model, logistic_model
+from .levels import level_to_alpha, level_to_percent
 from .limitmeta import LimitmetaResult, limitmeta
 from .measures import (
     NntResult,
@@ -711,6 +712,8 @@ __all__ = [
     "CopasResult",
     "copas_fit",
     "copas_loglik",
+    "level_to_alpha",
+    "level_to_percent",
     "gosh",
     "GoshResult",
     "metacor",

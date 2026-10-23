@@ -6,6 +6,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **One confidence-level convention, everywhere.** `pimeta` had three
+  spellings of the same argument: `0.95` (a confidence level), `95` (percent)
+  and `0.05` (the alpha). The defaults were internally consistent, so nothing
+  broke by default — but crossing conventions did: `rma_peto(level=0.95)`
+  returned an interval 31 times too narrow, and `rma_peto(level=95)` returned
+  `nan`, both silently. Every entry point now normalises through
+  `ma.level_to_alpha`, which accepts all three and is idempotent on the alpha
+  so it can be applied at more than one layer. `tests/test_level_consistency.py`
+  pins that all three spellings give the same interval, for `rma_peto`,
+  `rma_mh`, `mh_confint`, `confint_tau2`, `predict_rma` and `hc_rma`, and that
+  the interval each reports really is the 95% one.
+
 ### Added
 
 - **Copas selection model.** `ma.copas` implements the selection model of
