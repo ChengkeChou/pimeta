@@ -1,6 +1,6 @@
 # Models
 
-*67 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*71 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -25,6 +25,10 @@
 | [`logistic_model`](#logistic_model) | — |
 | [`OneStageResult`](#onestageresult) | — |
 | [`ipd_one_stage`](#ipd_one_stage) | — |
+| [`PredictionResult`](#predictionresult) | — |
+| [`auc_logit`](#auc_logit) | — |
+| [`oe_ratio`](#oe_ratio) | — |
+| [`prediction_meta`](#prediction_meta) | — |
 | [`KmResult`](#kmresult) | — |
 | [`ReconstructedIpD`](#reconstructedipd) | — |
 | [`RmstResult`](#rmstresult) | — |
@@ -466,6 +470,123 @@ Fit one model to every participant, with participants nested in studies.
 
 - `>>> fit = ma.ipd_one_stage(y, study=study, treat=treat)   # doctest` — +SKIP
 - `>>> fit.b[1], fit.tau2, fit.ICC                           # doctest` — +SKIP
+
+## `PredictionResult`
+
+```python
+PredictionResult(metric: 'str', yi: 'list[float]', vi: 'list[float]', b: 'float', se: 'float', ci_lb: 'float', ci_ub: 'float', pooled: 'float', pooled_ci_lb: 'float', pooled_ci_ub: 'float', tau2: 'float', QE: 'float', QE_df: 'int', QE_p: 'float', I2: 'float', pi_lb: 'float | None', pi_ub: 'float | None', k: 'int', method: 'str', level: 'float', scale: 'str', fit: 'Any') -> None
+```
+
+A pooled performance metric.
+
+**Attributes**
+
+- `metric` — as passed in.
+- `yi, vi` — the per-study values on the analysis scale.
+- `b, se, ci_lb, ci_ub` — the pooled estimate on the analysis scale.
+- `pooled, pooled_ci_lb, pooled_ci_ub` — the same, back-transformed to the scale the studies reported.
+- `tau2, QE, QE_df, QE_p, I2` — heterogeneity.
+- `pi_lb, pi_ub` — prediction interval, back-transformed.
+- `k` — studies pooled.
+- `method` — τ² estimator.
+- `level` — confidence level.
+- `scale` — ``"logit"``, ``"log"`` or ``"identity"``.
+- `fit` — the underlying `rma_uni.RmaResult`.
+
+## `auc_logit`
+
+```python
+auc_logit(auc, *, n_event, n_nonevent)
+```
+
+Logit-transform an AUC and give it the Hanley–McNeil variance.
+
+An AUC is a proportion, so it is pooled on the logit scale — that keeps the
+back-transformed interval inside [0, 1] instead of letting it run past 1.
+Its standard error comes from Hanley & McNeil (1982),
+
+.. math::
+
+    \mathrm{Var}(A) = \frac{A(1-A) + (n_1-1)(Q_1 - A^2)
+                            + (n_0-1)(Q_2 - A^2)}{n_1 n_0},
+
+with :math:`Q_1 = A/(2-A)` and :math:`Q_2 = 2A^2/(1+A)`, mapped to the logit
+scale by the delta method. Note what this means: two studies reporting the
+same AUC have different variances if their event counts differ.
+
+**Args**
+
+- `auc` — the reported C-statistic(s), strictly inside (0, 1).
+- `n_event` — number of participants with the outcome.
+- `n_nonevent` — number without it.
+
+**Returns**
+
+``(yi, vi)`` on the logit scale.
+
+**Raises**
+
+- `ValueError` — for an AUC outside (0, 1), or non-positive group sizes.
+
+**Example**
+
+>>> yi, vi = ma.auc_logit(0.75, n_event=100, n_nonevent=400)
+
+## `oe_ratio`
+
+```python
+oe_ratio(observed, expected)
+```
+
+Log observed-to-expected ratio and its Poisson variance.
+
+**Args**
+
+- `observed` — observed events.
+- `expected` — expected events under the model.
+
+**Returns**
+
+``(yi, vi)`` with ``yi = log(O / E)`` and ``vi = 1/O + 1/E``.
+
+**Raises**
+
+- `ValueError` — for a non-positive count.
+
+**Example**
+
+>>> yi, vi = ma.oe_ratio(120, 100)      # log(1.2), 1/120 + 1/100
+
+## `prediction_meta`
+
+```python
+prediction_meta(yi, vi, *, metric: 'str', method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z') -> 'PredictionResult'
+```
+
+Pool a prediction-model performance metric on its own scale.
+
+**Args**
+
+- `yi` — the transformed values — from `auc_logit` or `oe_ratio`, or the reported values themselves for a calibration slope/intercept or a Brier score.
+- `vi` — their variances.
+- `metric` — ``"auc"``, ``"oe_ratio"``, ``"calibration_slope"``, ``"calibration_intercept"`` or ``"brier"``. It decides the back-transformation, nothing else.
+- `method` — τ² estimator.
+- `level` — confidence level.
+- `test` — reference distribution.
+
+**Returns**
+
+`PredictionResult`.
+
+**Raises**
+
+- `ValueError` — for an unknown metric or mismatched inputs.
+
+**Example**
+
+>>> yi, vi = ma.auc_logit([0.75, 0.80, 0.72], n_event=[100, 60, 140],
+...                       n_nonevent=[400, 300, 500])
+- `>>> ma.prediction_meta(yi, vi, metric="auc").pooled     # doctest` — +SKIP
 
 ## `KmResult`
 

@@ -168,18 +168,33 @@ Missing: time-dependent hazard ratios. Note that nothing here claims that
 pooling log HRs handles non-proportional hazards — it does not, which is why
 RMST is there.
 
-### 8. Prediction-model performance — **no**
+### 8. Prediction-model performance — **yes**
 
 Wanted: meta-analysis of discrimination and calibration.
 
-Nothing exists: no calibration slope or intercept, no observed-to-expected
-ratio, no Brier score, no logit-AUC. The keyword search over the source returns
-nothing.
+`pimeta.prediction` pools five metrics, each on the scale and with the variance
+its own literature specifies:
 
-These are not one effect size with four names — each has its own sampling
-variance and its own transformation, and when two are reported by the same
-study their estimates are correlated, which needs a covariance the study does
-not print.
+| metric | pooled on | variance from |
+|---|---|---|
+| discrimination (AUC) | logit | Hanley–McNeil, then the delta method |
+| calibration slope | as reported | the study's own |
+| calibration intercept | as reported | the study's own |
+| O:E ratio | log | Poisson, `1/O + 1/E` |
+| Brier score | as reported | the study's own |
+
+The point of the module is that an AUC cannot be pooled with a calibration
+slope — different scale, different meaning — and that an AUC's variance is not
+a function of the AUC alone: `ma.auc_logit` asks for the event and non-event
+counts because two studies reporting 0.75 have different precision.
+
+Pinned by `tests/test_prediction.py`, which checks the transforms exactly,
+checks that the pooling *is* `rma`, and checks the Hanley–McNeil variance
+against a simulation rather than against the same formula written twice.
+
+Missing: the within-study covariance between an AUC and a calibration slope
+reported by the same study, which a joint model would need. Pooling them
+separately avoids the problem rather than solving it.
 
 ### 9. Multivariate meta-analysis — **partial**
 
@@ -240,7 +255,7 @@ model twice.
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
 | 7 | survival outcomes | partial | `tests/test_surv.py` |
-| 8 | prediction-model performance | no | — |
+| 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | partial | `tests/test_rma_mv_methods.py`, `tests/test_matreg_r_parity.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | partial | `tests/test_selmodel_models.py`, `tests/test_metabias.py` |
@@ -287,7 +302,7 @@ numerics*, not by topic:
 | 3 | IPD data layer and two-stage | **done** — it needed a first stage and a data layer, not a new estimator |
 | 4 | one-stage IPD, continuous then binary | **done** — the only item that needed a genuinely new likelihood |
 | 5 | KM reconstruction and RMST | **done** — data layer, strictly verifiable, feeds item 3 |
-| 6 | prediction-model performance | four effect sizes and their covariances; different audience, can run in parallel |
+| 6 | prediction-model performance | **done** — four metrics, each on its own scale and variance, pooled by the existing engine |
 | — | RoBMA, time-varying effects | declined, see the dependency policy |
 
 > **中文**　本页是能力矩阵：逐项核对「已有 / 部分 / 无」，并写明证明它的测试。结论是原路线图高估了工作量 —— 公式解析、设计矩阵、带置信区间与预测区间的 `predict`、混合模型内核**都已经在库里**，非线性回归只差基函数与非线性检验；DTA 与稳健方差已经完成；`netcomb` 就是成分 NMA。真正的缺口是剂量–反应的协方差构造、IPD 数据层、单阶段 IPD 的逐个体似然、KM 重建、预测模型性能。依赖政策写死：不引入通用混合模型求解器、不引入 MCMC。

@@ -8,6 +8,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Prediction-model performance: discrimination and calibration.**
+  `pimeta.prediction` pools five metrics, each on the scale and with the
+  variance its own literature specifies:
+  - `auc_logit` puts an AUC on the logit scale with the Hanley–McNeil variance
+    and the delta method. It asks for the event and non-event counts, because
+    an AUC's precision is not a function of the AUC alone — two studies
+    reporting 0.75 do not have the same estimate.
+  - `oe_ratio` puts an observed-to-expected ratio on the log scale with the
+    Poisson variance `1/O + 1/E`.
+  - `prediction_meta` pools a transformed metric with the existing engine and
+    back-transforms the estimate, its interval and the prediction interval, so
+    a proportion cannot leave [0, 1]. Calibration slope and intercept, and the
+    Brier score, are pooled on the scale they were reported on.
+  - An AUC and a calibration slope are deliberately different `metric=`
+    values: they are on different scales and mean different things.
+  - The Hanley–McNeil variance is checked against a simulation rather than
+    against the same formula written twice.
 - **One-stage individual-participant-data meta-analysis.** `ma.ipd_one_stage`
   fits one model to every participant with a random intercept per study, the
   route that estimates the treatment effect across all participants at once

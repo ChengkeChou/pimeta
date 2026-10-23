@@ -234,6 +234,7 @@ from .pooling import (
     result_to_dict,
     run_meta,
 )
+from .prediction import PredictionResult, auc_logit, oe_ratio, prediction_meta
 from .publication_bias import (
     BeggResult,
     EggerResult,
@@ -613,6 +614,10 @@ __all__ = [
     "logistic_model",
     "OneStageResult",
     "ipd_one_stage",
+    "PredictionResult",
+    "auc_logit",
+    "oe_ratio",
+    "prediction_meta",
     "KmResult",
     "ReconstructedIpD",
     "RmstResult",
