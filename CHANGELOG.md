@@ -8,6 +8,30 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Two-stage individual-participant-data meta-analysis.** `pimeta.ipd` runs a
+  model inside each study and pools its coefficient:
+  - `logistic_model` is maximum likelihood by iteratively reweighted least
+    squares, and refuses to invent an estimate when a study has complete
+    separation; `linear_model` is OLS with the residual variance estimated.
+  - `ipd_two_stage` fits those per study, pools the requested coefficient with
+    `rma`, and reports each study's estimate, its participants and its events.
+    `term="treat:age_c"` builds the covariate interaction inside every study
+    and pools that, which is the analysis most IPD reviews are for.
+  - A study that cannot be fitted is named in `excluded` with the reason rather
+    than being dropped quietly.
+  - Verified against `glm(family = binomial)` and `metafor::rma`.
+- **Survival outcomes: RMST and Kaplan–Meier reconstruction.** `pimeta.surv`
+  adds the two things a published curve can be turned into:
+  - `km_curve` builds a Kaplan–Meier from individual times; `km_reconstruct`
+    rebuilds individual times and event indicators from a published (time, at
+    risk, events) table, reproducing the curve exactly at every reported time
+    point — which is how IPD is obtained for most published trials, and the
+    input `ipd_two_stage` expects.
+  - `rmst` is the restricted mean survival time with the Uno standard error,
+    the summary that stays meaningful when proportional hazards does not hold.
+  - RMST checked against R integrating the same step function two ways
+    (a hand-written step sum and `integrate(stepfun(...))`), and against a
+    closed form for a single-event curve.
 - **Dose-response meta-analysis.** A dose-response study contributes several
   contrasts against the same reference group, so the inverse-variance pool of
   them is wrong. `pimeta.dose` supplies the two missing pieces:

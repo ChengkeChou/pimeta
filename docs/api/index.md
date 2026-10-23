@@ -1,6 +1,6 @@
 # API reference
 
-All 437 public names in `pimeta.__all__`, generated from the source docstrings.
+All 448 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -111,6 +111,17 @@ All 437 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`NonlinearTestResult`](models.md#nonlineartestresult) | Models | — |
 | [`WaldResult`](models.md#waldresult) | Models | — |
 | [`default_knots`](models.md#default_knots) | Models | — |
+| [`IpdResult`](models.md#ipdresult) | Models | — |
+| [`StudyFit`](models.md#studyfit) | Models | — |
+| [`ipd_two_stage`](models.md#ipd_two_stage) | Models | — |
+| [`linear_model`](models.md#linear_model) | Models | — |
+| [`logistic_model`](models.md#logistic_model) | Models | — |
+| [`KmResult`](models.md#kmresult) | Models | — |
+| [`ReconstructedIpD`](models.md#reconstructedipd) | Models | — |
+| [`RmstResult`](models.md#rmstresult) | Models | — |
+| [`km_curve`](models.md#km_curve) | Models | — |
+| [`km_reconstruct`](models.md#km_reconstruct) | Models | — |
+| [`rmst`](models.md#rmst) | Models | — |
 | [`fp`](models.md#fp) | Models | — |
 | [`nonlinear_test`](models.md#nonlinear_test) | Models | — |
 | [`predict_curve`](models.md#predict_curve) | Models | — |

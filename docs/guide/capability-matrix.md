@@ -76,19 +76,25 @@ and `pimeta` uses the random-intercept model; the `random=` argument of
 Still missing: selecting the number of knots and the reference dose
 automatically, and dose–response *network* meta-analysis.
 
-### 3. Two-stage IPD — **no**
+### 3. Two-stage IPD — **yes**
 
 Wanted: fit a model inside each study, then pool the coefficient vectors.
 
-Already there: everything downstream of the per-study fit. A study-level
-$(\hat\beta_i, \hat V_i)$ is just a multivariate effect size, and `ma.rma_mv`
-with `struct="UN"` pools correlated coefficients correctly.
+`pimeta.ipd` does exactly that. `logistic_model` and `linear_model` are the
+first stage (maximum likelihood by IRLS, and OLS with the residual variance
+estimated); `ipd_two_stage` runs them per study, reports every study's estimate
+and its events, and pools one coefficient with `rma`. A covariate interaction
+is pooled the same way — `term="treat:age_c"` builds the product inside each
+study, which is the analysis most IPD reviews are actually for.
 
-Missing: a public per-study GLM (there is an internal PIRLS binomial fitter
-inside `rma_glmm`, but it is not exported and is shaped for two-arm aggregate
-data), an IPD data layer with the checks that matter (which studies actually
-provide a randomised contrast), and the assembly that turns study fits into one
-stacked model.
+Studies that cannot be fitted are not silently dropped: a study with no events,
+or one where a covariate separates the outcome, is named in `result.excluded`
+with the reason.
+
+Pinned by `tests/test_ipd.py` against `glm(family = binomial)` and
+`metafor::rma`.
+
+Missing: the one-stage model (item 4), and IPD plus aggregate data.
 
 ### 4. One-stage IPD — **no**
 
@@ -134,14 +140,23 @@ Pinned by `tests/test_rve.py` against `clubSandwich` 0.7.0.
 
 ### 7. Survival outcomes — **partial**
 
-Already there: a pooled log hazard ratio is an ordinary effect size. `ma.metagen`
-treats `"HR"` as a relative effect (for log transformation and plotting), and
-`ma.rd` converts a pooled HR into an absolute risk difference.
+Already there, in more depth than "pool a log hazard ratio":
 
-Missing: everything that needs more than one number per study. There is no
-Kaplan–Meier reconstruction, no restricted mean survival time, and no
-time-dependent hazard ratio. Note that nothing here claims that pooling log HRs
-handles non-proportional hazards — it does not.
+- a pooled log HR is an ordinary effect size — `ma.metagen` treats `"HR"` as a
+  relative effect, and `ma.rd` converts a pooled HR into an absolute risk
+  difference;
+- `ma.rmst` is the restricted mean survival time, the area under a Kaplan–Meier
+  curve up to a horizon, with the Uno standard error when the risk sets are
+  supplied. It is the summary that stays meaningful when proportional hazards
+  fails;
+- `ma.km_curve` builds a Kaplan–Meier curve from individual times, and
+  `ma.km_reconstruct` rebuilds individual times and event indicators from a
+  published (time, at risk, events) table — which is how most "IPD" is actually
+  obtained, and it feeds `ma.ipd_two_stage` directly.
+
+Missing: time-dependent hazard ratios. Note that nothing here claims that
+pooling log HRs handles non-proportional hazards — it does not, which is why
+RMST is there.
 
 ### 8. Prediction-model performance — **no**
 
@@ -210,11 +225,11 @@ model twice.
 |---|---|---|---|
 | 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
 | 2 | dose–response | yes | `tests/test_dose.py` |
-| 3 | two-stage IPD | no | — |
+| 3 | two-stage IPD | yes | `tests/test_ipd.py` |
 | 4 | one-stage IPD | no | — |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
-| 7 | survival outcomes | partial | — |
+| 7 | survival outcomes | partial | `tests/test_surv.py` |
 | 8 | prediction-model performance | no | — |
 | 9 | multivariate | partial | `tests/test_rma_mv_methods.py`, `tests/test_matreg_r_parity.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
@@ -259,9 +274,9 @@ numerics*, not by topic:
 | 0 | this page | cheap, and it stops the next three stages from being built twice |
 | 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | **done** — item 1 is finished; it unblocks items 2 and 3 |
 | 2 | dose–response | item 1 plus the covariance construction; **done** — it needed the covariance, not a new estimator |
-| 3 | IPD data layer and two-stage | reuses stage 1 for the non-linear case, nothing else new |
+| 3 | IPD data layer and two-stage | **done** — it needed a first stage and a data layer, not a new estimator |
 | 4 | one-stage IPD, continuous then binary | first genuinely new likelihood |
-| 5 | KM reconstruction and RMST | data layer, strictly verifiable, feeds item 3 |
+| 5 | KM reconstruction and RMST | **done** — data layer, strictly verifiable, feeds item 3 |
 | 6 | prediction-model performance | four effect sizes and their covariances; different audience, can run in parallel |
 | — | RoBMA, time-varying effects | declined, see the dependency policy |
 

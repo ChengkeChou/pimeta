@@ -1,6 +1,6 @@
 # Models
 
-*54 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*65 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -18,6 +18,17 @@
 | [`NonlinearTestResult`](#nonlineartestresult) | — |
 | [`WaldResult`](#waldresult) | — |
 | [`default_knots`](#default_knots) | — |
+| [`IpdResult`](#ipdresult) | — |
+| [`StudyFit`](#studyfit) | — |
+| [`ipd_two_stage`](#ipd_two_stage) | — |
+| [`linear_model`](#linear_model) | — |
+| [`logistic_model`](#logistic_model) | — |
+| [`KmResult`](#kmresult) | — |
+| [`ReconstructedIpD`](#reconstructedipd) | — |
+| [`RmstResult`](#rmstresult) | — |
+| [`km_curve`](#km_curve) | — |
+| [`km_reconstruct`](#km_reconstruct) | — |
+| [`rmst`](#rmst) | — |
 | [`fp`](#fp) | — |
 | [`nonlinear_test`](#nonlinear_test) | — |
 | [`predict_curve`](#predict_curve) | — |
@@ -278,6 +289,263 @@ Sorted knot vector of length ``nk``.
 
 - `ValueError` — for fewer than 3 knots, or more knots than distinct values.
 
+## `IpdResult`
+
+```python
+IpdResult(term: 'str', b: 'float', se: 'float', zval: 'float', pval: 'float', ci_lb: 'float', ci_ub: 'float', tau2: 'float', QE: 'float', QE_df: 'int', QE_p: 'float', I2: 'float', k: 'int', studies: 'int', excluded: 'dict[str, str]', method: 'str', level: 'float', test: 'str', per_study: 'list[StudyFit]', fit: 'Any') -> None
+```
+
+A pooled individual-participant analysis.
+
+**Attributes**
+
+- `term` — name of the coefficient that was pooled.
+- `b, se, zval, pval, ci_lb, ci_ub` — the pooled estimate.
+- `tau2, QE, QE_df, QE_p, I2` — between-study heterogeneity.
+- `k` — number of studies that contributed.
+- `studies` — studies present in the data.
+- `excluded` — studies that could not be fitted, with the reason.
+- `method` — τ² estimator.
+- `level` — confidence level.
+- `test` — reference distribution (``"z"`` unless ``test=`` was given).
+- `per_study` — one `StudyFit` per contributing study.
+- `fit` — the underlying `rma_uni.RmaResult`.
+
+## `StudyFit`
+
+```python
+StudyFit(study: 'str', n: 'int', events: 'int | None', coefnames: 'list[str]', b: 'list[float]', se: 'list[float]', vb: 'np.ndarray', term: 'int', converged: 'bool') -> None
+```
+
+One study's first-stage model.
+
+**Attributes**
+
+- `study` — the study label.
+- `n` — participants in the analysis.
+- `events` — outcome events (``None`` for a continuous outcome).
+- `coefnames` — ``["(Intercept)", ...]``.
+- `b, se` — coefficients and their standard errors.
+- `vb` — covariance matrix.
+- `term` — index of the coefficient being pooled.
+- `converged` — whether the first stage converged.
+
+## `ipd_two_stage`
+
+```python
+ipd_two_stage(y, *, study, treat, covariates=None, family: 'str' = 'binomial', term: 'str' = 'treat', method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1) -> 'IpdResult'
+```
+
+Fit one model per study, then pool one coefficient.
+
+**Args**
+
+- `y` — the outcome, one entry per participant.
+- `study` — the study label, one entry per participant.
+- `treat` — the treatment indicator (0/1), one entry per participant. It is put first in the design, so ``term="treat"`` means the treatment effect.
+- `covariates` — optional list of participant-level covariates, each one entry per participant.
+- `family` — ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
+- `term` — which coefficient to pool — ``"treat"``, a covariate name, or a product such as ``"treat:age"``. The product is formed for you.
+- `method` — τ² estimator for the second stage.
+- `level` — confidence level.
+- `test` — ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
+- `min_events` — studies with fewer events than this are excluded (a study with no events in one arm has no finite logistic estimate).
+
+**Returns**
+
+`IpdResult`.
+
+**Raises**
+
+- `ValueError` — when the inputs disagree in length, the study has too few participants, or the requested term does not exist.
+
+**Example**
+
+- `>>> fit = ma.ipd_two_stage(y, study=study, treat=treat)   # doctest` — +SKIP
+- `>>> fit.b, fit.tau2, fit.k                                # doctest` — +SKIP
+
+## `linear_model`
+
+```python
+linear_model(y, X)
+```
+
+Ordinary least squares with the residual variance estimated.
+
+**Args**
+
+- `y` — the outcome.
+- `X` — ``(n, p)`` design matrix, intercept column included.
+
+**Returns**
+
+``(b, vb)``.
+
+**Raises**
+
+- `ValueError` — when there are no residual degrees of freedom, or the design is rank deficient.
+
+## `logistic_model`
+
+```python
+logistic_model(y, X, *, max_iter: 'int' = 200, tol: 'float' = 1e-10)
+```
+
+Maximum-likelihood logistic regression by iteratively reweighted least squares.
+
+**Args**
+
+- `y` — 0/1 outcome.
+- `X` — ``(n, p)`` design matrix, intercept column included.
+- `max_iter` — iteration cap.
+- `tol` — convergence tolerance on the largest absolute coefficient change.
+
+**Returns**
+
+``(b, vb, iterations, converged)``.
+
+**Raises**
+
+- `ValueError` — on a non-binary outcome, a rank-deficient design, or complete separation (a study whose covariate perfectly predicts the outcome has no finite estimate, and inventing one would be worse than saying so).
+
+## `KmResult`
+
+```python
+KmResult(time: 'np.ndarray', n_risk: 'np.ndarray', n_event: 'np.ndarray', n_censored: 'np.ndarray', surv: 'np.ndarray', se: 'np.ndarray', n: 'int') -> None
+```
+
+A Kaplan–Meier curve, with the risk sets it came from.
+
+**Attributes**
+
+- `time` — the event times, excluding time 0.
+- `n_risk` — number at risk just before each of those times.
+- `n_event` — events at each of those times.
+- `n_censored` — censored just after each of those times.
+- `surv` — the survival estimate at each time (``S(0) = 1`` implied).
+- `se` — Greenwood standard error of ``surv``.
+- `n` — number of participants.
+
+## `ReconstructedIpD`
+
+```python
+ReconstructedIpD(time: 'np.ndarray', event: 'np.ndarray', n: 'int', n_event: 'int', km: 'KmResult') -> None
+```
+
+Individual times and event indicators rebuilt from a KM curve.
+
+**Attributes**
+
+- `time` — reconstructed follow-up time per participant.
+- `event` — 1 for an event, 0 for a censoring.
+- `n` — number of participants.
+- `n_event` — number of events.
+- `km` — the `KmResult` the reconstruction reproduces.
+
+## `RmstResult`
+
+```python
+RmstResult(rmst: 'float', se: 'float | None', ci_lb: 'float | None', ci_ub: 'float | None', tau: 'float', level: 'float', surv: 'np.ndarray' = <factory>, time: 'np.ndarray' = <factory>, truncated: 'bool' = False) -> None
+```
+
+Restricted mean survival time up to a horizon.
+
+**Attributes**
+
+- `rmst` — the estimate.
+- `se` — standard error (``None`` when the risk sets were not supplied).
+- `ci_lb, ci_ub` — confidence interval (``None`` alongside ``se``).
+- `tau` — the horizon.
+- `level` — confidence level.
+- `surv` — the survival values used.
+- `time` — the times used.
+- `truncated` — whether ``tau`` fell before the last reported time.
+
+## `km_curve`
+
+```python
+km_curve(time, event) -> 'KmResult'
+```
+
+Kaplan–Meier survivor function from individual times.
+
+**Args**
+
+- `time` — follow-up time per participant.
+- `event` — 1 for an event, 0 for a censoring.
+
+**Returns**
+
+`KmResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched lengths, negative times, or an event indicator that is not 0/1.
+
+**Example**
+
+>>> km = ma.km_curve([1, 2, 2, 5], [1, 1, 0, 1]) >>> [round(v, 4) for v in km.surv] [0.75, 0.5, 0.5]
+
+## `km_reconstruct`
+
+```python
+km_reconstruct(time, n_risk, n_event, *, total: 'int | None' = None) -> 'ReconstructedIpD'
+```
+
+Rebuild individual data from a published Kaplan–Meier summary.
+
+**Args**
+
+- `time` — the reported time points (strictly increasing, all positive).
+- `n_risk` — number at risk just before each time point.
+- `n_event` — events at each time point.
+- `total` — participants at risk at time 0. Defaults to ``n_risk[0]``.
+
+Censoring is spread evenly across the interval that produced it. It has to
+fall strictly inside the interval: placing it at the interval's end would
+put those participants back into the next risk set and change the curve.
+
+**Returns**
+
+`ReconstructedIpD`. Feeding ``time``/``event`` to `km_curve` reproduces ``n_risk``, ``n_event`` and the survival values implied by the input.
+
+**Raises**
+
+- `ValueError` — for inconsistent risk sets — a value that increases, or fewer at risk than the events plus the next risk set.
+
+**Example**
+
+>>> ipd = ma.km_reconstruct([2, 5, 9], [36, 30, 21], [4, 5, 6], total=40) >>> ipd.n, ipd.n_event (40, 15)
+
+## `rmst`
+
+```python
+rmst(time, surv, *, tau: 'float | None' = None, n_risk=None, n_event=None, level: 'float' = 0.95) -> 'RmstResult'
+```
+
+Restricted mean survival time: the area under the survival curve.
+
+**Args**
+
+- `time` — the times at which the curve is reported (event times).
+- `surv` — the survival estimate at each of those times. ``S(0) = 1`` is assumed and must not be included.
+- `tau` — the horizon. Defaults to the last reported time.
+- `n_risk` — number at risk just before each time; supplying it (with ``n_event``) adds the standard error.
+- `n_event` — events at each time.
+- `level` — confidence level.
+
+**Returns**
+
+`RmstResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched lengths, times that are not increasing, or ``tau`` beyond the data with no curve to integrate.
+
+**Example**
+
+- `>>> ma.rmst([12, 24], [0.8, 0.6], tau=24).rmst      # doctest` — +SKIP
+
 ## `fp`
 
 ```python
@@ -417,7 +685,7 @@ Joint Wald test for a subset of coefficients (``metafor::anova``).
 
 **Args**
 
-- `result` — a fitted `rma_uni.RmaResult` (or anything with ``b``, ``vb``, ``test``, ``s2w`` and ``ddf``).
+- `result` — a fitted `rma_uni.RmaResult` (or anything with ``b``/``beta``, ``vb``, ``test``, ``s2w`` and ``ddf``).
 - `btt` — **1-based** coefficient positions, exactly as in ``metafor::anova(fit, btt=)``. Note the difference from Python indexing: ``btt=[2, 3]`` tests the second and third coefficients.
 - `names` — coefficient names instead of positions. Matching is exact, so pass the names ``result.coefnames`` reports.
 

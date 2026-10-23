@@ -96,6 +96,7 @@ from .extras import (
 from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
 from .fsn import FsnResult, fsn
 from .gosh import GoshResult, gosh
+from .ipd import IpdResult, StudyFit, ipd_two_stage, linear_model, logistic_model
 from .measures import (
     NntResult,
     RdResult,
@@ -350,6 +351,14 @@ from .settings import (
     settings_netmeta,
     setvals,
 )
+from .surv import (
+    KmResult,
+    ReconstructedIpD,
+    RmstResult,
+    km_curve,
+    km_reconstruct,
+    rmst,
+)
 from .tau2 import estimate_tau2
 from .transforms import (
     transf_abt,
@@ -596,6 +605,17 @@ __all__ = [
     "dose_cov",
     "dosres",
     "greenland_counts",
+    "IpdResult",
+    "StudyFit",
+    "ipd_two_stage",
+    "linear_model",
+    "logistic_model",
+    "KmResult",
+    "ReconstructedIpD",
+    "RmstResult",
+    "km_curve",
+    "km_reconstruct",
+    "rmst",
     "fp",
     "nonlinear_test",
     "predict_curve",
