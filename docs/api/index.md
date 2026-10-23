@@ -1,6 +1,6 @@
 # API reference
 
-All 448 public names in `pimeta.__all__`, generated from the source docstrings.
+All 450 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -116,6 +116,8 @@ All 448 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`ipd_two_stage`](models.md#ipd_two_stage) | Models | — |
 | [`linear_model`](models.md#linear_model) | Models | — |
 | [`logistic_model`](models.md#logistic_model) | Models | — |
+| [`OneStageResult`](models.md#onestageresult) | Models | — |
+| [`ipd_one_stage`](models.md#ipd_one_stage) | Models | — |
 | [`KmResult`](models.md#kmresult) | Models | — |
 | [`ReconstructedIpD`](models.md#reconstructedipd) | Models | — |
 | [`RmstResult`](models.md#rmstresult) | Models | — |

@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **One-stage individual-participant-data meta-analysis.** `ma.ipd_one_stage`
+  fits one model to every participant with a random intercept per study, the
+  route that estimates the treatment effect across all participants at once
+  rather than pooling study-level estimates:
+  - a continuous outcome uses the closed-form marginal likelihood
+    (`V_i = sigma^2 I + tau^2 J`, computed from per-study cross-products, so
+    nothing n-by-n is ever formed) and is maximised over the residual and
+    between-study variances under REML or ML;
+  - a binary outcome uses adaptive Gauss–Hermite quadrature, and the standard
+    errors come from the fixed-effect block of the observed information.
+  - Verified against `lme4` 2.0.6 — `lmer` under REML and ML, `glmer` for the
+    binary model.
+  - The two-stage and one-stage routes are different models and can disagree;
+    both are here so the disagreement can be looked at rather than assumed
+    away. Deliberately absent: study-specific residual variances, random
+    treatment slopes, and non-linear covariate terms.
 - **Two-stage individual-participant-data meta-analysis.** `pimeta.ipd` runs a
   model inside each study and pools its coefficient:
   - `logistic_model` is maximum likelihood by iteratively reweighted least

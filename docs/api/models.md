@@ -1,6 +1,6 @@
 # Models
 
-*65 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*67 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -23,6 +23,8 @@
 | [`ipd_two_stage`](#ipd_two_stage) | — |
 | [`linear_model`](#linear_model) | — |
 | [`logistic_model`](#logistic_model) | — |
+| [`OneStageResult`](#onestageresult) | — |
+| [`ipd_one_stage`](#ipd_one_stage) | — |
 | [`KmResult`](#kmresult) | — |
 | [`ReconstructedIpD`](#reconstructedipd) | — |
 | [`RmstResult`](#rmstresult) | — |
@@ -407,6 +409,63 @@ Maximum-likelihood logistic regression by iteratively reweighted least squares.
 **Raises**
 
 - `ValueError` — on a non-binary outcome, a rank-deficient design, or complete separation (a study whose covariate perfectly predicts the outcome has no finite estimate, and inventing one would be worse than saying so).
+
+## `OneStageResult`
+
+```python
+OneStageResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', coefnames: 'list[str]', tau2: 'float', sigma2: 'float | None', loglik: 'float', method: 'str', participants: 'int', studies: 'int', family: 'str', converged: 'bool', level: 'float', test: 'str' = 'z') -> None
+```
+
+A one-stage individual-participant model.
+
+**Attributes**
+
+- `b, se, zval, pval, ci_lb, ci_ub` — fixed effects.
+- `vb` — their covariance matrix.
+- `coefnames` — names, intercept first.
+- `tau2` — between-study variance of the random intercept.
+- `sigma2` — residual variance (``None`` for a binary outcome, where it is fixed at :math:`\pi^2/3` by the logistic link).
+- `loglik` — the maximised (restricted) log-likelihood.
+- `method` — ``"REML"`` or ``"ML"``.
+- `participants` — rows used.
+- `studies` — number of studies.
+- `family` — ``"gaussian"`` or ``"binomial"``.
+- `converged` — whether the optimiser reported success.
+- `level` — confidence level.
+- `test` — always ``"z"`` — a one-stage model's fixed effects are tested against the normal reference unless the user asks otherwise.
+
+## `ipd_one_stage`
+
+```python
+ipd_one_stage(y, *, study, treat, covariates=None, family: 'str' = 'gaussian', method: 'str' = 'REML', level: 'float' = 0.95, quadrature: 'int' = 15, max_iter: 'int' = 500) -> 'OneStageResult'
+```
+
+Fit one model to every participant, with participants nested in studies.
+
+**Args**
+
+- `y` — the outcome, one entry per participant.
+- `study` — the study label, one entry per participant.
+- `treat` — the treatment indicator, one entry per participant.
+- `covariates` — optional participant-level covariates — a list of arrays (named ``cov1``, …) or a mapping ``{name: array}``.
+- `family` — ``"gaussian"`` (linear mixed model, analytic likelihood) or ``"binomial"`` (logistic mixed model, Gauss–Hermite quadrature).
+- `method` — ``"REML"`` (default) or ``"ML"``. Ignored for the binomial family, where the likelihood is a true likelihood.
+- `level` — confidence level.
+- `quadrature` — number of Gauss–Hermite nodes (binomial only).
+- `max_iter` — optimiser iteration cap.
+
+**Returns**
+
+`OneStageResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched lengths, a missing treatment indicator, or an unknown family.
+
+**Example**
+
+- `>>> fit = ma.ipd_one_stage(y, study=study, treat=treat)   # doctest` — +SKIP
+- `>>> fit.b[1], fit.tau2, fit.ICC                           # doctest` — +SKIP
 
 ## `KmResult`
 

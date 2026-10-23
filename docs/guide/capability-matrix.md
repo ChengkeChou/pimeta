@@ -96,21 +96,31 @@ Pinned by `tests/test_ipd.py` against `glm(family = binomial)` and
 
 Missing: the one-stage model (item 4), and IPD plus aggregate data.
 
-### 4. One-stage IPD — **no**
+### 4. One-stage IPD — **yes**, with a stated model
 
 Wanted: participant-level data in one model, with participants nested in
 studies.
 
-Already there: `ma.rma_mv` is a mixed model in which the sampling variances are
-*known*. A continuous one-stage IPD model differs from it by exactly one free
-parameter — the residual scale — so the optimiser and the variance-component
-machinery carry over.
+`ma.ipd_one_stage` fits
+:math:`g(E[y_{ij}]) = x_{ij}'\beta + u_i` with :math:`u_i \sim N(0,\tau^2)`.
+For a continuous outcome the integral over the random effect is analytic, so
+the likelihood is closed form and `V_i = \sigma^2 I + \tau^2 J` is never
+inverted — GLS and the profile likelihood are computed from per-study
+cross-products, which keeps it linear in the number of participants. For a
+binary outcome the integral is approximated by adaptive Gauss–Hermite
+quadrature.
 
-Missing: that unknown scale, and any participant-level likelihood. A binary or
-time-to-event one-stage model needs the likelihood written per participant
-rather than per study-arm, which is new numerical code, not a re-parameterisation.
-This is the most expensive item on the list and the one where writing a general
-mixed-model solver would be a mistake.
+Pinned by `tests/test_onestage.py` against `lme4` 2.0.6: `lmer` under REML and
+ML, and `glmer` for the binary model.
+
+Deliberately not implemented: study-specific residual variances, random
+treatment slopes, and non-linear covariate terms. A random intercept with fixed
+effects is the model the Cochrane guidance describes as the standard one-stage
+analysis; the rest are extensions with their own identification problems, and a
+package that has no dependency to lean on should not claim them.
+
+The two-stage and one-stage routes can disagree. That is a result, not a bug —
+compare them with `ma.ipd_two_stage` when it matters.
 
 ### 5. Diagnostic test accuracy — **yes**
 
@@ -226,7 +236,7 @@ model twice.
 | 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
 | 2 | dose–response | yes | `tests/test_dose.py` |
 | 3 | two-stage IPD | yes | `tests/test_ipd.py` |
-| 4 | one-stage IPD | no | — |
+| 4 | one-stage IPD | yes | `tests/test_onestage.py` |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
 | 7 | survival outcomes | partial | `tests/test_surv.py` |
@@ -275,7 +285,7 @@ numerics*, not by topic:
 | 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | **done** — item 1 is finished; it unblocks items 2 and 3 |
 | 2 | dose–response | item 1 plus the covariance construction; **done** — it needed the covariance, not a new estimator |
 | 3 | IPD data layer and two-stage | **done** — it needed a first stage and a data layer, not a new estimator |
-| 4 | one-stage IPD, continuous then binary | first genuinely new likelihood |
+| 4 | one-stage IPD, continuous then binary | **done** — the only item that needed a genuinely new likelihood |
 | 5 | KM reconstruction and RMST | **done** — data layer, strictly verifiable, feeds item 3 |
 | 6 | prediction-model performance | four effect sizes and their covariances; different audience, can run in parallel |
 | — | RoBMA, time-varying effects | declined, see the dependency policy |

@@ -192,6 +192,7 @@ from .netmeta import (
     treats,
     vikor,
 )
+from .onestage import OneStageResult, ipd_one_stage
 from .plotting import (
     PlotResult,
     bubble,
@@ -610,6 +611,8 @@ __all__ = [
     "ipd_two_stage",
     "linear_model",
     "logistic_model",
+    "OneStageResult",
+    "ipd_one_stage",
     "KmResult",
     "ReconstructedIpD",
     "RmstResult",
