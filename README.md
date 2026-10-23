@@ -691,7 +691,7 @@ from it:
   what is partial, what is absent, and the test behind each claim
 - [Coming from R](docs/migration-from-r.md) — line-by-line translation guide
 - [Guides](docs/guide/pooling.md) — one page per task
-- [API reference](docs/api/index.md) — all 461 public names, generated from the
+- [API reference](docs/api/index.md) — all 465 public names, generated from the
   docstrings by `python tools/gen_api_docs.py`
 - [中文说明](docs/zh/index.md)
 

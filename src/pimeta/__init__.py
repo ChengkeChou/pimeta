@@ -430,6 +430,12 @@ from .transforms import (
     transf_ztor_int,
     transf_ztor_mode,
 )
+from .tvhr import (
+    PiecewiseResult,
+    piecewise_exp,
+    poisson_irls,
+    split_followup,
+)
 from .utils import (
     BlupResult,
     EstimatesResult,
@@ -632,6 +638,11 @@ __all__ = [
     "km_curve",
     "km_reconstruct",
     "rmst",
+    # time-varying hazard ratios
+    "piecewise_exp",
+    "PiecewiseResult",
+    "poisson_irls",
+    "split_followup",
     "fp",
     "nonlinear_test",
     "predict_curve",

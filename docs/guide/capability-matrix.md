@@ -148,7 +148,7 @@ with Satterthwaite degrees of freedom and a robust omnibus test.
 
 Pinned by `tests/test_rve.py` against `clubSandwich` 0.7.0.
 
-### 7. Survival outcomes — **partial**
+### 7. Survival outcomes — **yes**
 
 Already there, in more depth than "pool a log hazard ratio":
 
@@ -162,11 +162,30 @@ Already there, in more depth than "pool a log hazard ratio":
 - `ma.km_curve` builds a Kaplan–Meier curve from individual times, and
   `ma.km_reconstruct` rebuilds individual times and event indicators from a
   published (time, at risk, events) table — which is how most "IPD" is actually
-  obtained, and it feeds `ma.ipd_two_stage` directly.
+  obtained, and it feeds `ma.ipd_two_stage` directly;
+- `ma.piecewise_exp` gives the **time-varying hazard ratio**. Follow-up is
+  split at the analyst's cut points and each study is fitted as a Poisson
+  regression with the interval as a stratifying factor, so every study
+  estimates its own baseline hazard and its own log hazard ratio per interval;
+  those are then pooled interval by interval. `ma.split_followup` and
+  `ma.poisson_irls` are exposed for checking the split and the fit.
 
-Missing: time-dependent hazard ratios. Note that nothing here claims that
-pooling log HRs handles non-proportional hazards — it does not, which is why
-RMST is there.
+Two limitations, stated rather than papered over. The cut points are not
+chosen by the data — that is model selection with its own multiplicity, the
+same problem as choosing the number of spline knots. And pooling each interval
+separately ignores the correlation between a study's interval-specific
+estimates (they come from the same participants): each interval's pooled
+estimate is valid, but *comparing* intervals needs a model that carries that
+correlation, so no trend test is reported.
+
+Pinned by `tests/test_tvhr.py` against `glm(family = poisson)` in R and then
+`metafor::rma` per interval. One detail worth knowing: R's default
+`epsilon = 1e-8` leaves the GLM standard errors off by 1.4e-5, so the
+reference is generated with `epsilon = 1e-14`; the difference looks like an
+implementation gap and is a convergence tolerance.
+
+Nothing here claims that pooling log HRs handles non-proportional hazards —
+it does not, which is why RMST and this module exist.
 
 ### 8. Prediction-model performance — **yes**
 
@@ -297,7 +316,7 @@ model twice.
 | 4 | one-stage IPD | yes | `tests/test_onestage.py` |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
-| 7 | survival outcomes | partial | `tests/test_surv.py` |
+| 7 | survival outcomes | yes | `tests/test_surv.py`, `tests/test_tvhr.py` |
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |

@@ -1,6 +1,6 @@
 # Models
 
-*77 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*81 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -35,6 +35,10 @@
 | [`km_curve`](#km_curve) | — |
 | [`km_reconstruct`](#km_reconstruct) | — |
 | [`rmst`](#rmst) | — |
+| [`piecewise_exp`](#piecewise_exp) | — |
+| [`PiecewiseResult`](#piecewiseresult) | — |
+| [`poisson_irls`](#poisson_irls) | — |
+| [`split_followup`](#split_followup) | — |
 | [`fp`](#fp) | — |
 | [`nonlinear_test`](#nonlinear_test) | — |
 | [`predict_curve`](#predict_curve) | — |
@@ -731,6 +735,109 @@ Restricted mean survival time: the area under the survival curve.
 **Example**
 
 - `>>> ma.rmst([12, 24], [0.8, 0.6], tau=24).rmst      # doctest` — +SKIP
+
+## `piecewise_exp`
+
+```python
+piecewise_exp(time, event, *, study, treat, breaks, method='REML', level=95.0, min_events=1)
+```
+
+Pooled interval-specific hazard ratios from participant-level data.
+
+Each study is fitted separately by Poisson regression of the split
+follow-up, with the interval as a stratifying factor and an
+interval-by-treatment interaction.  The interval-specific log hazard
+ratios are then pooled with a random-effects model per interval.
+
+**Args**
+
+- `time` — follow-up time per participant.
+- `event` — 1 if the event was observed, 0 if censored.
+- `study` — study identifier per participant.
+- `treat` — treatment indicator per participant (0/1).
+- `breaks` — interval boundaries, starting at 0 and strictly increasing.
+- `method` — between-study variance estimator for the pooling.
+- `level` — confidence level in percent (``95``) or as a proportion (``0.95``).
+- `min_events` — an interval with fewer events than this is not fitted for that study; it stays ``NaN`` instead of returning a coefficient at minus infinity.
+
+**Returns**
+
+`PiecewiseResult`.
+
+**Raises**
+
+- `ValueError` — mismatched lengths, a treatment indicator that is not 0/1, or fewer than two studies.
+
+## `PiecewiseResult`
+
+```python
+PiecewiseResult(breaks: 'np.ndarray', labels: 'list[str]', beta: 'np.ndarray', se: 'np.ndarray', zval: 'np.ndarray', pval: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', tau2: 'np.ndarray', QE: 'np.ndarray', QEp: 'np.ndarray', k: 'list[int]', log_hr: 'np.ndarray', se_hr: 'np.ndarray', studies: 'list', fits: 'list' = <factory>, dropped: 'list' = <factory>, method: 'str' = 'REML', level: 'float' = 95.0) -> None
+```
+
+Interval-specific hazard ratios pooled across studies.
+
+**Attributes**
+
+- `breaks` — the interval boundaries that were used.
+- `labels` — a readable label per interval, e.g. ``"0-6"``.
+- `beta` — pooled log hazard ratio per interval.
+- `se` — its standard error.
+- `zval, pval, ci_lb, ci_ub` — inference on each interval.
+- `tau2` — between-study variance per interval.
+- `QE, QEp` — residual heterogeneity per interval.
+- `k` — number of studies contributing to each interval.
+- `log_hr` — ``(n_study, n_interval)`` per-study log hazard ratios, ``NaN`` where a study could not be fitted.
+- `se_hr` — the matching standard errors.
+- `studies` — study labels, in the row order of ``log_hr``.
+- `fits` — the pooling fits, one per interval.
+- `dropped` — ``(study, reason)`` for every study that could not be used; nothing is dropped silently.
+- `method, level` — settings.
+
+## `poisson_irls`
+
+```python
+poisson_irls(y, X, offset=None, max_iter=200, tol=1e-10)
+```
+
+Poisson regression by iteratively reweighted least squares.
+
+**Args**
+
+- `y` — counts.
+- `X` — design matrix (``n x p``).
+- `offset` — optional additive term on the log scale, e.g. ``log(exposure)``.
+- `max_iter` — iteration cap.
+- `tol` — convergence threshold on the largest coefficient change.
+
+**Returns**
+
+``(beta, vcov, iterations, converged)``.
+
+**Raises**
+
+- `ValueError` — mismatched shapes, negative counts, a rank-deficient design, or a non-finite fit.
+
+## `split_followup`
+
+```python
+split_followup(time, event, breaks)
+```
+
+Split each participant's follow-up at the interval boundaries.
+
+**Args**
+
+- `time` — follow-up time per participant.
+- `event` — 1 if the event was observed, 0 if censored.
+- `breaks` — interval boundaries, starting at 0.  Follow-up is split into ``len(breaks) - 1`` intervals; the last one is open-ended.
+
+**Returns**
+
+``(rows, intervals, exposure, events)`` — ``rows`` indexes the input participant, ``intervals`` is 0-based, ``exposure`` the time spent in that interval and ``events`` whether the event fell in it.
+
+**Raises**
+
+- `ValueError` — the breaks are not strictly increasing or do not start at zero, or a time is negative.
 
 ## `fp`
 

@@ -70,6 +70,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "onestage": ("models", "Models"),
     "prediction": ("models", "Models"),
     "surv": ("models", "Models"),
+    "tvhr": ("models", "Models"),
     "mv": ("models", "Models"),
     "mv.vcov": ("models", "Models"),
     "mv.corr": ("models", "Models"),

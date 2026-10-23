@@ -1,6 +1,6 @@
 # API reference
 
-All 461 public names in `pimeta.__all__`, generated from the source docstrings.
+All 465 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -128,6 +128,10 @@ All 461 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`km_curve`](models.md#km_curve) | Models | — |
 | [`km_reconstruct`](models.md#km_reconstruct) | Models | — |
 | [`rmst`](models.md#rmst) | Models | — |
+| [`piecewise_exp`](models.md#piecewise_exp) | Models | — |
+| [`PiecewiseResult`](models.md#piecewiseresult) | Models | — |
+| [`poisson_irls`](models.md#poisson_irls) | Models | — |
+| [`split_followup`](models.md#split_followup) | Models | — |
 | [`fp`](models.md#fp) | Models | — |
 | [`nonlinear_test`](models.md#nonlinear_test) | Models | — |
 | [`predict_curve`](models.md#predict_curve) | Models | — |

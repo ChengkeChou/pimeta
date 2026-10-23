@@ -8,6 +8,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Time-varying hazard ratios: piecewise-exponential meta-analysis.**
+  `ma.piecewise_exp` splits follow-up at the analyst's cut points, fits each
+  study as a Poisson regression with the interval as a stratifying factor — so
+  each study gets its own baseline hazard and its own log hazard ratio per
+  interval — and pools those interval by interval.
+  - `ma.split_followup` expands `(time, event)` into per-interval exposure and
+    events; `ma.poisson_irls` is the first-stage solver. Both are public so the
+    split and the fit can be audited on their own.
+  - A cell with no events is removed rather than fitted: it has no finite
+    hazard ratio, and returning a coefficient at minus infinity would look
+    like evidence.
+  - Two limitations are deliberate: the cut points are the analyst's (choosing
+    them is model selection), and pooling each interval separately ignores the
+    correlation between a study's interval-specific estimates, so no trend
+    test is reported.
+  - Pinned by `tests/test_tvhr.py` against `glm(family = poisson)` and
+    `metafor::rma`. R's default GLM tolerance leaves its own standard errors
+    off by 1.4e-5, so the reference uses `epsilon = 1e-14`.
+
 - **Limit meta-analysis: an effect estimate adjusted for small-study
   effects.** `ma.limitmeta` implements Rücker et al. (2011). The model lets
   the effect depend on the standard error, so standardising by the total

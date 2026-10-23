@@ -167,3 +167,4 @@ derivation alone. Installed and used for that purpose:
 | `IPDfromKM` | 0.1.10 | Guyot's Kaplan–Meier reconstruction and RMST |
 | `mvmeta`, `lme4` | 1.0.3, 2.0.6 | multivariate and mixed-model cross-checks |
 | `metasens` | 1.5.3 | `limitmeta` (and the Copas selection model, when it lands) |
+| `survival`, `stats` | 3.8.12, base | Kaplan–Meier reconstruction, RMST and the piecewise-exponential Poisson fit |
