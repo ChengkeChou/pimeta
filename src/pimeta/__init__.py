@@ -97,6 +97,7 @@ from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
 from .fsn import FsnResult, fsn
 from .gosh import GoshResult, gosh
 from .ipd import IpdResult, StudyFit, ipd_two_stage, linear_model, logistic_model
+from .limitmeta import LimitmetaResult, limitmeta
 from .measures import (
     NntResult,
     RdResult,
@@ -692,6 +693,8 @@ __all__ = [
     "CumulResult",
     "fsn",
     "FsnResult",
+    "limitmeta",
+    "LimitmetaResult",
     "gosh",
     "GoshResult",
     "metacor",

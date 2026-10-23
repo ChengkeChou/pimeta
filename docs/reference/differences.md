@@ -166,3 +166,4 @@ derivation alone. Installed and used for that purpose:
 | `metamisc` | 0.4.0 | prediction-model performance meta-analysis |
 | `IPDfromKM` | 0.1.10 | Guyot's Kaplan–Meier reconstruction and RMST |
 | `mvmeta`, `lme4` | 1.0.3, 2.0.6 | multivariate and mixed-model cross-checks |
+| `metasens` | 1.5.3 | `limitmeta` (and the Copas selection model, when it lands) |

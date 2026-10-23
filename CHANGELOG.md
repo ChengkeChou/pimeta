@@ -8,6 +8,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Limit meta-analysis: an effect estimate adjusted for small-study
+  effects.** `ma.limitmeta` implements Rücker et al. (2011). The model lets
+  the effect depend on the standard error, so standardising by the total
+  standard error $\sqrt{se^2+\tau^2}$ turns the likelihood into a straight
+  line — the generalised radial plot — whose intercept is the bias parameter
+  and whose slope is the effect at infinite precision. Everything is closed
+  form, and the standard errors are the ordinary least-squares ones (valid as
+  they stand: the standardised residuals have variance exactly 1).
+  - three adjusted estimates: `beta0` (the limit effect shifted by the bias),
+    `betalim` (radial-plot slope of the shrunken estimates) and `mulim`
+    (common-effect estimate of the shrunken estimates);
+  - heterogeneity is decomposed into `Q.small` and `Q.resid`, plus $G^2$;
+  - `ma.radial_regression` is exposed on its own for checking a radial plot.
+  - Pinned by `tests/test_limitmeta.py` against `metasens` 1.5.3 on Moore 1998
+    and on a synthetic dataset; all three adjustments agree to 1e-15.
+
 - **Multivariate reporting layer (`pimeta.mv`).** The estimator was already
   complete; what was missing was everything around it.
   - `ma.vcalc` now implements all four dependency structures `metafor::vcalc`

@@ -265,8 +265,17 @@ tools are present too: `ma.trimfill` for trim-and-fill, `ma.fsn` for the
 file-drawer, and `ma.regtest` and `ma.egger_test` for the regression test. All
 of it is pinned against `metafor` and `meta`.
 
-Missing: `limitmeta` (a different estimator, from `metasens`), the Copas
-selection model, and any Bayesian model averaging.
+`ma.limitmeta` adds the adjusted estimate of Rücker et al. (2011). It is not a
+selection model but an extended random-effects model in which the effect may
+depend on the standard error; standardising by the total standard error turns
+the likelihood into a line, so the bias parameter is an intercept and the
+limit effect a slope, and both come out in closed form. Three adjusted
+estimates are available (`beta0`, `betalim`, `mulim`), and the heterogeneity is
+decomposed into the part explained by small-study effects and the part that is
+not. Pinned by `tests/test_limitmeta.py` against `metasens` 1.5.3 on Moore
+1998 and on a synthetic set.
+
+Missing: the Copas selection model, and any Bayesian model averaging.
 
 ### 12. Time-varying effects — **no**
 
@@ -292,7 +301,7 @@ model twice.
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
-| 11 | publication bias | partial | `tests/test_selmodel_models.py`, `tests/test_metabias.py` |
+| 11 | publication bias | partial | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py` |
 | 12 | time-varying effects | no | — |
 
 Five of these twelve turned out to be further along than the roadmap assumed:

@@ -1,6 +1,6 @@
 # Publication bias
 
-*30 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*32 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -21,6 +21,8 @@
 | [`CumulResult`](#cumulresult) | — |
 | [`fsn`](#fsn) | fsn |
 | [`FsnResult`](#fsnresult) | — |
+| [`limitmeta`](#limitmeta) | — |
+| [`LimitmetaResult`](#limitmetaresult) | — |
 | [`gosh`](#gosh) | — |
 | [`GoshResult`](#goshresult) | — |
 | [`metainf`](#metainf) | metainf |
@@ -243,6 +245,54 @@ FsnResult(type: 'str', k: 'int', fsnum: 'float', pval: 'float', est: 'float | No
 ```
 
 Fail-safe N result.
+
+## `limitmeta`
+
+```python
+limitmeta(result, method_adjust='beta0', level=None)
+```
+
+Adjust a pooled effect for small-study effects (Rücker et al. 2011).
+
+**Args**
+
+- `result` — fitted `rma_uni.RmaResult`, or a meta-analysis result holding one in ``.random``.  Its :math:`\tau^2` — from whichever estimator was used — drives the shrinkage, so it must be an intercept-only random-effects fit.
+- `method_adjust` — ``"beta0"`` (default), ``"betalim"`` or ``"mulim"``.
+- `level` — confidence level, either as a percentage (``95``) or a proportion (``0.95``).  Defaults to the level of the input model. (The package is not consistent here — ``RmaResult.level`` is a proportion while ``rma_mv(level=)`` is a percentage — so both are accepted rather than one of them silently misread.)
+
+**Returns**
+
+`LimitmetaResult`.
+
+**Raises**
+
+- `TypeError` — the argument is not a fitted model.
+- `ValueError` — the model is not intercept-only, fewer than three studies, or an unknown ``method_adjust``.
+
+## `LimitmetaResult`
+
+```python
+LimitmetaResult(method_adjust: 'str', TE: 'np.ndarray', seTE: 'np.ndarray', TE_limit: 'np.ndarray', seTE_limit: 'np.ndarray', TE_adjust: 'float', seTE_adjust: 'float', ci_lb: 'float', ci_ub: 'float', zval: 'float', pval: 'float', alpha: 'float', beta: 'float', tau: 'float', TE_random: 'float', seTE_random: 'float', Q: 'float', df_Q: 'int', Q_small: 'float', Q_resid: 'float', G_squared: 'float', k: 'int', level: 'float' = 95.0, slab: 'list[str] | None' = None) -> None
+```
+
+Adjusted effect estimate from a limit meta-analysis.
+
+**Attributes**
+
+- `method_adjust` — which adjusted estimate was reported.
+- `TE, seTE` — the studies' effects and standard errors.
+- `TE_limit, seTE_limit` — shrunken per-study estimates.
+- `TE_adjust, seTE_adjust` — the adjusted overall effect and its SE.
+- `ci_lb, ci_ub, zval, pval` — inference on the adjusted effect.
+- `alpha, beta` — intercept and slope of the radial plot — the bias parameter and the effect at infinite precision.
+- `tau` — between-study standard deviation used for the shrinkage.
+- `TE_random, seTE_random` — the unadjusted random-effects estimate.
+- `Q, df_Q` — Cochran's Q of the unadjusted model.
+- `Q_small` — heterogeneity attributed to small-study effects.
+- `Q_resid` — heterogeneity remaining beyond them.
+- `G_squared` — proportion of the radial-plot variation left unexplained by the shrunken model.
+- `k, level` — number of studies and the confidence level in percent.
+- `slab` — study labels, when the input model had them.
 
 ## `gosh`
 
