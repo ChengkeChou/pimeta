@@ -1,6 +1,6 @@
 # Publication bias
 
-*36 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*38 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -27,6 +27,8 @@
 | [`CopasResult`](#copasresult) | — |
 | [`copas_fit`](#copas_fit) | — |
 | [`copas_loglik`](#copas_loglik) | — |
+| [`copas_region`](#copas_region) | — |
+| [`CopasRegion`](#copasregion) | — |
 | [`gosh`](#gosh) | — |
 | [`GoshResult`](#goshresult) | — |
 | [`metainf`](#metainf) | metainf |
@@ -333,7 +335,7 @@ Copas selection-model analysis of a set of effect sizes.
 ## `CopasResult`
 
 ```python
-CopasResult(yi: 'np.ndarray', seTE: 'np.ndarray', tau_random: 'float', TE_random: 'float', seTE_random: 'float', left: 'bool', rho_bound: 'float', gamma0_range: 'tuple', gamma1_range: 'tuple', gamma0: 'np.ndarray', gamma1: 'np.ndarray', te_contour: 'np.ndarray', levels: 'list', contour: 'dict', slope: 'float', gamma0_line: 'np.ndarray', gamma1_line: 'np.ndarray', publprob: 'np.ndarray', te_line: 'np.ndarray', se_line: 'np.ndarray', rho_line: 'np.ndarray', tau_line: 'np.ndarray', pval_rsb: 'np.ndarray', n_unpubl: 'np.ndarray', te_adjust: 'float', se_adjust: 'float', ci_lb: 'float', ci_ub: 'float', zval: 'float', pval: 'float', sign_rsb: 'float' = 0.1, level: 'float' = 95.0) -> None
+CopasResult(yi: 'np.ndarray', seTE: 'np.ndarray', tau_random: 'float', TE_random: 'float', seTE_random: 'float', left: 'bool', rho_bound: 'float', gamma0_range: 'tuple', gamma1_range: 'tuple', gamma0: 'np.ndarray', gamma1: 'np.ndarray', te_contour: 'np.ndarray', loglik_contour: 'np.ndarray', levels: 'list', contour: 'dict', slope: 'float', gamma0_line: 'np.ndarray', gamma1_line: 'np.ndarray', publprob: 'np.ndarray', te_line: 'np.ndarray', se_line: 'np.ndarray', rho_line: 'np.ndarray', tau_line: 'np.ndarray', pval_rsb: 'np.ndarray', n_unpubl: 'np.ndarray', te_adjust: 'float', se_adjust: 'float', ci_lb: 'float', ci_ub: 'float', zval: 'float', pval: 'float', sign_rsb: 'float' = 0.1, level: 'float' = 95.0) -> None
 ```
 
 A Copas selection-model analysis.
@@ -347,6 +349,7 @@ A Copas selection-model analysis.
 - `gamma0_range, gamma1_range` — the grid ranges.
 - `gamma0, gamma1` — the grid itself.
 - `te_contour` — ``(ngrid, ngrid)`` pooled effect at each grid point, with ``gamma0`` varying down the rows and ``gamma1`` across columns.
+- `loglik_contour` — ``(ngrid, ngrid)`` maximised log-likelihood at each grid point — the surface `copas_region` turns into a confidence region.
 - `levels` — the contour levels that were traced.
 - `contour` — per level, the number of crossing points, the fitted slope, its standard error, the intercept and the adjusted R-squared.
 - `slope` — slope of the line orthogonal to the contours, in rescaled coordinates.
@@ -403,6 +406,70 @@ The negative log-likelihood, the quantity metasens' ``copas.loglik.without.beta`
 **Raises**
 
 - `ValueError` — the parameter vector is not of length three or four.
+
+## `copas_region`
+
+```python
+copas_region(result, level=95.0)
+```
+
+Likelihood region for the Copas selection parameters.
+
+The model identifies only the combination ``gamma0 + gamma1/se``, so a
+point estimate of the adjusted effect is not the honest output.  This
+keeps the whole set of selection scenarios consistent with the data:
+
+.. math::
+
+    2\{\ell_{\max} - \ell(\gamma_0, \gamma_1)\}
+    \le \chi^2_2(1-\alpha)
+
+and reports the range of the adjusted effect over that set.  Projecting a
+joint confidence set onto one coordinate gives a conservative interval —
+wider than a profile that fixes the others — which is the right direction
+to err in when the "others" are unidentified.
+
+**Args**
+
+- `result` — a `CopasResult` from `copas`; the surface is reused, so nothing is refitted.
+- `level` — confidence level in percent (``95``) or as a proportion (``0.95``).
+
+**Returns**
+
+`CopasRegion`.
+
+**Raises**
+
+- `ValueError` — the level is not in ``(0, 100)``, or the surface has no finite point to anchor the maximum.
+
+## `CopasRegion`
+
+```python
+CopasRegion(level: 'float', crit: 'float', gamma0_in: 'np.ndarray', gamma1_in: 'np.ndarray', mu_in: 'np.ndarray', publprob_in: 'np.ndarray', mu_best: 'float', mu_lb: 'float', mu_ub: 'float', publprob_lb: 'float', publprob_ub: 'float', no_selection_inside: 'bool', gamma1_min: 'float', sign_stable: 'bool', k: 'int') -> None
+```
+
+Which selection scenarios the data cannot rule out.
+
+``metasens`` reduces the Copas analysis to one number by walking a path
+drawn by hand.  This is the same model with an actual inference attached:
+the set of ``(gamma0, gamma1)`` whose profile likelihood is within the
+usual chi-square-2 threshold of the best value.  Everything the model can
+say about the adjusted effect then follows from that set.
+
+**Attributes**
+
+- `level` — confidence level in percent.
+- `crit` — the threshold ``2*(max loglik - loglik)`` must not exceed.
+- `gamma0_in, gamma1_in` — the grid points inside the region.
+- `mu_in` — the pooled effect at those points.
+- `publprob_in` — publication probability of the largest study at those points — the interpretable coordinate.
+- `mu_best` — the pooled effect at the single best point.
+- `mu_lb, mu_ub` — **projection interval** for the adjusted effect: the range of the effect over the whole region.  Conservative by construction, in the same sense that a projection of a joint confidence set always is.
+- `publprob_lb, publprob_ub` — the same for the publication probability.
+- `no_selection_inside` — whether the region contains a scenario in which publication does not depend on precision (``gamma1 = 0``).  If it does, the data do not require any selection at all.
+- `gamma1_min` — the smallest ``|gamma1|`` among admissible scenarios; zero means precision-dependent selection is not needed to explain the data.
+- `sign_stable` — whether every admissible scenario has the effect on the same side of zero.  This is the question a reader actually asks, and it is answerable without any of the path machinery.
+- `k` — number of studies.
 
 ## `gosh`
 

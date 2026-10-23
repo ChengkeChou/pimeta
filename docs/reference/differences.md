@@ -104,6 +104,15 @@ therefore agrees with metasens to about 1e-5 (and to 2e-8 on Fleiss 1993),
 not to machine precision, and the number of points on the path can differ.
 The tests assert that measured agreement rather than claiming parity.
 
+**`pimeta` also offers the inference that heuristic never had.**
+`ma.copas_region` returns the likelihood-ratio region for
+$(\gamma_0, \gamma_1)$ — the selection scenarios the data cannot rule out —
+and projects it onto the adjusted effect, giving an interval, whether a
+scenario with no precision-dependent selection is admissible, and whether
+every admissible scenario agrees on the sign. Projecting a joint confidence
+set is conservative by construction, and the projected interval is documented
+as such rather than sold as exact.
+
 ### `mada` is not ported
 
 `pimeta.dta` implements the **methods** — bivariate random-effects model, HSROC,

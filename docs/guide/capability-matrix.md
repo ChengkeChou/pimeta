@@ -315,10 +315,19 @@ therefore agrees to about 1e-5 rather than to machine precision. That is stated
 in `docs/reference/differences.md` §3 rather than hidden, and the tests assert
 the measured agreement.
 
+That path is not inference, though, and the capability matrix row is marked
+"yes" because of `ma.copas_region`, not because of it. The region is the
+likelihood-ratio set of $(\gamma_0, \gamma_1)$ at a chosen confidence level —
+the selection scenarios the data cannot rule out — projected onto the adjusted
+effect to give an interval, along with whether a scenario with no
+precision-dependent selection is admissible and whether every admissible
+scenario agrees on the sign. Projecting a joint confidence set is conservative
+by construction, and it is documented that way; the coverage was not
+simulated, and the tests do not claim it was.
+
 Not offered: Bayesian model averaging (RoBMA). It needs an MCMC sampler, which
 the dependency policy rules out; a half-validated one would be worse than the
-gap.
-### 12. Time-varying effects — **no**
+gap.### 12. Time-varying effects — **no**
 
 Nothing. No time index, no dynamic heterogeneity, no Gaussian process. This is
 a research direction rather than a missing feature.

@@ -38,12 +38,16 @@ it is not a maximum likelihood estimate of anything:
 4. Report the first point where residual selection is no longer significant —
    the least selection that would explain the funnel asymmetry.
 
-Step 2 is a heuristic, and it is metasens' heuristic; ``slope=`` overrides it.
-Everything from step 3 onwards is deterministic given the path.
+Steps 2–4 are a graphical heuristic, and they are metasens' heuristic; they are
+kept so that a published Copas analysis can be reproduced.
 
-Verified against ``metasens`` 1.5.3 on Fleiss 1993 (the example in metasens'
-own documentation).  See the caveats on the contour step in
-``docs/reference/differences.md``.
+**For inference, use** :func:`copas_region` instead.  It keeps the whole set of
+selection scenarios consistent with the data — the likelihood-ratio region for
+:math:`(\\gamma_0, \\gamma_1)` — and reports the range of the adjusted effect
+over that set, whether a scenario with no precision-dependent selection is
+admissible, and whether every admissible scenario puts the effect on the same
+side of zero.  Those are statements with a definable error rate; a single point
+picked off a contour plot is not.
 """
 
 from __future__ import annotations
@@ -55,10 +59,12 @@ import numpy as np
 from scipy import optimize, special, stats
 
 __all__ = [
+    "CopasRegion",
     "CopasResult",
     "copas",
     "copas_fit",
     "copas_loglik",
+    "copas_region",
 ]
 
 
@@ -377,6 +383,9 @@ class CopasResult:
         gamma0, gamma1: the grid itself.
         te_contour: ``(ngrid, ngrid)`` pooled effect at each grid point, with
             ``gamma0`` varying down the rows and ``gamma1`` across columns.
+        loglik_contour: ``(ngrid, ngrid)`` maximised log-likelihood at each
+            grid point — the surface :func:`copas_region` turns into a
+            confidence region.
         levels: the contour levels that were traced.
         contour: per level, the number of crossing points, the fitted slope,
             its standard error, the intercept and the adjusted R-squared.
@@ -403,6 +412,7 @@ class CopasResult:
     gamma0: np.ndarray = field(repr=False)
     gamma1: np.ndarray = field(repr=False)
     te_contour: np.ndarray = field(repr=False)
+    loglik_contour: np.ndarray = field(repr=False)
     levels: list
     contour: dict = field(repr=False)
     slope: float
@@ -464,6 +474,7 @@ class CopasResult:
             "gamma0": self.gamma0.tolist(),
             "gamma1": self.gamma1.tolist(),
             "te_contour": self.te_contour.tolist(),
+            "loglik_contour": self.loglik_contour.tolist(),
             "levels": [float(x) for x in self.levels],
             "contour": {k: np.asarray(v).tolist()
                         for k, v in self.contour.items()},
@@ -594,12 +605,14 @@ def copas(yi, sei=None, *, tau=None, mu0=None, se0=None, ngrid=20,
     rho0 = rho_bound / 2.0 if left else -rho_bound / 2.0
 
     contour_grid = np.full((g0.size, g1.size), np.nan)
+    loglik_grid = np.full((g0.size, g1.size), np.nan)
     for i in range(g0.size):
         for j in range(g1.size):
             fit = copas_fit(yi_arr, sei_arr, g0[i], g1[j],
                             rho_bound=rho_bound, mu0=mu_start, rho0=rho0,
                             tau0=tau_use, se_mu=False)
             contour_grid[i, j] = fit.mu
+            loglik_grid[i, j] = -fit.loglik
 
     if levels is None:
         level_list = _auto_levels(contour_grid, nlevels)
@@ -746,6 +759,7 @@ def copas(yi, sei=None, *, tau=None, mu0=None, se0=None, ngrid=20,
         seTE_random=se_random, left=bool(left), rho_bound=float(rho_bound),
         gamma0_range=tuple(gamma0_range), gamma1_range=tuple(gamma1_range),
         gamma0=g0, gamma1=g1, te_contour=contour_grid,
+        loglik_contour=loglik_grid,
         levels=[float(x) for x in stats_rows["levels"]],
         contour=stats_rows, slope=slope_value,
         gamma0_line=gamma0_line, gamma1_line=gamma1_line,
@@ -754,4 +768,175 @@ def copas(yi, sei=None, *, tau=None, mu0=None, se0=None, ngrid=20,
         n_unpubl=n_unpubl, te_adjust=te_adj, se_adjust=se_adj,
         ci_lb=float(ci_lb), ci_ub=float(ci_ub), zval=float(zval),
         pval=pval, sign_rsb=float(sign_rsb), level=level,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# the inferential object: a likelihood region
+# --------------------------------------------------------------------------- #
+
+@dataclass
+class CopasRegion:
+    """Which selection scenarios the data cannot rule out.
+
+    ``metasens`` reduces the Copas analysis to one number by walking a path
+    drawn by hand.  This is the same model with an actual inference attached:
+    the set of ``(gamma0, gamma1)`` whose profile likelihood is within the
+    usual chi-square-2 threshold of the best value.  Everything the model can
+    say about the adjusted effect then follows from that set.
+
+    Attributes:
+        level: confidence level in percent.
+        crit: the threshold ``2*(max loglik - loglik)`` must not exceed.
+        gamma0_in, gamma1_in: the grid points inside the region.
+        mu_in: the pooled effect at those points.
+        publprob_in: publication probability of the largest study at those
+            points — the interpretable coordinate.
+        mu_best: the pooled effect at the single best point.
+        mu_lb, mu_ub: **projection interval** for the adjusted effect: the
+            range of the effect over the whole region.  Conservative by
+            construction, in the same sense that a projection of a joint
+            confidence set always is.
+        publprob_lb, publprob_ub: the same for the publication probability.
+        no_selection_inside: whether the region contains a scenario in which
+            publication does not depend on precision (``gamma1 = 0``).  If it
+            does, the data do not require any selection at all.
+        gamma1_min: the smallest ``|gamma1|`` among admissible scenarios; zero
+            means precision-dependent selection is not needed to explain the
+            data.
+        sign_stable: whether every admissible scenario has the effect on the
+            same side of zero.  This is the question a reader actually asks,
+            and it is answerable without any of the path machinery.
+        k: number of studies.
+    """
+
+    level: float
+    crit: float
+    gamma0_in: np.ndarray = field(repr=False)
+    gamma1_in: np.ndarray = field(repr=False)
+    mu_in: np.ndarray = field(repr=False)
+    publprob_in: np.ndarray = field(repr=False)
+    mu_best: float
+    mu_lb: float
+    mu_ub: float
+    publprob_lb: float
+    publprob_ub: float
+    no_selection_inside: bool
+    gamma1_min: float
+    sign_stable: bool
+    k: int
+
+    def to_dict(self) -> dict:
+        return {
+            "level": self.level,
+            "crit": self.crit,
+            "gamma0_in": self.gamma0_in.tolist(),
+            "gamma1_in": self.gamma1_in.tolist(),
+            "mu_in": self.mu_in.tolist(),
+            "publprob_in": self.publprob_in.tolist(),
+            "mu_best": self.mu_best,
+            "mu_lb": self.mu_lb,
+            "mu_ub": self.mu_ub,
+            "publprob_lb": self.publprob_lb,
+            "publprob_ub": self.publprob_ub,
+            "no_selection_inside": self.no_selection_inside,
+            "gamma1_min": self.gamma1_min,
+            "sign_stable": self.sign_stable,
+            "k": self.k,
+        }
+
+    def __str__(self) -> str:
+        rows = [f"Copas selection region ({self.level:.0f}% likelihood)"]
+        rows.append(f"  studies                 {self.k}")
+        rows.append(f"  admissible scenarios    {self.mu_in.size} grid points")
+        rows.append(f"  effect at the best fit  {self.mu_best:+.4f}")
+        rows.append(f"  effect over the region  "
+                    f"[{self.mu_lb:+.4f}, {self.mu_ub:+.4f}]")
+        rows.append(f"  publication probability "
+                    f"[{self.publprob_lb:.3f}, {self.publprob_ub:.3f}]")
+        rows.append(f"  no selection admissible "
+                    f"{'yes' if self.no_selection_inside else 'no'}")
+        rows.append(f"  sign stable             "
+                    f"{'yes' if self.sign_stable else 'no'}")
+        return "\n".join(rows)
+
+
+def copas_region(result, level=95.0):
+    """Likelihood region for the Copas selection parameters.
+
+    The model identifies only the combination ``gamma0 + gamma1/se``, so a
+    point estimate of the adjusted effect is not the honest output.  This
+    keeps the whole set of selection scenarios consistent with the data:
+
+    .. math::
+
+        2\\{\\ell_{\\max} - \\ell(\\gamma_0, \\gamma_1)\\}
+        \\le \\chi^2_2(1-\\alpha)
+
+    and reports the range of the adjusted effect over that set.  Projecting a
+    joint confidence set onto one coordinate gives a conservative interval —
+    wider than a profile that fixes the others — which is the right direction
+    to err in when the "others" are unidentified.
+
+    Args:
+        result: a :class:`CopasResult` from :func:`copas`; the surface is
+            reused, so nothing is refitted.
+        level: confidence level in percent (``95``) or as a proportion
+            (``0.95``).
+
+    Returns:
+        :class:`CopasRegion`.
+
+    Raises:
+        ValueError: the level is not in ``(0, 100)``, or the surface has no
+            finite point to anchor the maximum.
+    """
+    level = float(level)
+    if level <= 1.0:
+        level *= 100.0
+    if not 0.0 < level < 100.0:
+        raise ValueError("'level' must be between 0 and 100")
+
+    ll = np.asarray(result.loglik_contour, dtype=float)
+    mu = np.asarray(result.te_contour, dtype=float)
+    finite = np.isfinite(ll) & np.isfinite(mu)
+    if not np.any(finite):
+        raise ValueError("the likelihood surface has no finite point")
+
+    ll_max = float(np.max(ll[finite]))
+    alpha = 1.0 - level / 100.0
+    crit = float(stats.chi2.ppf(1.0 - alpha, 2))
+    inside = finite & (2.0 * (ll_max - ll) <= crit)
+
+    g0 = np.broadcast_to(np.asarray(result.gamma0)[:, None], ll.shape)
+    g1 = np.broadcast_to(np.asarray(result.gamma1)[None, :], ll.shape)
+    # the largest study's publication probability identifies the direction of
+    # selection that matters, while gamma0 alone does not
+    se_max = float(np.max(result.seTE))
+    publprob = stats.norm.cdf(g0 + g1 / se_max)
+
+    mu_in = mu[inside]
+    pp_in = publprob[inside]
+    best = np.unravel_index(int(np.argmax(np.where(finite, ll, -np.inf))),
+                            ll.shape)
+
+    # "no selection" means publication does not depend on precision: the
+    # likelihood cannot separate gamma0 and gamma1 beyond the combination
+    # gamma0 + gamma1/se, but gamma1 = 0 is a definite statement about
+    # precision, so membership is checked on gamma1 alone.
+    gamma1_floor = float(np.min(np.abs(result.gamma1)))
+    no_sel = bool(np.any(inside & (np.abs(g1) <= gamma1_floor + 1e-12)))
+
+    return CopasRegion(
+        level=level, crit=crit,
+        gamma0_in=g0[inside], gamma1_in=g1[inside],
+        mu_in=mu_in, publprob_in=pp_in,
+        mu_best=float(mu[best]),
+        mu_lb=float(np.min(mu_in)), mu_ub=float(np.max(mu_in)),
+        publprob_lb=float(np.min(pp_in)),
+        publprob_ub=float(np.max(pp_in)),
+        no_selection_inside=no_sel,
+        gamma1_min=float(np.min(np.abs(g1[inside]))),
+        sign_stable=bool(np.all(mu_in > 0.0) or np.all(mu_in < 0.0)),
+        k=int(result.seTE.size),
     )

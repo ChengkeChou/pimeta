@@ -44,7 +44,14 @@ from .conv import (
     to_table,
     to_wide,
 )
-from .copas import CopasResult, copas, copas_fit, copas_loglik
+from .copas import (
+    CopasRegion,
+    CopasResult,
+    copas,
+    copas_fit,
+    copas_loglik,
+    copas_region,
+)
 from .cumul import CumulResult, cumul
 from .data_compat import (
     FormulaSpec,
@@ -712,6 +719,8 @@ __all__ = [
     "CopasResult",
     "copas_fit",
     "copas_loglik",
+    "copas_region",
+    "CopasRegion",
     "level_to_alpha",
     "level_to_percent",
     "gosh",
