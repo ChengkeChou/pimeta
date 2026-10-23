@@ -44,6 +44,7 @@ from .conv import (
     to_table,
     to_wide,
 )
+from .copas import CopasResult, copas, copas_fit, copas_loglik
 from .cumul import CumulResult, cumul
 from .data_compat import (
     FormulaSpec,
@@ -706,6 +707,10 @@ __all__ = [
     "FsnResult",
     "limitmeta",
     "LimitmetaResult",
+    "copas",
+    "CopasResult",
+    "copas_fit",
+    "copas_loglik",
     "gosh",
     "GoshResult",
     "metacor",

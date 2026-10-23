@@ -1,6 +1,6 @@
 # API reference
 
-All 465 public names in `pimeta.__all__`, generated from the source docstrings.
+All 469 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -283,6 +283,10 @@ All 465 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`FsnResult`](bias.md#fsnresult) | Publication bias | — |
 | [`limitmeta`](bias.md#limitmeta) | Publication bias | — |
 | [`LimitmetaResult`](bias.md#limitmetaresult) | Publication bias | — |
+| [`copas`](bias.md#copas) | Publication bias | — |
+| [`CopasResult`](bias.md#copasresult) | Publication bias | — |
+| [`copas_fit`](bias.md#copas_fit) | Publication bias | — |
+| [`copas_loglik`](bias.md#copas_loglik) | Publication bias | — |
 | [`gosh`](bias.md#gosh) | Publication bias | — |
 | [`GoshResult`](bias.md#goshresult) | Publication bias | — |
 | [`metainf`](bias.md#metainf) | Publication bias | metainf |

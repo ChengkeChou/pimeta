@@ -8,6 +8,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Copas selection model.** `ma.copas` implements the selection model of
+  Copas and Shi (2000, 2001): a study is published when
+  `gamma0 + gamma1/se + delta > 0`, so large studies almost surely and small
+  ones only when their result is favourable. Only the combination
+  `gamma0 + gamma1/se` is identified, which is why the answer is a surface
+  rather than a number.
+  - the likelihood, the fits at a fixed `(gamma0, gamma1)`, the sensitivity
+    surface, the publication probability and the implied number of
+    unpublished studies reproduce `metasens` 1.5.3;
+  - `ma.copas_loglik` and `ma.copas_fit` are public so the objective and a
+    single fit can be checked on their own;
+  - the adjusted estimate follows metasens' path through the surface — the
+    contour-orthogonal direction, stopping where residual selection stops
+    being significant — and agrees to about 1e-5. The contour tracer splits a
+    level into a different number of pieces, which is documented in
+    `docs/reference/differences.md` section 3 rather than glossed over;
+  - a standard error is withheld (NaN) where `rho` sits on its bound, because
+    a constrained fit has no meaningful curvature in that direction;
+  - pinned by `tests/test_copas.py` on Fleiss 1993 (the example in metasens'
+    own documentation, where no adjustment is needed) and on a synthetic set
+    where selection is detected and the estimate does move.
 - **Time-varying hazard ratios: piecewise-exponential meta-analysis.**
   `ma.piecewise_exp` splits follow-up at the analyst's cut points, fits each
   study as a Poisson regression with the interval as a stratifying factor — so

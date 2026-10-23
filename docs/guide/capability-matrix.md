@@ -274,7 +274,7 @@ disconnected components. All three are pinned against `netmeta` 3.7.0.
 Missing: the component *interaction* (inconsistency) model, dose–response NMA,
 time-course NMA, and IPD-NMA.
 
-### 11. Publication bias — **partial**
+### 11. Publication bias — **yes**
 
 Already there, and larger than "a funnel plot": `ma.selmodel` with eighteen
 selection functions (beta, half-normal, negative-exponential, logistic, power,
@@ -296,6 +296,28 @@ not. Pinned by `tests/test_limitmeta.py` against `metasens` 1.5.3 on Moore
 
 Missing: the Copas selection model, and any Bayesian model averaging.
 
+`ma.copas` adds the selection model itself (Copas and Shi 2000, 2001). It is
+the one place in the package where the answer is deliberately a *surface*
+rather than a number: only the combination $\gamma_0 + \gamma_1/se$ is
+identified from the observed studies, so the analysis reports the pooled
+effect along a path through the ( $\gamma_0$, $\gamma_1$ ) plane, the
+publication probability and the number of studies the implied selection would
+leave unpublished, and the residual-selection test at each step.
+
+The likelihood, the fits at a fixed $(\gamma_0, \gamma_1)$, the sensitivity
+surface, the publication probabilities and the implied number of unpublished
+studies reproduce `metasens` 1.5.3 exactly or near it. The *path* is metasens'
+graphical heuristic — iso-effect contours, a line orthogonal to them, stop
+where residual selection stops being significant — and metasens' contour
+tracer splits a level into more pieces than the connected-component grouping
+used here does (16 against 12 on the synthetic fixture). The adjusted estimate
+therefore agrees to about 1e-5 rather than to machine precision. That is stated
+in `docs/reference/differences.md` §3 rather than hidden, and the tests assert
+the measured agreement.
+
+Not offered: Bayesian model averaging (RoBMA). It needs an MCMC sampler, which
+the dependency policy rules out; a half-validated one would be worse than the
+gap.
 ### 12. Time-varying effects — **no**
 
 Nothing. No time index, no dynamic heterogeneity, no Gaussian process. This is
@@ -320,7 +342,7 @@ model twice.
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
-| 11 | publication bias | partial | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py` |
+| 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py` |
 | 12 | time-varying effects | no | — |
 
 Five of these twelve turned out to be further along than the roadmap assumed:

@@ -1,6 +1,6 @@
 # Publication bias
 
-*32 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*36 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -23,6 +23,10 @@
 | [`FsnResult`](#fsnresult) | — |
 | [`limitmeta`](#limitmeta) | — |
 | [`LimitmetaResult`](#limitmetaresult) | — |
+| [`copas`](#copas) | — |
+| [`CopasResult`](#copasresult) | — |
+| [`copas_fit`](#copas_fit) | — |
+| [`copas_loglik`](#copas_loglik) | — |
 | [`gosh`](#gosh) | — |
 | [`GoshResult`](#goshresult) | — |
 | [`metainf`](#metainf) | metainf |
@@ -293,6 +297,112 @@ Adjusted effect estimate from a limit meta-analysis.
 - `G_squared` — proportion of the radial-plot variation left unexplained by the shrunken model.
 - `k, level` — number of studies and the confidence level in percent.
 - `slab` — study labels, when the input model had them.
+
+## `copas`
+
+```python
+copas(yi, sei=None, *, tau=None, mu0=None, se0=None, ngrid=20, nlevels=10, levels=None, rho_bound=0.9999, left=None, slope=None, sign_rsb=0.1, level=95.0, gamma0_range=None, gamma1_range=None)
+```
+
+Copas selection-model analysis of a set of effect sizes.
+
+**Args**
+
+- `yi` — observed effects, or a fitted `rma_uni.RmaResult` whose ``.yi`` / ``.vi`` / ``.tau2`` are used.
+- `sei` — standard errors, when ``yi`` is an array.
+- `tau` — between-study SD to start from; defaults to the random-effects estimate.
+- `mu0, se0` — the random-effects estimate and SE.  When ``yi`` is a fitted model these come from the fit.
+- `ngrid` — grid size for the sensitivity surface.
+- `nlevels` — number of contour levels when ``levels`` is not given.
+- `levels` — explicit contour levels of the pooled effect.
+- `rho_bound` — bound on the effect-selection correlation.
+- `left` — whether the unpublished studies are assumed to lie on the left of the funnel (negative effects).  Defaults to the sign of Egger's intercept, as metasens does.
+- `slope` — slope of the line orthogonal to the contours, in rescaled coordinates.  Defaults to the value derived from the contours.
+- `sign_rsb` — significance level of the residual-selection test used to decide where along the path to stop.
+- `level` — confidence level in percent.
+- `gamma0_range, gamma1_range` — grid ranges; defaults follow metasens.
+
+**Returns**
+
+`CopasResult`.
+
+**Raises**
+
+- `ValueError` — too few studies, mismatched lengths, or non-positive standard errors.
+
+## `CopasResult`
+
+```python
+CopasResult(yi: 'np.ndarray', seTE: 'np.ndarray', tau_random: 'float', TE_random: 'float', seTE_random: 'float', left: 'bool', rho_bound: 'float', gamma0_range: 'tuple', gamma1_range: 'tuple', gamma0: 'np.ndarray', gamma1: 'np.ndarray', te_contour: 'np.ndarray', levels: 'list', contour: 'dict', slope: 'float', gamma0_line: 'np.ndarray', gamma1_line: 'np.ndarray', publprob: 'np.ndarray', te_line: 'np.ndarray', se_line: 'np.ndarray', rho_line: 'np.ndarray', tau_line: 'np.ndarray', pval_rsb: 'np.ndarray', n_unpubl: 'np.ndarray', te_adjust: 'float', se_adjust: 'float', ci_lb: 'float', ci_ub: 'float', zval: 'float', pval: 'float', sign_rsb: 'float' = 0.1, level: 'float' = 95.0) -> None
+```
+
+A Copas selection-model analysis.
+
+**Attributes**
+
+- `yi, seTE` — the studies.
+- `tau_random, TE_random, seTE_random` — the ordinary random-effects fit the analysis starts from.
+- `left` — which side the missing studies were assumed to be on.
+- `rho_bound` — the bound placed on the effect-selection correlation.
+- `gamma0_range, gamma1_range` — the grid ranges.
+- `gamma0, gamma1` — the grid itself.
+- `te_contour` — ``(ngrid, ngrid)`` pooled effect at each grid point, with ``gamma0`` varying down the rows and ``gamma1`` across columns.
+- `levels` — the contour levels that were traced.
+- `contour` — per level, the number of crossing points, the fitted slope, its standard error, the intercept and the adjusted R-squared.
+- `slope` — slope of the line orthogonal to the contours, in rescaled coordinates.
+- `gamma0_line, gamma1_line` — the path walked, in natural units.
+- `publprob` — publication probability of the largest study at each point.
+- `te_line, se_line, rho_line, tau_line` — the fit along the path.
+- `pval_rsb` — p-value of the residual-selection test (beta = 0).
+- `n_unpubl` — number of studies implied to be unpublished.
+- `te_adjust, se_adjust, ci_lb, ci_ub, zval, pval` — the reported answer.
+- `sign_rsb, level` — settings.
+
+## `copas_fit`
+
+```python
+copas_fit(yi, sei, gamma0, gamma1, *, rho_bound=0.9999, mu0=None, rho0=None, tau0=None, with_beta=False, se_mu=True, rho_lim=None)
+```
+
+Fit the selection model at one ``(gamma0, gamma1)``.
+
+**Args**
+
+- `yi` — observed effects.
+- `sei` — their standard errors.
+- `gamma0, gamma1` — the selection parameters to condition on.
+- `rho_bound` — the correlation is constrained to ``[-rho_bound, rho_bound]``.
+- `mu0, rho0, tau0` — starting values.  metasens starts from the ordinary random-effects estimate, ``-rho_bound/2`` and the random-effects :math:`\hat\tau`; the same defaults are used here.
+- `with_beta` — also estimate the residual small-study slope.
+- `se_mu` — compute the standard error from the numerical Hessian.
+- `rho_lim` — explicit ``(lower, upper)`` bounds for the correlation.  The residual-selection fit needs this: metasens restricts :math:`\rho` to the side of the funnel the missing studies were assumed to be on, which is narrower than the bound used for the surface and can matter for which optimum is reached.
+
+**Returns**
+
+`CopasFit`.
+
+## `copas_loglik`
+
+```python
+copas_loglik(params, yi, sei, gamma0, gamma1)
+```
+
+Negative log-likelihood of the Copas selection model.
+
+**Args**
+
+- `params` — ``(mu, rho, tau)``, or ``(mu, rho, tau, beta)`` to include the residual small-study slope.
+- `yi` — observed effects.
+- `sei` — their standard errors.
+- `gamma0, gamma1` — the selection parameters.
+
+**Returns**
+
+The negative log-likelihood, the quantity metasens' ``copas.loglik.without.beta`` returns (and ``.with.beta`` for the four-parameter form).
+
+**Raises**
+
+- `ValueError` — the parameter vector is not of length three or four.
 
 ## `gosh`
 

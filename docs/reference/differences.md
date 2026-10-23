@@ -75,8 +75,7 @@ about 1e-6, the residual being R's adaptive-quadrature tolerance.
 ## 3. Deliberate non-portings
 
 | R behaviour | pimeta |
-|---|---|
-| `metabias(..., plotit=TRUE)` draws a radial plot as a side effect | `plotit` is accepted for signature parity but draws nothing — call `ma.radial()` / `ma.regplot()` yourself |
+|---|---|| `metabias(..., plotit=TRUE)` draws a radial plot as a side effect | `plotit` is accepted for signature parity but draws nothing — call `ma.radial()` / `ma.regplot()` yourself |
 | `netmeta::pairwise(TE=, seTE=)` passes contrast-level data straight through | not implemented; arm-level `treat` / `n` / `event` / `mean` / `sd` input is fully supported |
 | `netmatrix(..., ties.method=)` tie handling | fixed at `"first"`; only matters when reference selection hits an exact tie |
 | `dfround()` returns an R `data.frame` | returns a `dict` of columns, or a pandas `DataFrame` when pandas is installed |
@@ -85,6 +84,25 @@ about 1e-6, the residual being R's adaptive-quadrature tolerance.
 | `set.seed()` seeds a global RNG | pass `seed=` to the routines that draw random numbers: `gosh`, `permutest`, `hettest`, `simulate`, `regplot`, `netmatrix(ties_method="random")` |
 | `profile.rma.uni.selmodel` fixes τ² at the full-model estimate on every grid point | τ² is re-estimated at each point, which is the proper profile likelihood |
 | `metafor::news()` (changelog viewer) | not implemented — no analytic content |
+
+### `copas` reports a path, and its contours are traced slightly differently
+
+`metasens::copas` does not return a maximum likelihood estimate. It builds a
+sensitivity surface over the two selection parameters, traces the iso-effect
+contours of that surface, fits a line to each contour, walks the direction
+orthogonal to them, and reports the first point where residual selection stops
+being significant. Steps 1 and 3–4 are statistics; step 2 is a graphical
+heuristic, and its output depends on how the contour tracer splits a level
+into pieces.
+
+`pimeta.copas` reproduces the likelihood, the per-point fits, the surface, the
+publication probabilities and the implied number of unpublished studies.
+For the contour step it groups crossings by connected component, where R's
+`contourLines` produces more pieces: 16 against 12 on the synthetic fixture in
+`tests/test_copas.py`, 12 against 12 on Fleiss 1993. The adjusted estimate
+therefore agrees with metasens to about 1e-5 (and to 2e-8 on Fleiss 1993),
+not to machine precision, and the number of points on the path can differ.
+The tests assert that measured agreement rather than claiming parity.
 
 ### `mada` is not ported
 
@@ -166,5 +184,5 @@ derivation alone. Installed and used for that purpose:
 | `metamisc` | 0.4.0 | prediction-model performance meta-analysis |
 | `IPDfromKM` | 0.1.10 | Guyot's Kaplan–Meier reconstruction and RMST |
 | `mvmeta`, `lme4` | 1.0.3, 2.0.6 | multivariate and mixed-model cross-checks |
-| `metasens` | 1.5.3 | `limitmeta` (and the Copas selection model, when it lands) |
+| `metasens` | 1.5.3 | `limitmeta` and the Copas selection model |
 | `survival`, `stats` | 3.8.12, base | Kaplan–Meier reconstruction, RMST and the piecewise-exponential Poisson fit |
