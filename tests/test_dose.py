@@ -200,6 +200,12 @@ def test_the_spline_term_is_testable(fit):
     assert both.pval == pytest.approx(R_QM_P, abs=1e-5)
 
 
+def test_the_joint_test_also_accepts_the_underlying_rma_mv_fit(fit):
+    """rma_mv keeps its coefficients in 'beta'; wald_test reads either name."""
+    underlying = ma.wald_test(fit.fit, btt=[2, 3])
+    assert underlying.QM == pytest.approx(R_QM, rel=1e-4)
+
+
 def test_a_curve_can_be_predicted(fit):
     curve = ma.predict_curve(fit, fit.basis, grid=[0.0, 10.0, 20.0])
     assert curve.fit[0] == pytest.approx(fit.b[0], rel=1e-12)

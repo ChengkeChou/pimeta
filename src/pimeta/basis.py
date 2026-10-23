@@ -407,9 +407,18 @@ class WaldResult:
         }
 
 
+def _coef_vector(result) -> np.ndarray:
+    """Coefficients, under either naming: ``rma`` uses ``b``, ``rma_mv`` ``beta``."""
+    for name in ("b", "beta"):
+        value = getattr(result, name, None)
+        if value is not None:
+            return np.asarray(value, dtype=float).ravel()
+    return np.empty(0)
+
+
 def _coef_names(result) -> list[str]:
     names = getattr(result, "coefnames", None)
-    b = np.asarray(getattr(result, "b", []), dtype=float).ravel()
+    b = _coef_vector(result)
     if names is None or len(names) != b.size:
         names = [f"b{i + 1}" for i in range(b.size)]
     return list(names)
@@ -421,7 +430,7 @@ def wald_test(result, btt: Sequence[int] | None = None,
 
     Args:
         result: a fitted :class:`~pimeta.rma_uni.RmaResult` (or anything with
-            ``b``, ``vb``, ``test``, ``s2w`` and ``ddf``).
+            ``b``/``beta``, ``vb``, ``test``, ``s2w`` and ``ddf``).
         btt: **1-based** coefficient positions, exactly as in
             ``metafor::anova(fit, btt=)``. Note the difference from Python
             indexing: ``btt=[2, 3]`` tests the second and third coefficients.
@@ -438,7 +447,7 @@ def wald_test(result, btt: Sequence[int] | None = None,
         >>> fit = ma.rma(yi, vi, mods="~ x", data=df)    # doctest: +SKIP
         >>> ma.wald_test(fit, btt=[2])                    # doctest: +SKIP
     """
-    b = np.asarray(getattr(result, "b", []), dtype=float).ravel()
+    b = _coef_vector(result)
     vb = np.asarray(getattr(result, "vb", np.empty((0, 0))), dtype=float)
     if b.size == 0 or vb.shape != (b.size, b.size):
         raise TypeError(
