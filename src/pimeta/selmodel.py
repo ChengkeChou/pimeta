@@ -1,4 +1,4 @@
-﻿"""selmodel 鈥?a faithful transcription of ``metafor::selmodel`` (selection models).
+"""selmodel —a faithful transcription of ``metafor::selmodel`` (selection models).
 
 Implements the full family of publication-bias selection models on top of an
 ``rma`` fit: ``beta``, ``halfnorm``/``halfnorm1``/``halfnorm2``, ``negexp``/
@@ -185,7 +185,7 @@ def _is_dummy(x, eps=1e-8):
 
 
 def _mapfun(x, lb, ub, fun=None):
-    """metafor's ``.mapfun`` 鈥?forward map from optimisation scale."""
+    """metafor's ``.mapfun`` —forward map from optimisation scale."""
     if fun is None:
         if lb == 0.0 and ub == 1.0:
             y = _plogis(x)
@@ -211,7 +211,7 @@ def _mapfun(x, lb, ub, fun=None):
 
 
 def _mapinvfun(x, lb, ub, fun=None):
-    """metafor's ``.mapinvfun`` 鈥?inverse map onto the optimisation scale."""
+    """metafor's ``.mapinvfun`` —inverse map onto the optimisation scale."""
     if fun is None:
         if lb == 0.0 and ub == 1.0:
             return _qlogis(x)
@@ -432,17 +432,17 @@ def _make_ll_cont(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                   mapfun, delta_min, delta_max, decreasing, delta_transf,
                   tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                   alternative, pval_min, dofit=False):
-    """``.selmodel.ll.cont`` 鈥?numeric integration over the density.
+    """``.selmodel.ll.cont`` —numeric integration over the density.
 
     The per-study integrals use adaptive quadrature with exactly the tolerances
     metafor passes to R's ``integrate()`` (``rel.tol = .Machine$double.eps^0.25``,
-    ``subdivisions = 100``), so the numerical accuracy 鈥?and hence the point at
-    which the optimiser stops 鈥?matches the reference implementation.
+    ``subdivisions = 100``), so the numerical accuracy —and hence the point at
+    which the optimiser stops —matches the reference implementation.
 
     A fixed Gauss-Hermite rule would be two orders of magnitude faster, but the
     selection weights ``exp(-delta * preci * p^2)`` are step functions once
     ``delta`` grows (the exponent reaches -600 on the realistic fits), and a
-    200-node rule loses 5e-4 of relative accuracy there 鈥?enough to move the
+    200-node rule loses 5e-4 of relative accuracy there —enough to move the
     optimum more than R's own quadrature does.  Accuracy wins over speed.
     """
     k = len(yi)
@@ -602,7 +602,7 @@ def _make_ll_stepfun(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                      mapfun, delta_min, delta_max, decreasing, delta_transf,
                      tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                      alternative, pval_min, dofit=False):
-    """``.selmodel.ll.stepfun`` 鈥?closed-form (analytic) integrals."""
+    """``.selmodel.ll.stepfun`` —closed-form (analytic) integrals."""
     k = len(yi)
     sub_idx = np.where(subset)[0]
     nsub_idx = np.where(~subset)[0]
@@ -705,7 +705,7 @@ def _make_ll_trunc(yi, vi, X, preci, subset, p, pvals, deltas, delta_arg,
                    mapfun, delta_min, delta_max, decreasing, delta_transf,
                    tau2_arg, tau2_transf, tau2_max, beta_arg, type_, steps,
                    alternative, pval_min, dofit=False):
-    """``.selmodel.ll.trunc`` 鈥?closed-form truncated likelihood."""
+    """``.selmodel.ll.trunc`` —closed-form truncated likelihood."""
     len(yi)
     sub_idx = np.where(subset)[0]
     nsub_idx = np.where(~subset)[0]

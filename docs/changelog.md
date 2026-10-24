@@ -37,6 +37,41 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Joint pooling of interval-specific hazard ratios, with trend tests.**
+  `ma.piecewise_joint` stacks a study's interval-specific log hazard ratios
+  into a vector, gives each study its own sampling covariance and a
+  between-study covariance on top, and fits them together — so
+  `trend_test(kind="linear" | "diff" | "any")` and `predict_region` have the
+  covariance a comparison between intervals needs. `ma.piecewise_exp` pools the
+  same estimates one interval at a time and remains the right tool for
+  reporting each interval on its own.
+
+  The correlation between a study's interval-specific estimates is where this
+  model is usually misdescribed, and the documentation said it wrong. The
+  intervals *partition* follow-up, so a Poisson fit with a saturated
+  interval-by-treatment interaction estimates each interval from disjoint rows
+  and the information matrix is block diagonal: the estimates are **exactly
+  uncorrelated** (measured at 0.0, not argued). A within-study `rho` therefore
+  has no role for participant-level input; it has one for aggregate input,
+  where the published hazard ratios come from a model without that structure
+  and the correlation cannot be estimated, so `rho` is an assumption to vary.
+
+  Pinned against `metafor::rma.mv` on the stacked block
+  (`tests/test_tvhr_joint.py`): per-study sampling covariance to 1e-8, the
+  diagonal pooling to 1e-6, the trend estimate and its standard error to 1e-3.
+  Generating the reference needed `glm.control(epsilon = 1e-14)`: with R's
+  default the per-study standard errors are wrong in the sixth digit, and a
+  reference that stops early is not a reference.
+
+  The unstructured pooling is pinned only to 1e-3, and the reason is a result.
+  With 16 studies the estimate of the between-interval covariance lands on a
+  boundary where one correlation is 1; the likelihood is flat along the ridge,
+  and every statistic that contrasts intervals depends on where the optimiser
+  stopped. The omnibus test of a constant hazard ratio is 40.6 with
+  `struct="DIAG"`, 52.1 with `"UN"` and 57.3 with `"HCS"`. The qualitative
+  answer survives that spread; the number does not, so a fit with a boundary
+  correlation now warns and quotes the three values.
+
 - **Random slopes in the one-stage IPD model.** `re_slopes=` puts
   fixed-design coefficients into the random part, so `re_slopes=["treat"]` is
   lme4's `(1 + treat | study)` and `struct="DIAG"` is

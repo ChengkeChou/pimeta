@@ -445,8 +445,10 @@ from .transforms import (
     transf_ztor_mode,
 )
 from .tvhr import (
+    PiecewiseJointResult,
     PiecewiseResult,
     piecewise_exp,
+    piecewise_joint,
     poisson_irls,
     split_followup,
 )
@@ -657,6 +659,8 @@ __all__ = [
     "rmst",
     # time-varying hazard ratios
     "piecewise_exp",
+    "piecewise_joint",
+    "PiecewiseJointResult",
     "PiecewiseResult",
     "poisson_irls",
     "split_followup",

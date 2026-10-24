@@ -1,6 +1,6 @@
 # Models
 
-*88 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*90 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -39,6 +39,8 @@
 | [`km_reconstruct`](#km_reconstruct) | — |
 | [`rmst`](#rmst) | — |
 | [`piecewise_exp`](#piecewise_exp) | — |
+| [`piecewise_joint`](#piecewise_joint) | — |
+| [`PiecewiseJointResult`](#piecewisejointresult) | — |
 | [`PiecewiseResult`](#piecewiseresult) | — |
 | [`poisson_irls`](#poisson_irls) | — |
 | [`split_followup`](#split_followup) | — |
@@ -846,10 +848,69 @@ ratios are then pooled with a random-effects model per interval.
 
 - `ValueError` — mismatched lengths, a treatment indicator that is not 0/1, or fewer than two studies.
 
+## `piecewise_joint`
+
+```python
+piecewise_joint(time, event, *, study, treat, breaks, rho=None, method='REML', level=95.0, min_events=1, struct='UN')
+```
+
+Pool the interval-specific hazard ratios as one vector.
+
+The difference from `piecewise_exp` is what is being estimated.  That
+function pools each interval with its own univariate model: every reported
+hazard ratio is valid on its own, and any statement comparing two intervals
+is informal.  This one stacks a study's interval-specific log hazard ratios
+into a vector, gives each study its own sampling covariance, puts a
+between-study covariance on top and fits them together —so
+`PiecewiseJointResult.trend_test` and
+`predict_region` have the covariance they need.
+
+**Args**
+
+- `time, event, study, treat, breaks, min_events` — as in `piecewise_exp`.
+- `rho` — within-study correlation between a study's interval-specific log hazard ratios.  ``None`` uses the covariance the per-study Poisson fits supply, which for this parameterisation is exactly diagonal — the intervals partition the follow-up, so the information matrix is block diagonal.  A non-zero value is for *aggregate* input, where the reported hazard ratios come from a model that does not have that structure and the correlation cannot be estimated from the data; it is an assumption, and it belongs in a sensitivity analysis.
+- `method` — ``"REML"`` or ``"ML"``.
+- `level` — confidence level.
+- `struct` — between-study covariance structure passed to `rma_mv`; ``"UN"`` needs ``k(k+1)/2`` parameters for ``k`` intervals.
+
+**Returns**
+
+`PiecewiseJointResult`.
+
+**Raises**
+
+- `ValueError` — on mismatched lengths, a treatment indicator that is not 0/1, fewer than two studies, or a ``rho`` outside ``[-1, 1]``.
+
+## `PiecewiseJointResult`
+
+```python
+PiecewiseJointResult(breaks: 'np.ndarray', labels: 'list[str]', beta: 'np.ndarray', se: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', vcov: 'np.ndarray', Sigma: 'np.ndarray', tau2: 'np.ndarray', k: 'list[int]', studies: 'list', model: 'object' = None, dropped: 'list' = <factory>, rho: 'float | None' = None, method: 'str' = 'REML', level: 'float' = 95.0, struct: 'str' = 'UN') -> None
+```
+
+Interval-specific hazard ratios pooled as a vector.
+
+Pooling each interval with its own univariate model gives valid
+interval-specific estimates but makes every *comparison* between intervals
+an informal one: the estimates share the between-study covariance, so
+"the hazard ratio falls after six months" needs the joint covariance.
+
+**Attributes**
+
+- `breaks, labels` — the intervals.
+- `beta, se, ci_lb, ci_ub` — the pooled log hazard ratio per interval.
+- `vcov` — their joint covariance matrix.
+- `Sigma` — the estimated between-study covariance of the interval-specific log hazard ratios, on the log scale.
+- `tau2` — its diagonal.
+- `k` — studies contributing per interval.
+- `rho` — the within-study correlation that was imposed on the sampling covariance, or ``None`` when the per-study fits supplied it.
+- `model` — the underlying `RmaMvResult`, so `predict_region` can be applied to it.
+- `studies, dropped` — as in `PiecewiseResult`.
+- `method, level, struct` — settings.
+
 ## `PiecewiseResult`
 
 ```python
-PiecewiseResult(breaks: 'np.ndarray', labels: 'list[str]', beta: 'np.ndarray', se: 'np.ndarray', zval: 'np.ndarray', pval: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', tau2: 'np.ndarray', QE: 'np.ndarray', QEp: 'np.ndarray', k: 'list[int]', log_hr: 'np.ndarray', se_hr: 'np.ndarray', studies: 'list', fits: 'list' = <factory>, dropped: 'list' = <factory>, method: 'str' = 'REML', level: 'float' = 95.0) -> None
+PiecewiseResult(breaks: 'np.ndarray', labels: 'list[str]', beta: 'np.ndarray', se: 'np.ndarray', zval: 'np.ndarray', pval: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', tau2: 'np.ndarray', QE: 'np.ndarray', QEp: 'np.ndarray', k: 'list[int]', log_hr: 'np.ndarray', se_hr: 'np.ndarray', studies: 'list', cov_hr: 'np.ndarray | None' = None, fits: 'list' = <factory>, dropped: 'list' = <factory>, method: 'str' = 'REML', level: 'float' = 95.0) -> None
 ```
 
 Interval-specific hazard ratios pooled across studies.
@@ -866,6 +927,7 @@ Interval-specific hazard ratios pooled across studies.
 - `k` — number of studies contributing to each interval.
 - `log_hr` — ``(n_study, n_interval)`` per-study log hazard ratios, ``NaN`` where a study could not be fitted.
 - `se_hr` — the matching standard errors.
+- `cov_hr` — ``(n_study, n_interval, n_interval)`` the covariance of each study's log hazard ratios.  Exactly diagonal, because the intervals partition the follow-up and a Poisson fit with a saturated interval-by-treatment interaction therefore has a block-diagonal information matrix; `piecewise_joint` checks that rather than trusting it.
 - `studies` — study labels, in the row order of ``log_hr``.
 - `fits` — the pooling fits, one per interval.
 - `dropped` — ``(study, reason)`` for every study that could not be used; nothing is dropped silently.
@@ -911,7 +973,7 @@ Split each participant's follow-up at the interval boundaries.
 
 **Returns**
 
-``(rows, intervals, exposure, events)`` — ``rows`` indexes the input participant, ``intervals`` is 0-based, ``exposure`` the time spent in that interval and ``events`` whether the event fell in it.
+``(rows, intervals, exposure, events)`` —``rows`` indexes the input participant, ``intervals`` is 0-based, ``exposure`` the time spent in that interval and ``events`` whether the event fell in it.
 
 **Raises**
 

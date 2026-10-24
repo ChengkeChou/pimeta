@@ -270,20 +270,45 @@ Already there, in more depth than "pool a log hazard ratio":
   estimates its own baseline hazard and its own log hazard ratio per interval;
   those are then pooled interval by interval. `ma.split_followup` and
   `ma.poisson_irls` are exposed for checking the split and the fit.
+- `ma.piecewise_joint` pools the same estimates **as a vector**: each study's
+  interval-specific log hazard ratios enter with their own sampling covariance
+  and a between-study covariance on top, which is what a comparison between
+  intervals needs. `trend_test(kind=...)` reports three Wald tests —
+  `"linear"` (the usual monotone trend), `"diff"` (last interval against the
+  first) and `"any"` (the omnibus test that the hazard ratio is constant) — and
+  `ma.predict_region` applies to the underlying fit.
+
+On the correlation between a study's interval-specific estimates, which is
+where this model is usually misdescribed. The intervals *partition* each
+participant's follow-up, so a Poisson fit with a saturated
+interval-by-treatment interaction estimates each interval's log hazard ratio
+from disjoint rows and the information matrix is block diagonal: the estimates
+are **exactly uncorrelated**, measured at 0.0 rather than argued. A
+within-study `rho` therefore has no role for participant-level input. It has
+one for *aggregate* input, where the published hazard ratios come from a model
+without that structure and the correlation cannot be estimated; there `rho` is
+an assumption to be varied.
 
 Two limitations, stated rather than papered over. The cut points are not
 chosen by the data — that is model selection with its own multiplicity, the
-same problem as choosing the number of spline knots. And pooling each interval
-separately ignores the correlation between a study's interval-specific
-estimates (they come from the same participants): each interval's pooled
-estimate is valid, but *comparing* intervals needs a model that carries that
-correlation, so no trend test is reported.
+same problem as choosing the number of spline knots. And the between-study
+correlation is not always identifiable: with few studies `Sigma` lands on a
+boundary where one correlation is ±1, the likelihood is flat along a ridge, and
+every statistic that contrasts intervals depends on where the optimiser
+stopped. On the 16-study fixture the omnibus statistic is 40.6 with
+`struct="DIAG"`, 52.1 with `"UN"` and 57.3 with `"HCS"` — the qualitative answer
+survives that spread, the number does not, and a fit with a boundary
+correlation warns.
 
 Pinned by `tests/test_tvhr.py` against `glm(family = poisson)` in R and then
-`metafor::rma` per interval. One detail worth knowing: R's default
-`epsilon = 1e-8` leaves the GLM standard errors off by 1.4e-5, so the
-reference is generated with `epsilon = 1e-14`; the difference looks like an
-implementation gap and is a convergence tolerance.
+`metafor::rma` per interval, and by `tests/test_tvhr_joint.py` against
+`metafor::rma.mv` on the stacked block: coefficients to 1e-6, the per-study
+sampling covariance to 1e-8, the diagonal pooling to 1e-6. The unstructured
+pooling is pinned only to 1e-3, and the test says why — that fit is on the
+ridge. One detail worth knowing: R's default `epsilon = 1e-8` leaves the GLM
+standard errors off by 1.4e-5, so the reference is generated with
+`epsilon = 1e-14`; the difference looks like an implementation gap and is a
+convergence tolerance.
 
 Nothing here claims that pooling log HRs handles non-proportional hazards —
 it does not, which is why RMST and this module exist.
@@ -500,7 +525,9 @@ A time-varying **hazard ratio** *is* implemented: `ma.piecewise_exp` (row 7)
 splits follow-up at given break points, fits a Poisson model with a log-time
 offset per interval, and pools the interval-specific log hazard ratios. That is
 a treatment effect that changes over time, and it is pinned against `survival`
-and `metafor` in `tests/test_tvhr.py`.
+and `metafor` in `tests/test_tvhr.py`. `ma.piecewise_joint` pools the same
+estimates as a vector and reports the trend tests that comparison needs, pinned
+against `metafor::rma.mv` in `tests/test_tvhr_joint.py`.
 
 What is absent is a time-varying **effect size** — dynamic heterogeneity, where
 the pooled estimate and $\tau^2$ are functions of a continuous time index, and
@@ -524,7 +551,7 @@ model twice.
 | 4 | one-stage IPD | yes | `tests/test_onestage.py`, `tests/test_onestage_slopes.py` |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
-| 7 | survival outcomes | yes | `tests/test_surv.py`, `tests/test_tvhr.py` |
+| 7 | survival outcomes | yes | `tests/test_surv.py`, `tests/test_tvhr.py`, `tests/test_tvhr_joint.py` |
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py`, `tests/test_mv_confint.py`, `tests/test_mv_region.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |

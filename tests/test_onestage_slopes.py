@@ -1,18 +1,18 @@
-﻿"""One-stage IPD models with random slopes, pinned against ``lme4``.
+"""One-stage IPD models with random slopes, pinned against ``lme4``.
 
 The random-intercept one-stage model in :mod:`pimeta.onestage` has a closed-form
 likelihood, because ``V_i = sigma2 I + tau2 J`` inverts by a rank-one update.
 A random *slope* removes that: ``V_i = sigma2 (I + Z_i Lambda Z_i')`` does not
 factor, and the likelihood has to be evaluated one study at a time.
 
-``lme4::lmer`` is the reference, and it is the right one here 鈥?the one-stage
+``lme4::lmer`` is the reference, and it is the right one here —the one-stage
 model *is* a linear mixed model, so ``y ~ treat + agec + treat:agec +
 (1 + treat | study)`` is the same likelihood rather than an analogy of it.
 
-The fixture (``tests/data/onestage_slopes.csv``) is 24 studies of 165鈥?75
+The fixture (``tests/data/onestage_slopes.csv``) is 24 studies of 165–275
 participants with a correlated random intercept and treatment slope, drawn from
 ``D = [[0.09, 0.03], [0.03, 0.04]]`` and residual SD 0.8.  Studies are large on
-purpose: with the 25鈥?0 participant studies a first attempt used, the sampling
+purpose: with the 25–60 participant studies a first attempt used, the sampling
 noise in each study's own intercept and slope is comparable to the variance
 being estimated, both implementations land on the correlation boundary
 ``rho = 0.99998``, and there is nothing left to discriminate.  The estimates

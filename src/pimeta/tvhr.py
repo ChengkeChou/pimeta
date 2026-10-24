@@ -2,8 +2,8 @@
 
 When proportional hazards fails, a single pooled hazard ratio is the wrong
 summary: it averages over a hazard ratio that changes.  The usual answer is a
-piecewise-exponential model — constant hazard within each interval of
-follow-up, free to differ between intervals — which turns the problem into a
+piecewise-exponential model —constant hazard within each interval of
+follow-up, free to differ between intervals —which turns the problem into a
 Poisson regression per study:
 
 .. math::
@@ -16,17 +16,39 @@ where :math:`e_{ik}` is the exposure of participant :math:`i` in interval
 study estimates its own baseline hazard; :math:`\\beta_k` is that study's
 log hazard ratio in interval :math:`k`.
 
-The per-study estimates are then pooled interval by interval with the ordinary
-random-effects engine, which is what "pooled hazard ratio at 0-6 months,
-6-12 months, ..." means.
+The per-study estimates are then pooled.  Two routes, and the difference
+between them is what is being estimated:
+
+- :func:`piecewise_exp` pools each interval with its own univariate model.
+  Every reported hazard ratio is valid on its own, and any statement comparing
+  two intervals is informal.
+- :func:`piecewise_joint` stacks a study's interval-specific log hazard ratios
+  into a vector, gives each study its own sampling covariance, puts a
+  between-study covariance on top and fits them together — so a trend test and
+  a joint region have the covariance they need.
+
+On the within-study correlation, which is where this model is usually
+misdescribed.  The intervals partition each participant's follow-up, so a
+Poisson fit with a saturated interval-by-treatment interaction estimates each
+interval's log hazard ratio from disjoint rows and the information matrix is
+block diagonal: a study's interval-specific estimates are **exactly
+uncorrelated**, which ``tests/test_tvhr_joint.py`` checks rather than assumes.
+A within-study ``rho`` therefore has no role when the input is participant
+level.  It does when the input is *aggregate*: published interval-specific
+hazard ratios come from a model that does not have that structure, and the
+correlation cannot be estimated from the data, so ``rho`` is an assumption to
+be varied rather than a quantity to be reported.
 
 Two limitations are deliberate and worth stating:
 
-- **Pooling each interval separately ignores the correlation between a study's
-  interval-specific estimates** (they come from the same participants).  The
-  intervals' pooled estimates are each valid; *comparing* them — "the hazard
-  ratio falls after six months" — needs a model that carries that correlation,
-  which this is not.  No trend test is reported for that reason.
+- **The between-study correlation is not always identifiable.**  With a few
+  studies the estimate of :math:`\\Sigma` lands on a boundary where one
+  correlation is :math:`\\pm 1`; the likelihood is then flat along a ridge and
+  every statistic that contrasts intervals — the omnibus test especially —
+  depends on where the optimiser stopped.  On the shipped 16-study fixture the
+  omnibus statistic is 40.6 with ``struct="DIAG"``, 52.1 with ``"UN"`` and 57.3
+  with ``"HCS"``: the qualitative answer survives, the number does not, and a
+  fit with a boundary correlation warns.
 - **The cut points are not chosen by the data.**  Picking where to break
   follow-up is a model-selection problem with its own multiplicity, exactly as
   choosing the number of spline knots is; the break points are the analyst's.
@@ -39,11 +61,14 @@ table into exactly this, which is how most "IPD" is actually obtained.
 from __future__ import annotations
 
 import math
+import warnings
 from dataclasses import dataclass, field
 
 import numpy as np
+from scipy import stats
 
-__all__ = ["PiecewiseResult", "piecewise_exp", "poisson_irls", "split_followup"]
+__all__ = ["PiecewiseJointResult", "PiecewiseResult", "piecewise_exp",
+           "piecewise_joint", "poisson_irls", "split_followup"]
 
 
 def split_followup(time, event, breaks):
@@ -56,7 +81,7 @@ def split_followup(time, event, breaks):
             ``len(breaks) - 1`` intervals; the last one is open-ended.
 
     Returns:
-        ``(rows, intervals, exposure, events)`` — ``rows`` indexes the input
+        ``(rows, intervals, exposure, events)`` —``rows`` indexes the input
         participant, ``intervals`` is 0-based, ``exposure`` the time spent in
         that interval and ``events`` whether the event fell in it.
 
@@ -181,6 +206,12 @@ class PiecewiseResult:
         log_hr: ``(n_study, n_interval)`` per-study log hazard ratios, ``NaN``
             where a study could not be fitted.
         se_hr: the matching standard errors.
+        cov_hr: ``(n_study, n_interval, n_interval)`` the covariance of each
+            study's log hazard ratios.  Exactly diagonal, because the intervals
+            partition the follow-up and a Poisson fit with a saturated
+            interval-by-treatment interaction therefore has a block-diagonal
+            information matrix; :func:`piecewise_joint` checks that rather than
+            trusting it.
         studies: study labels, in the row order of ``log_hr``.
         fits: the pooling fits, one per interval.
         dropped: ``(study, reason)`` for every study that could not be used;
@@ -203,6 +234,7 @@ class PiecewiseResult:
     log_hr: np.ndarray = field(repr=False)
     se_hr: np.ndarray = field(repr=False)
     studies: list
+    cov_hr: np.ndarray | None = field(repr=False, default=None)
     fits: list = field(repr=False, default_factory=list)
     dropped: list = field(repr=False, default_factory=list)
     method: str = "REML"
@@ -267,6 +299,73 @@ def _interval_labels(breaks):
     return labels
 
 
+def _fit_study_blocks(time, event, study, treat, breaks, min_events):
+    """One Poisson fit per study; return the estimates *and* their covariance.
+
+    The intervals partition each participant's follow-up, so a study's
+    interval-specific log hazard ratios are estimated from disjoint rows of the
+    design and their covariance block is exactly diagonal.  That is checked
+    numerically in the tests rather than assumed, and it is the reason a
+    within-study ``rho`` only matters for aggregate data, where the estimates
+    come from a model that does not have this structure.
+    """
+    k_int = breaks.size - 1
+    studies = list(np.unique(study))
+    log_hr = np.full((len(studies), k_int), np.nan)
+    se_hr = np.full((len(studies), k_int), np.nan)
+    cov_hr = np.full((len(studies), k_int, k_int), np.nan)
+    dropped: list[tuple] = []
+
+    for row, s in enumerate(studies):
+        sel = study == s
+        rows, ints, exposure, events = split_followup(
+            time[sel], event[sel], breaks)
+        if rows.size == 0:
+            dropped.append((s, "no follow-up after time 0"))
+            continue
+        tr = treat[sel][rows]
+        # a cell with fewer than 'min_events' events carries no information
+        # about the treatment effect, and fitting it would return a
+        # coefficient at minus infinity.  Those rows are removed, not fitted.
+        per_interval = np.bincount(ints, weights=events, minlength=k_int)
+        usable = [j for j in range(k_int)
+                  if per_interval[j] >= min_events]
+        if not usable:
+            dropped.append((s, f"no interval has {min_events} event(s)"))
+            continue
+        keep = np.isin(ints, usable)
+        rows, ints = rows[keep], ints[keep]
+        exposure, events, tr = exposure[keep], events[keep], tr[keep]
+        used = sorted(usable)
+        slot = {j: pos for pos, j in enumerate(used)}
+        codes = np.array([slot[j] for j in ints], dtype=int)
+        n_used = len(used)
+        # design: the used interval dummies, then their interaction with treat
+        X = np.zeros((rows.size, 2 * n_used))
+        X[np.arange(rows.size), codes] = 1.0
+        X[np.arange(rows.size), n_used + codes] = tr
+        try:
+            beta, vcov, _iters, converged = poisson_irls(
+                events, X, offset=np.log(exposure))
+        except ValueError as exc:
+            dropped.append((s, f"Poisson fit failed: {exc}"))
+            continue
+        if not converged:
+            dropped.append((s, "Poisson fit did not converge"))
+            continue
+        for pos, j in enumerate(used):
+            col = n_used + pos
+            est = float(beta[col])
+            var = float(vcov[col, col])
+            if var <= 0.0 or not np.isfinite(var):
+                continue
+            log_hr[row, j] = est
+            se_hr[row, j] = math.sqrt(var)
+            for pos2, j2 in enumerate(used):
+                cov_hr[row, j, j2] = float(vcov[col, n_used + pos2])
+    return studies, log_hr, se_hr, cov_hr, dropped
+
+
 def piecewise_exp(time, event, *, study, treat, breaks, method="REML",
                   level=95.0, min_events=1):
     """Pooled interval-specific hazard ratios from participant-level data.
@@ -317,59 +416,10 @@ def piecewise_exp(time, event, *, study, treat, breaks, method="REML",
 
     k_int = breaks.size - 1
     labels = _interval_labels(breaks)
-    studies = list(np.unique(study))
-    if len(studies) < 2:
+    if len(np.unique(study)) < 2:
         raise ValueError("at least two studies are needed to pool")
-
-    log_hr = np.full((len(studies), k_int), np.nan)
-    se_hr = np.full((len(studies), k_int), np.nan)
-    dropped: list[tuple] = []
-
-    for row, s in enumerate(studies):
-        sel = study == s
-        rows, ints, exposure, events = split_followup(
-            time[sel], event[sel], breaks)
-        if rows.size == 0:
-            dropped.append((s, "no follow-up after time 0"))
-            continue
-        tr = treat[sel][rows]
-        # a cell with fewer than 'min_events' events carries no information
-        # about the treatment effect, and fitting it would return a
-        # coefficient at minus infinity.  Those rows are removed, not fitted.
-        per_interval = np.bincount(ints, weights=events, minlength=k_int)
-        usable = [j for j in range(k_int)
-                  if per_interval[j] >= min_events]
-        if not usable:
-            dropped.append((s, f"no interval has {min_events} event(s)"))
-            continue
-        keep = np.isin(ints, usable)
-        rows, ints = rows[keep], ints[keep]
-        exposure, events, tr = exposure[keep], events[keep], tr[keep]
-        used = sorted(usable)
-        slot = {j: pos for pos, j in enumerate(used)}
-        codes = np.array([slot[j] for j in ints], dtype=int)
-        n_used = len(used)
-        # design: the used interval dummies, then their interaction with treat
-        X = np.zeros((rows.size, 2 * n_used))
-        X[np.arange(rows.size), codes] = 1.0
-        X[np.arange(rows.size), n_used + codes] = tr
-        try:
-            beta, vcov, _iters, converged = poisson_irls(
-                events, X, offset=np.log(exposure))
-        except ValueError as exc:
-            dropped.append((s, f"Poisson fit failed: {exc}"))
-            continue
-        if not converged:
-            dropped.append((s, "Poisson fit did not converge"))
-            continue
-        for pos, j in enumerate(used):
-            col = n_used + pos
-            est = float(beta[col])
-            var = float(vcov[col, col])
-            if var <= 0.0 or not np.isfinite(var):
-                continue
-            log_hr[row, j] = est
-            se_hr[row, j] = math.sqrt(var)
+    studies, log_hr, se_hr, cov_hr, dropped = _fit_study_blocks(
+        time, event, study, treat, breaks, min_events)
 
     beta = np.full(k_int, np.nan)
     se = np.full(k_int, np.nan)
@@ -405,6 +455,356 @@ def piecewise_exp(time, event, *, study, treat, breaks, method="REML",
     return PiecewiseResult(
         breaks=breaks, labels=labels, beta=beta, se=se, zval=zval,
         pval=pval, ci_lb=ci_lb, ci_ub=ci_ub, tau2=tau2, QE=qe, QEp=qep,
-        k=ks, log_hr=log_hr, se_hr=se_hr, studies=studies, fits=fits,
-        dropped=dropped, method=method, level=level,
+        k=ks, log_hr=log_hr, se_hr=se_hr, studies=studies, cov_hr=cov_hr,
+        fits=fits, dropped=dropped, method=method, level=level,
     )
+
+
+# --------------------------------------------------------------------------- #
+# joint pooling: the interval-specific log hazard ratios as one vector
+# --------------------------------------------------------------------------- #
+@dataclass
+class PiecewiseJointResult:
+    """Interval-specific hazard ratios pooled as a vector.
+
+    Pooling each interval with its own univariate model gives valid
+    interval-specific estimates but makes every *comparison* between intervals
+    an informal one: the estimates share the between-study covariance, so
+    "the hazard ratio falls after six months" needs the joint covariance.
+
+    Attributes:
+        breaks, labels: the intervals.
+        beta, se, ci_lb, ci_ub: the pooled log hazard ratio per interval.
+        vcov: their joint covariance matrix.
+        Sigma: the estimated between-study covariance of the interval-specific
+            log hazard ratios, on the log scale.
+        tau2: its diagonal.
+        k: studies contributing per interval.
+        rho: the within-study correlation that was imposed on the sampling
+            covariance, or ``None`` when the per-study fits supplied it.
+        model: the underlying :class:`~pimeta.RmaMvResult`, so
+            :func:`~pimeta.predict_region` can be applied to it.
+        studies, dropped: as in :class:`PiecewiseResult`.
+        method, level, struct: settings.
+    """
+
+    breaks: np.ndarray = field(repr=False)
+    labels: list[str]
+    beta: np.ndarray = field(repr=False)
+    se: np.ndarray = field(repr=False)
+    ci_lb: np.ndarray = field(repr=False)
+    ci_ub: np.ndarray = field(repr=False)
+    vcov: np.ndarray = field(repr=False)
+    Sigma: np.ndarray = field(repr=False)
+    tau2: np.ndarray = field(repr=False)
+    k: list[int]
+    studies: list
+    model: object = field(repr=False, default=None)
+    dropped: list = field(repr=False, default_factory=list)
+    rho: float | None = None
+    method: str = "REML"
+    level: float = 95.0
+    struct: str = "UN"
+
+    def coef_table(self) -> list[dict]:
+        """One row per interval, with the hazard ratio on its own scale."""
+        rows = []
+        for j, label in enumerate(self.labels):
+            if not np.isfinite(self.beta[j]):
+                rows.append({"interval": label, "hr": float("nan"),
+                             "hr_lb": float("nan"), "hr_ub": float("nan"),
+                             "log_hr": float("nan"), "se": float("nan"),
+                             "k": int(self.k[j]), "tau2": float("nan")})
+                continue
+            rows.append({
+                "interval": label,
+                "log_hr": float(self.beta[j]),
+                "se": float(self.se[j]),
+                "hr": float(np.exp(self.beta[j])),
+                "hr_lb": float(np.exp(self.ci_lb[j])),
+                "hr_ub": float(np.exp(self.ci_ub[j])),
+                "k": int(self.k[j]),
+                "tau2": float(self.tau2[j]),
+            })
+        return rows
+
+    def _wald(self, weights):
+        """A one-degree-of-freedom Wald test of ``weights @ beta == 0``."""
+        w = np.asarray(weights, dtype=float).ravel()
+        ok = np.isfinite(self.beta)
+        if w.size != self.beta.size:
+            raise ValueError("the contrast must cover every interval")
+        b = self.beta[ok]
+        wk = w[ok]
+        V = np.asarray(self.vcov, dtype=float)[np.ix_(ok, ok)]
+        var = float(wk @ V @ wk)
+        if var <= 0.0:
+            return {"stat": float("nan"), "df": 1, "pval": float("nan")}
+        stat = float((wk @ b) ** 2 / var)
+        return {
+            "stat": stat,
+            "df": 1,
+            "pval": float(stats.chi2.sf(stat, 1)),
+            "estimate": float(wk @ b),
+            "se": math.sqrt(var),
+            "ci_lb": float(wk @ b - self._crit() * math.sqrt(var)),
+            "ci_ub": float(wk @ b + self._crit() * math.sqrt(var)),
+        }
+
+    def _crit(self) -> float:
+        return float(stats.norm.ppf(0.5 + self.level / 200.0))
+
+    def trend_test(self, kind: str = "linear") -> dict:
+        """Is the hazard ratio changing over follow-up?
+
+        Args:
+            kind: ``"linear"`` weighs the intervals by their position, which is
+                the usual test for a monotone trend; ``"diff"`` contrasts the
+                last interval with the first, which is the question a reader
+                actually asks; ``"any"`` tests every interval against the first
+                jointly, which is the omnibus test that the hazard ratio is
+                constant.
+
+        Returns:
+            A dict with ``stat``, ``df``, ``pval`` and, for the one-degree-of-
+            freedom versions, ``estimate``, ``se``, ``ci_lb``, ``ci_ub`` on the
+            log scale.
+        """
+        label = str(kind).lower()
+        ok = np.isfinite(self.beta)
+        n = int(np.sum(ok))
+        if n < 2:
+            raise ValueError("a trend needs at least two estimable intervals")
+        if label == "linear":
+            pos = np.arange(self.beta.size, dtype=float)
+            centre = pos[ok].mean()
+            return self._wald(pos - centre)
+        if label == "diff":
+            w = np.zeros(self.beta.size)
+            idx = np.flatnonzero(ok)
+            w[idx[0]] = -1.0
+            w[idx[-1]] = 1.0
+            return self._wald(w)
+        if label == "any":
+            b = self.beta[ok]
+            V = np.asarray(self.vcov, dtype=float)[np.ix_(ok, ok)]
+            C = np.zeros((n - 1, n))
+            for i in range(1, n):
+                C[i - 1, i] = 1.0
+                C[i - 1, 0] = -1.0
+            diff = C @ b
+            middle = C @ V @ C.T
+            stat = float(diff @ np.linalg.solve(middle, diff))
+            return {"stat": stat, "df": n - 1,
+                    "pval": float(stats.chi2.sf(stat, n - 1))}
+        raise ValueError(
+            f"unknown trend kind {kind!r}; use 'linear', 'diff' or 'any'")
+
+    def to_dict(self) -> dict:
+        return {
+            "breaks": self.breaks.tolist(),
+            "labels": list(self.labels),
+            "beta": self.beta.tolist(),
+            "se": self.se.tolist(),
+            "ci_lb": self.ci_lb.tolist(),
+            "ci_ub": self.ci_ub.tolist(),
+            "vcov": self.vcov.tolist(),
+            "Sigma": self.Sigma.tolist(),
+            "tau2": self.tau2.tolist(),
+            "k": list(self.k),
+            "studies": list(self.studies),
+            "rho": self.rho,
+            "method": self.method,
+            "level": self.level,
+            "struct": self.struct,
+            "dropped": [[s, why] for s, why in self.dropped],
+        }
+
+    def __str__(self) -> str:
+        rows = ["time-varying hazard ratio, joint pooling"]
+        rows.append(f"  {'interval':<14}{'HR':>8}{'95% CI':>20}{'k':>5}"
+                    f"{'tau2':>9}")
+        for row in self.coef_table():
+            ci = f"[{row['hr_lb']:.3f}, {row['hr_ub']:.3f}]"
+            rows.append(f"  {row['interval']:<14}{row['hr']:>8.3f}{ci:>20}"
+                        f"{row['k']:>5}{row['tau2']:>9.4f}")
+        for kind, name in (("any", "hazard ratio constant"),
+                           ("linear", "linear trend"),
+                           ("diff", "last vs first")):
+            try:
+                test = self.trend_test(kind)
+            except ValueError:
+                continue
+            rows.append(f"  {name:<22} chi2({test['df']}) = "
+                        f"{test['stat']:.3f}, p = {test['pval']:.4g}")
+        return "\n".join(rows)
+
+
+def piecewise_joint(time, event, *, study, treat, breaks, rho=None,
+                    method="REML", level=95.0, min_events=1,
+                    struct="UN"):
+    """Pool the interval-specific hazard ratios as one vector.
+
+    The difference from :func:`piecewise_exp` is what is being estimated.  That
+    function pools each interval with its own univariate model: every reported
+    hazard ratio is valid on its own, and any statement comparing two intervals
+    is informal.  This one stacks a study's interval-specific log hazard ratios
+    into a vector, gives each study its own sampling covariance, puts a
+    between-study covariance on top and fits them together —so
+    :meth:`PiecewiseJointResult.trend_test` and
+    :func:`~pimeta.predict_region` have the covariance they need.
+
+    Args:
+        time, event, study, treat, breaks, min_events: as in
+            :func:`piecewise_exp`.
+        rho: within-study correlation between a study's interval-specific log
+            hazard ratios.  ``None`` uses the covariance the per-study Poisson
+            fits supply, which for this parameterisation is exactly diagonal —
+            the intervals partition the follow-up, so the information matrix is
+            block diagonal.  A non-zero value is for *aggregate* input, where
+            the reported hazard ratios come from a model that does not have that
+            structure and the correlation cannot be estimated from the data;
+            it is an assumption, and it belongs in a sensitivity analysis.
+        method: ``"REML"`` or ``"ML"``.
+        level: confidence level.
+        struct: between-study covariance structure passed to
+            :func:`~pimeta.rma_mv`; ``"UN"`` needs ``k(k+1)/2`` parameters for
+            ``k`` intervals.
+
+    Returns:
+        :class:`PiecewiseJointResult`.
+
+    Raises:
+        ValueError: on mismatched lengths, a treatment indicator that is not
+            0/1, fewer than two studies, or a ``rho`` outside ``[-1, 1]``.
+    """
+    from .rma_mv import rma_mv
+
+    time = np.asarray(time, dtype=float).ravel()
+    event = np.asarray(event).ravel()
+    study = np.asarray(study).ravel()
+    treat = np.asarray(treat).ravel()
+    breaks = np.asarray(breaks, dtype=float).ravel()
+    n = time.size
+    if not (event.size == study.size == treat.size == n):
+        raise ValueError("'time', 'event', 'study' and 'treat' must be the "
+                         "same length")
+    if not set(np.unique(treat).tolist()) <= {0, 1}:
+        raise ValueError("'treat' must be a 0/1 indicator")
+    if rho is not None and not -1.0 <= float(rho) <= 1.0:
+        raise ValueError("'rho' must lie in [-1, 1]")
+    level = float(level)
+    if level <= 1.0:
+        level *= 100.0
+    k_int = breaks.size - 1
+    labels = _interval_labels(breaks)
+    if len(np.unique(study)) < 2:
+        raise ValueError("at least two studies are needed to pool")
+    studies, log_hr, se_hr, cov_hr, dropped = _fit_study_blocks(
+        time, event, study, treat, breaks, min_events)
+
+    yi: list[float] = []
+    blocks: list[np.ndarray] = []
+    k_per = np.zeros(k_int, dtype=int)
+    for i in range(len(studies)):
+        ok = np.isfinite(log_hr[i])
+        if not ok.any():
+            continue
+        idx = np.flatnonzero(ok)
+        block = np.array(cov_hr[i])[np.ix_(idx, idx)]
+        if rho is not None:
+            sd = np.sqrt(np.diag(block))
+            corr = np.full(block.shape, float(rho))
+            np.fill_diagonal(corr, 1.0)
+            block = corr * np.outer(sd, sd)
+        try:
+            np.linalg.cholesky(block)
+        except np.linalg.LinAlgError as exc:
+            raise ValueError(
+                f"study {studies[i]!r}: the implied within-study covariance is "
+                f"not positive definite; rho={rho} is too large for its "
+                "standard errors") from exc
+        for j in idx:
+            yi.append(float(log_hr[i, j]))
+            k_per[j] += 1
+        blocks.append(block)
+
+    # an interval no study could be fitted in has no column: a dummy of zeros
+    # makes the design singular, and the honest answer for it is NaN, not a
+    # coefficient at minus infinity.
+    used = [j for j in range(k_int) if k_per[j] > 0]
+    if not used:
+        raise ValueError("no interval has enough events in any study")
+    col_of = {j: pos for pos, j in enumerate(used)}
+    total = sum(b.shape[0] for b in blocks)
+    V = np.zeros((total, total))
+    X = np.zeros((total, len(used)))
+    labels_row: list[str] = []
+    study_row: list[str] = []
+    start = 0
+    pos = 0
+    for i in range(len(studies)):
+        idx = np.flatnonzero(np.isfinite(log_hr[i]))
+        if idx.size == 0:
+            continue
+        n_i = idx.size
+        V[start:start + n_i, start:start + n_i] = blocks[pos]
+        X[start + np.arange(n_i), [col_of[j] for j in idx]] = 1.0
+        labels_row.extend(labels[j] for j in idx)
+        study_row.extend([str(studies[i])] * n_i)
+        start += n_i
+        pos += 1
+
+    data = {"interval": labels_row, "study": study_row}
+    fit = rma_mv(np.array(yi, dtype=float), V=V, mods=X, data=data,
+                 random="~ interval | study", struct=struct,
+                 intercept=False, method=method, level=level / 100.0)
+    sub_beta = np.asarray(fit.beta, dtype=float)
+    sub_vcov = np.asarray(fit.vb, dtype=float)
+    G, names = fit.g_matrix()
+    sub_sigma = (np.asarray(G, dtype=float) if G is not None
+                 else np.zeros((len(used), len(used))))
+    # rma_mv orders the levels of the random term by their sort order, so the
+    # intervals are not necessarily in the order they were asked for
+    # ("0-6" < "12-24" < "6-12").  Put Sigma back in interval order.
+    if names:
+        order = [list(names).index(labels[j]) for j in used]
+    else:
+        order = list(range(len(used)))
+    sub_sigma = sub_sigma[np.ix_(order, order)]
+    beta = np.full(k_int, np.nan)
+    vcov = np.full((k_int, k_int), np.nan)
+    Sigma = np.zeros((k_int, k_int))
+    for j in used:
+        beta[j] = sub_beta[col_of[j]]
+        for j2 in used:
+            vcov[j, j2] = sub_vcov[col_of[j], col_of[j2]]
+            Sigma[j, j2] = sub_sigma[col_of[j], col_of[j2]]
+    sigma2 = np.diag(Sigma)
+    if len(used) > 1:
+        sd = np.sqrt(np.maximum(sigma2[used], 0.0))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            corr = Sigma[np.ix_(used, used)] / np.outer(sd, sd)
+        off = corr[~np.eye(len(used), dtype=bool)]
+        if np.any(np.abs(off[np.isfinite(off)]) >= 0.999):
+            warnings.warn(
+                "the estimated between-interval correlation is at +/-1, so the "
+                "between-study covariance is singular and any joint test that "
+                "contrasts the intervals is decided by where on that ridge the "
+                "optimiser stopped: on the shipped fixture struct='UN' gives "
+                "chi2 = 52.1 for a constant hazard ratio where struct='HCS' "
+                "gives 57.3 and struct='DIAG' gives 40.6.  The qualitative "
+                "answer survives that spread; the statistic does not",
+                RuntimeWarning, stacklevel=2)
+    se = np.sqrt(np.diag(vcov))
+    crit = float(stats.norm.ppf(0.5 + level / 200.0))
+    return PiecewiseJointResult(
+        breaks=breaks, labels=labels, beta=beta, se=se,
+        ci_lb=beta - crit * se, ci_ub=beta + crit * se,
+        vcov=vcov, Sigma=Sigma, tau2=np.diag(Sigma),
+        k=k_per.tolist(), studies=studies, model=fit, dropped=dropped,
+        rho=None if rho is None else float(rho), method=method, level=level,
+        struct=struct,
+    )
+
+
