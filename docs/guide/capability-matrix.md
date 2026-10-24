@@ -571,17 +571,38 @@ and `metafor` in `tests/test_tvhr.py`. `ma.piecewise_joint` pools the same
 estimates as a vector and reports the trend tests that comparison needs, pinned
 against `metafor::rma.mv` in `tests/test_tvhr_joint.py`.
 
-What is absent is a time-varying **effect size** — dynamic heterogeneity, where
-the pooled estimate and $\tau^2$ are functions of a continuous time index, and
-the usual candidates are a Gaussian process or a state-space model on the
-coefficients. There is no reference implementation in R to check one against,
-and this package does not ship models it cannot verify. It is a research
-direction rather than a missing feature.
+What is absent is a time-varying **pooled effect size from aggregate data** —
+dynamic heterogeneity, where the pooled estimate and $\tau^2$ are functions of
+a continuous time index, and the usual candidates are a Gaussian process or a
+state-space model on the coefficients. There is no reference implementation in
+R to check one against, and this package does not ship models it cannot
+verify. It is a research direction rather than a missing feature.
 
-### Not on the list: IPD plus aggregate data — **no**
+**Time-course meta-analysis from aggregate data** *is* implemented, and it is
+the case most reviews actually meet: a trial reports the treatment effect at 3,
+6 and 12 months. `ma.timecourse` pools them with the within-study correlation
+spelled out — `rho` for a constant one, `phi` for AR(1) decay
+`phi**|t_i - t_j|`, which `ma.vcalc` builds — and a curve over time that can be
+linear or a spline. `curve()` returns a confidence band for the average curve
+and a prediction band for a new study's curve, `test_trend()` asks whether the
+effect changes with time at all, and `test_nonlinear()` whether a spline was
+needed.
 
-Depends on items 3 and 4. Doing it before them would mean building the hybrid
-model twice.
+The correlation is required rather than defaulted, because the alternative —
+treating a study's three estimates as independent — is the error that makes a
+time trend look more precise than it is; the difference in the trend's standard
+error is pinned in the tests. Pinned against `metafor::rma.mv` with the same
+block-diagonal `V` and `struct="GEN"`: coefficients to 1e-9, standard errors to
+1e-6, variance components to 1e-6, the curve to 1e-9.
+
+Scope: this is the **pairwise** model, treatment against a common comparator.
+A network version needs the consistency equations of a network meta-analysis on
+top, which is item 9's machinery rather than this one's, and is not attempted.
+
+### Not on the list: IPD plus aggregate data — **yes**
+
+`ipd_two_stage(..., aggregate=...)`; see item 3. It needed nothing beyond the
+two-stage model, which is why it could be done as soon as that existed.
 
 ## Summary
 
@@ -598,7 +619,7 @@ model twice.
 | 9 | multivariate | yes | `tests/test_mv.py`, `tests/test_mv_confint.py`, `tests/test_mv_region.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
-| 12 | time-varying effects (dynamic heterogeneity) | no | — |
+| 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
 
 Five of these twelve turned out to be further along than the roadmap assumed:
 items 5, 6 and 10 are finished, item 1 needed only a basis rather than a

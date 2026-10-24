@@ -37,6 +37,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Time-course meta-analysis from aggregate data.** `ma.timecourse` pools a
+  treatment effect reported at several time points per study. The within-study
+  correlation is spelled out — `rho` for a constant one, `phi` for AR(1) decay
+  `phi**|t_i - t_j|`, which `vcalc` builds — and required rather than
+  defaulted, because treating a study's three estimates as independent is the
+  error that makes a time trend look more precise than it is. The trend's
+  standard error differs between the two assumptions, and the tests pin that.
+
+  The pooled object is a curve over time, linear by default and a spline when
+  asked for. `curve()` returns a confidence band and a prediction band for a
+  new study's curve, `test_trend()` asks whether the effect changes with time
+  at all, and `test_nonlinear()` whether the spline was needed. Pinned against
+  `metafor::rma.mv` with the same block-diagonal `V` and `struct="GEN"`:
+  coefficients to 1e-9, standard errors to 1e-6, variance components to 1e-6,
+  the curve to 1e-9.
+
+  Building it found a bug in code shipped earlier this session.
+  `RmaMvResult.g_matrix()` returned `None` for every `struct="GEN"` fit,
+  because the GEN component stores its dimension as `q` and the accessor looked
+  only for `J`. Every random-slope fit therefore reported a between-study
+  covariance of zero, and `predict_region` — which adds that covariance —
+  reported a prediction region no wider than the confidence one. The accessor
+  now reads both, uses the component's `var_names` for labels, and the
+  regression test is the first thing in `tests/test_timecourse.py` that could
+  have failed.
+
+  Scope: the pairwise model, treatment against a common comparator. A network
+  version needs the consistency equations on top and is not attempted.
+
 - **IPD plus aggregate data.** `ipd_two_stage(..., aggregate=...)` adds studies
   that reported only the pooled effect as extra studies in the second stage.
   Not a new estimator — the same second stage with two more rows — but the

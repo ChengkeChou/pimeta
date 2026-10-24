@@ -93,12 +93,18 @@ class RmaMvResult:
     _data: dict | None = field(repr=False, default=None)
 
     def g_matrix(self):
-        """Between-outcome covariance of the first multivariate random term.
+        """Between-study covariance of the first multivariate random term.
 
         Returns:
-            ``(G, names)`` — the ``J x J`` covariance matrix and the outcome
-            labels in its order, or ``(None, [])`` when the model has no
-            random term over an inner factor with more than one level.
+            ``(G, names)`` — the ``q x q`` covariance matrix of the random
+            coefficients and their names, or ``(None, [])`` when the model has
+            no random term with more than one coefficient.
+
+        Both random-slope structures are covered: ``struct="UN"`` over an inner
+        factor (``J`` levels) and ``struct="GEN"`` over the design columns
+        (``q`` coefficients).  ``GEN`` was silently skipped until a
+        differential test against ``metafor`` reported a between-study
+        covariance of zero for every random-slope fit.
         """
         if not self.components:
             return None, []
@@ -107,10 +113,11 @@ class RmaMvResult:
             n = comp.n_params
             block = self.params[offset:offset + n]
             offset += n
-            J = int(getattr(comp, "J", 1))
+            J = int(getattr(comp, "J", getattr(comp, "q", 1)))
             if J < 2:
                 continue
-            labels = list(getattr(comp, "inner_labels", None) or [])
+            labels = list(getattr(comp, "inner_labels", None)
+                          or getattr(comp, "var_names", None) or [])
             if all(labels):
                 names = [str(x) for x in labels]
             else:

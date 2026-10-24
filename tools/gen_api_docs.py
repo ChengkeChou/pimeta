@@ -71,6 +71,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "onestage": ("models", "Models"),
     "prediction": ("models", "Models"),
     "prediction_joint": ("models", "Models"),
+    "timecourse": ("models", "Models"),
     "surv": ("models", "Models"),
     "tvhr": ("models", "Models"),
     "mv": ("models", "Models"),

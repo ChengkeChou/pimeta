@@ -385,6 +385,7 @@ from .surv import (
     rmst,
 )
 from .tau2 import estimate_tau2
+from .timecourse import TimeCourseCurve, TimeCourseResult, timecourse
 from .transforms import (
     transf_abt,
     transf_ahw,
@@ -662,6 +663,9 @@ __all__ = [
     "rmst",
     # time-varying hazard ratios
     "piecewise_exp",
+    "timecourse",
+    "TimeCourseResult",
+    "TimeCourseCurve",
     "piecewise_joint",
     "PiecewiseJointResult",
     "PiecewiseResult",

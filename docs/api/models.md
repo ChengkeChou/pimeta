@@ -1,6 +1,6 @@
 # Models
 
-*92 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*95 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -41,6 +41,9 @@
 | [`km_reconstruct`](#km_reconstruct) | — |
 | [`rmst`](#rmst) | — |
 | [`piecewise_exp`](#piecewise_exp) | — |
+| [`timecourse`](#timecourse) | — |
+| [`TimeCourseResult`](#timecourseresult) | — |
+| [`TimeCourseCurve`](#timecoursecurve) | — |
 | [`piecewise_joint`](#piecewise_joint) | — |
 | [`PiecewiseJointResult`](#piecewisejointresult) | — |
 | [`PiecewiseResult`](#piecewiseresult) | — |
@@ -907,6 +910,69 @@ ratios are then pooled with a random-effects model per interval.
 **Raises**
 
 - `ValueError` — mismatched lengths, a treatment indicator that is not 0/1, or fewer than two studies.
+
+## `timecourse`
+
+```python
+timecourse(yi, *, study, time, se=None, vi=None, rho=None, phi=None, knots=None, n_knots: 'int' = 0, center=None, method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z') -> 'TimeCourseResult'
+```
+
+Pool treatment effects reported at several time points per study.
+
+**Args**
+
+- `yi` — the effect sizes, one row per study and time point.
+- `study` — the study label for each row.
+- `time` — the time of each estimate.
+- `se` — its standard error; alternatively ``vi``.
+- `vi` — the sampling variance, if ``se`` is not given.
+- `rho` — a constant within-study correlation between a study's estimates; one of ``rho`` or ``phi`` is required, because the alternative — treating them as independent when they are not — silently overstates the precision of the curve.
+- `phi` — an AR(1) decay, giving ``phi**|t_i - t_j|``.
+- `knots` — knot positions for the spline basis over time.
+- `n_knots` — knots for a spline basis; ``0`` (the default) means a linear trend.  A spline fits a shape the data may not support: with three time points and a dozen studies the extra coefficients buy a curvature the between-study covariance cannot pay for.
+- `center` — time at which the intercept is the effect; the median by default, because at time zero the intercept is an extrapolation.
+- `method` — ``"REML"`` or ``"ML"``.
+- `level` — confidence level.
+- `test` — reference distribution for the coefficient tests.
+
+**Returns**
+
+`TimeCourseResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched lengths, a study with one time point and no correlation (nothing to correlate), neither ``rho`` nor ``phi``, a ``phi`` outside ``[-1, 1]``, or fewer than two studies.
+
+## `TimeCourseResult`
+
+```python
+TimeCourseResult(names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray', tau2: 'list[float]', Sigma: 'np.ndarray', k: 'int', studies: 'list', support: 'tuple[float, float]', method: 'str', level: 'float', struct: 'str', basis: 'Basis | None', fit: 'Any', center: 'float' = 0.0, rho: 'float | None' = None, phi: 'float | None' = None) -> None
+```
+
+A pooled time-course model.
+
+**Attributes**
+
+- `names` — coefficient names, intercept first.
+- `coef, se` — the pooled curve's coefficients.
+- `vcov` — their joint covariance.
+- `tau2` — the between-study variances, one per basis column.
+- `Sigma` — the between-study covariance of the curve's coefficients.
+- `k` — studies contributing.
+- `studies` — their labels.
+- `support` — the observed range of time.
+- `rho, phi` — which within-study correlation was assumed, or ``None``.
+- `method, level, struct` — settings.
+- `basis` — the basis over time.
+- `fit` — the underlying `RmaMvResult`.
+
+## `TimeCourseCurve`
+
+```python
+TimeCourseCurve(x: 'np.ndarray', est: 'np.ndarray', se: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', pred_lb: 'np.ndarray', pred_ub: 'np.ndarray', outside: 'np.ndarray') -> None
+```
+
+The pooled effect over time, with both bands.
 
 ## `piecewise_joint`
 
