@@ -19,6 +19,16 @@ over a quarter of them here -- because the rest cost nothing measurable.  Those
 reported are exactly the ones that decide how long a shard takes, so they carry
 the ordering; the unmeasured ones are spread by count on top of it.
 
+Measured on this repository, four shards of the suite above: 173, 263, 282 and
+203 seconds, against 615 for the suite in one process.  The critical path is
+2.2x shorter; the total is 1.5x larger, because a shard that runs part of a
+costly module pays that module's shared setup again.  A static split cannot see
+that -- the recorded cost of a test is the cost it had in a warm run, where the
+setup was already paid by an earlier test.  One file, test_selmodel_models.py,
+is half of the whole suite's time, so this shows up as a 1.6x spread across the
+shards rather than as noise.  Tighter than that needs dynamic scheduling
+(pytest-xdist) rather than a better prediction.
+
 Usage::
 
     python tools/shard_tests.py --shard 2 --of 4 > shard.txt

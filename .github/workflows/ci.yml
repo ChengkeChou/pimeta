@@ -21,14 +21,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # A full run is about eleven minutes, and it goes four times over: once
-        # per interpreter.  `tools/shard_tests.py` reads .test_durations.json (a
+        # A full run is about ten minutes, and it goes four times over: once per
+        # interpreter.  `tools/shard_tests.py` reads .test_durations.json (a
         # checked-in map of test id to seconds) and cuts the run into equally
-        # *timed* quarters rather than equally numbered ones, so the feedback
-        # arrives in about three minutes instead of eleven.  Without the map it
-        # falls back to splitting by count.  The combinations are written out
-        # rather than crossed, because a GitHub matrix cannot cross a literal
-        # list with `include` entries predictably.
+        # *timed* quarters rather than equally numbered ones.  Measured locally
+        # the four shards took 173, 263, 282 and 203 s against 615 s unsharded,
+        # so the critical path is 2.2x shorter; the spread is the cost of a
+        # shared setup being paid once per shard, which no static split can see.
+        # The combinations are written out rather than crossed, because a GitHub
+        # matrix cannot cross a literal list with `include` entries predictably.
         include:
           # Oldest supported interpreter on the NumPy 1.x side of the 2.0 split.
           - { python: "3.10", numpy: "1", shard: 1 }
