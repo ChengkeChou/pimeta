@@ -66,7 +66,7 @@
 netmeta(TE, seTE, treat1, treat2, studlab=None, sm: 'str' = '', level: 'float' = 0.95, common: 'bool' = True, random: 'bool' = True, method_tau: 'str' = 'DL', tau_preset: 'float | None' = None, reference_group: 'str' = '', baseline_reference: 'bool' = True, small_values: 'str' = 'desirable', n1=None, n2=None, event1=None, event2=None, incr2=None, mean1=None, mean2=None, sd1=None, sd2=None, time1=None, time2=None, data=None, warn_missing: 'bool' = True) -> 'NetmetaResult'
 ```
 
-Frequentist graph-theoretical network meta-analysis (Rücker 2012).
+Frequentist graph-theoretical network meta-analysis (R眉cker 2012).
 
 **Args**
 
@@ -249,7 +249,7 @@ Comparison-level data produced by `pairwise`.
 netrank(result: 'NetmetaResult', small_values: 'str' = 'desirable') -> 'NetrankResult'
 ```
 
-P-scores (Rücker & Schwarzer 2015), exact transcription of netrank.R.
+P-scores (R眉cker & Schwarzer 2015), exact transcription of netrank.R.
 
 ``P[i, j]`` = probability treatment *i* is better than treatment *j*,
 computed from the two-sided p-value matrix as a one-sided p-value and
@@ -517,7 +517,7 @@ netmetareg(result, covar, method_tau='REML', reference_group=None, level=0.95, r
 
 *Mirrors R's `netmetareg`.*
 
-``netmeta::netmetareg`` — network meta-regression.
+``netmeta::netmetareg`` 鈥?network meta-regression.
 
 Fits the treatment-by-covariate interaction model that netmeta uses::
 
@@ -529,7 +529,7 @@ contains it, otherwise the alphabetically last treatment of that study), the
 design matrix is ``[I(treat) | I(treat) * x]`` over the non-reference
 treatments, and the model is estimated by (restricted) maximum likelihood
 with a block-equicorrelated within-study covariance
-``V = diag(se^2) + tau2 * CS(rho)`` — the same structure as metafor's
+``V = diag(se^2) + tau2 * CS(rho)`` 鈥?the same structure as metafor's
 ``rma.mv(..., random = ~ comparison | study, rho = 0.5)``.
 
 **Args**
@@ -882,7 +882,7 @@ createC(trts, inactive=None, sep_comps='+')
 
 *Mirrors R's `createC`.*
 
-``netmeta::createC`` — component incidence matrix ``(C, comps, names)``.
+``netmeta::createC`` 鈥?component incidence matrix ``(C, comps, names)``.
 
 ## `invmat`
 
@@ -892,7 +892,7 @@ invmat(x)
 
 *Mirrors R's `invmat`.*
 
-``netmeta::invmat`` — Moore-Penrose pseudoinverse of a Laplacian.
+``netmeta::invmat`` 鈥?Moore-Penrose pseudoinverse of a Laplacian.
 
 ## `hatmatrix`
 
@@ -902,9 +902,9 @@ hatmatrix(x, method='Ruecker', type='full', common=None, random=None)
 
 *Mirrors R's `hatmatrix`.*
 
-``netmeta::hatmatrix`` — hat matrix of a network.
+``netmeta::hatmatrix`` 鈥?hat matrix of a network.
 
-Supported: ``method="Ruecker"`` (the default, as in netmeta 3.7-0 — the hat
+Supported: ``method="Ruecker"`` (the default, as in netmeta 3.7-0 鈥?the hat
 matrix stored on the fitted object), ``method="Davies"`` with ``type`` in
 ``short``/``long``/``full`` (via ``hatmatrix.aggr``), and
 ``method="Krahn"`` (the design-based hat matrix from the decomposition).
@@ -917,7 +917,7 @@ comps(x, trts=None, sep_comps='+')
 
 *Mirrors R's `comps`.*
 
-``netmeta::comps`` — split treatment names into components.
+``netmeta::comps`` 鈥?split treatment names into components.
 
 **Args**
 
@@ -937,7 +937,7 @@ combinations(x, sep_comps='+')
 
 *Mirrors R's `combinations`.*
 
-``netmeta::combinations`` — all treatment combinations of ``x``.
+``netmeta::combinations`` 鈥?all treatment combinations of ``x``.
 
 ## `netimpact`
 

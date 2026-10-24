@@ -37,6 +37,39 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **A network parameterisation layer, with algebraic tests.**
+  `pimeta.nma.design` holds the part of a network meta-analysis that every
+  network model shares and none of them should re-invent: the comparison
+  graph, the signed contrast matrix, the basic-parameter design matrix, the
+  fundamental circuits, the unrelated-mean-effects parameterisation, the
+  node-splitting decomposition and the exact multi-arm covariance.
+
+  It exists because the failure mode it guards is not in any likelihood. Two
+  programs can fit the same model correctly and both map treatments to
+  parameters wrongly; the likelihood then looks fine and every consistency
+  statement derived from it is wrong. The tests in
+  `tests/test_nma_design.py` check the layer against graph theory rather than
+  against a second implementation of the same formula: circuits are
+  independent and number `m - n + c`, the design has rank `n - c`, the null
+  space is the components' indicator vectors, and ``B d = X_b d_b`` holds for
+  arbitrary `d` and every choice of reference.
+
+  Writing it found two real errors, both in the same function, both in the
+  sign. The multi-arm covariance had been assembled by *adding* the shared
+  arm's variance without regard to sign: `A vs B` and `B vs C` share arm `B`
+  with opposite signs, so they covary by `-Var(B)`, and the first version
+  reported `+Var(B)`. A simulation of arm means caught it, which is exactly
+  the check a formula restated in code cannot catch. And the shared-arm
+  variance was taken from `variances` by *length* — a three-arm study has
+  three arms and three comparisons, so the length cannot say which is meant;
+  `per="arm" | "comparison"` is now explicit and the ambiguous case raises.
+
+  The multi-arm block is singular by construction: a `k`-arm study's
+  `k(k-1)/2` comparisons live in `k - 1` dimensions, because
+  `(A-B) - (A-C) = C - B`. That is not repaired, it is reported (`rank`) and
+  tested, because it is the reason a multi-arm study cannot be entered as `m`
+  independent observations.
+
 - **Time-course meta-analysis from aggregate data.** `ma.timecourse` pools a
   treatment effect reported at several time points per study. The within-study
   correlation is spelled out — `rho` for a constant one, `phi` for AR(1) decay

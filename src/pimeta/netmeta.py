@@ -1,6 +1,6 @@
-"""Network meta-analysis, replicating R's ``netmeta`` (Rücker 2012).
+"""Network meta-analysis, replicating R's ``netmeta`` (R眉cker 2012).
 
-Implements the frequentist graph-theoretical approach of Rücker (2012) and the
+Implements the frequentist graph-theoretical approach of R眉cker (2012) and the
 Senn et al. (2013) Aitken estimator, matching ``netmeta::netmeta`` exactly:
 
 - Edge-vertex incidence matrix ``B`` (``createB``)
@@ -34,10 +34,6 @@ from .nma.binary import (  # noqa: F401  (re-export: pip.api and docs use these)
     NetmetabinResult,
     netmetabin,
 )
-
-# The remaining sections live in their own modules.  They are re-exported here
-# so ``pimeta.netmeta.<name>`` keeps working; nothing below this block uses
-# them except ``hatmatrix()``, which shares ``_hatmatrix_aggr`` with ``netpath``.
 from .nma.complexity import (  # noqa: F401
     NetcomplexResult,
     netcomplex,
@@ -72,6 +68,16 @@ from .nma.core import (  # noqa: F401  (re-export: the code below uses them all)
     _iv_pool,
     _multiarm,
     _pair_index,
+)
+
+# The remaining sections live in their own modules.  They are re-exported here
+# so ``pimeta.netmeta.<name>`` keeps working; nothing below this block uses
+# them except ``hatmatrix()``, which shares ``_hatmatrix_aggr`` with ``netpath``.
+from .nma.design import (  # noqa: F401  (network parameterisation layer)
+    MultiArmStructure,
+    TreatmentNetwork,
+    consistency_residuals,
+    multiarm_structure,
 )
 from .nma.graph import (  # noqa: F401  (re-export: documented public API)
     NetconnectionResult,
@@ -108,11 +114,11 @@ from .nma.tables import (  # noqa: F401
 )
 
 # ---------------------------------------------------------------------------
-# Core Rücker (2012) algorithm
+# Core R眉cker (2012) algorithm
 # ---------------------------------------------------------------------------
 
 def _nma_ruecker(te, se_adj, treat1_pos, treat2_pos, narms, studlab, n, level):
-    """One pass of the Rücker (2012) graph-theoretical NMA.
+    """One pass of the R眉cker (2012) graph-theoretical NMA.
 
     ``se_adj`` is the per-comparison standard error *after* multi-arm variance
     adjustment (``_adjusted_variances``); the weight matrix is
@@ -1468,7 +1474,7 @@ def netrank(
     result: NetmetaResult,
     small_values: str = "desirable",
 ) -> NetrankResult:
-    """P-scores (Rücker & Schwarzer 2015), exact transcription of netrank.R.
+    """P-scores (R眉cker & Schwarzer 2015), exact transcription of netrank.R.
 
     ``P[i, j]`` = probability treatment *i* is better than treatment *j*,
     computed from the two-sided p-value matrix as a one-sided p-value and
@@ -1503,7 +1509,7 @@ def netrank(
 
 
 def _calc_v_block(x: dict, sm: str) -> np.ndarray:
-    """netmeta:::calcV — within-study covariance of one (multi-arm) study.
+    """netmeta:::calcV 鈥?within-study covariance of one (multi-arm) study.
 
     Off-diagonals all equal the *reference arm's* variance (arm 2 after the
     star-shaped re-orientation); diagonals are ``seTE^2``.
@@ -1554,8 +1560,8 @@ def _nma_tau_ml_reml(
 ) -> float:
     """ML / REML network heterogeneity SD (netmeta's ``method.tau`` branch).
 
-    R reduces the network to one *star* per study — every comparison that
-    touches the study's reference treatment — expresses each as
+    R reduces the network to one *star* per study 鈥?every comparison that
+    touches the study's reference treatment 鈥?expresses each as
     "comparison vs reference", then fits ``metafor::rma.mv`` with
 
     * ``mods = ~ V1 + ... + V(n-1) - 1`` where ``Vj`` are the ``contrmat``
@@ -1590,7 +1596,7 @@ def _nma_tau_ml_reml(
         if "event1" in cols and arm_data.get("incr2") is not None:
             cols["incr2"] = [float(v) for v in arm_data["incr2"]]
 
-    # 1. R's order(studlab, treat1, treat2) — lexicographic, stable.
+    # 1. R's order(studlab, treat1, treat2) 鈥?lexicographic, stable.
     order_idx = sorted(range(m), key=lambda i: (cols["studlab"][i],
                                                 cols["treat1"][i],
                                                 cols["treat2"][i]))
@@ -1723,7 +1729,7 @@ def netmeta(
     data=None,
     warn_missing: bool = True,
 ) -> NetmetaResult:
-    """Frequentist graph-theoretical network meta-analysis (Rücker 2012).
+    """Frequentist graph-theoretical network meta-analysis (R眉cker 2012).
 
     Args:
         TE: per-comparison treatment effects (m).
@@ -1852,7 +1858,7 @@ def netmeta(
         adj[t1, t2] = adj[t2, t1] = True
     if n > 1 and not _connected(adj):
         raise ValueError("network is disconnected; cannot compute Laplacian "
-                         "pseudoinverse (Rücker 2012 requires a connected network)")
+                         "pseudoinverse (R眉cker 2012 requires a connected network)")
 
     se_arr = np.asarray(seTE, dtype=float)
     te_arr = np.asarray(TE, dtype=float)
@@ -1941,7 +1947,7 @@ def netmeta(
     upper_direct_r = te_direct_r + zz * se_direct_r
 
     # Q decomposition: pairwise heterogeneity statistics, computed from the
-    # *adjusted* weights (netmeta::nma.ruecker — Q.matrix uses 1/sqrt(w.pooled)).
+    # *adjusted* weights (netmeta::nma.ruecker 鈥?Q.matrix uses 1/sqrt(w.pooled)).
     # Q.decomp includes every pair with direct evidence (df = A[i,j] - 1).
     q_decomp = []
     a_mat_c = res_c["a_mat"]
@@ -1962,7 +1968,7 @@ def netmeta(
     # Krahn (2013) design-based decomposition (netmeta::decomp.design).
     # When there is more than one design, Q.heterogeneity / Q.inconsistency
     # are overwritten with the "Within designs" / "Between designs" rows of
-    # decomp.design — NOT the internal nma.ruecker pairwise sums.
+    # decomp.design 鈥?NOT the internal nma.ruecker pairwise sums.
     if n > 1:
         krahn = _nma_krahn(
             te_arr, se_arr, treat1_pos, treat2_pos, studlab, narms, trts)
@@ -2155,7 +2161,7 @@ def netmeta(
 
 
 # --------------------------------------------------------------------------- #
-# netmetareg — network meta-regression
+# netmetareg 鈥?network meta-regression
 # --------------------------------------------------------------------------- #
 
 @dataclass
@@ -2213,7 +2219,7 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
                level=0.95, rho=0.5, assumption="independent",
                consistency=True, covar_name="covar",
                direction1=None, direction2=None, max_ia=False):
-    """``netmeta::netmetareg`` — network meta-regression.
+    """``netmeta::netmetareg`` 鈥?network meta-regression.
 
     Fits the treatment-by-covariate interaction model that netmeta uses::
 
@@ -2225,7 +2231,7 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
     design matrix is ``[I(treat) | I(treat) * x]`` over the non-reference
     treatments, and the model is estimated by (restricted) maximum likelihood
     with a block-equicorrelated within-study covariance
-    ``V = diag(se^2) + tau2 * CS(rho)`` — the same structure as metafor's
+    ``V = diag(se^2) + tau2 * CS(rho)`` 鈥?the same structure as metafor's
     ``rma.mv(..., random = ~ comparison | study, rho = 0.5)``.
 
     Args:
@@ -2524,19 +2530,19 @@ def netmetareg(result, covar, method_tau="REML", reference_group=None,
 # --------------------------------------------------------------------------- #
 
 def createC(trts, inactive=None, sep_comps="+"):
-    """``netmeta::createC`` — component incidence matrix ``(C, comps, names)``."""
+    """``netmeta::createC`` 鈥?component incidence matrix ``(C, comps, names)``."""
     return _create_c_matrix(trts, inactive, sep_comps)[:3]
 
 
 def invmat(x):
-    """``netmeta::invmat`` — Moore-Penrose pseudoinverse of a Laplacian."""
+    """``netmeta::invmat`` 鈥?Moore-Penrose pseudoinverse of a Laplacian."""
     return _invmat(np.asarray(x, dtype=float))
 
 
 def hatmatrix(x, method="Ruecker", type="full", common=None, random=None):
-    """``netmeta::hatmatrix`` — hat matrix of a network.
+    """``netmeta::hatmatrix`` 鈥?hat matrix of a network.
 
-    Supported: ``method="Ruecker"`` (the default, as in netmeta 3.7-0 — the hat
+    Supported: ``method="Ruecker"`` (the default, as in netmeta 3.7-0 鈥?the hat
     matrix stored on the fitted object), ``method="Davies"`` with ``type`` in
     ``short``/``long``/``full`` (via ``hatmatrix.aggr``), and
     ``method="Krahn"`` (the design-based hat matrix from the decomposition).
@@ -2573,7 +2579,7 @@ def hatmatrix(x, method="Ruecker", type="full", common=None, random=None):
 
 
 def comps(x, trts=None, sep_comps="+"):
-    """``netmeta::comps`` — split treatment names into components.
+    """``netmeta::comps`` 鈥?split treatment names into components.
 
     Args:
         x: a treatment label, or a sequence of them.
@@ -2605,7 +2611,7 @@ def comps(x, trts=None, sep_comps="+"):
 
 
 def combinations(x, sep_comps="+"):
-    """``netmeta::combinations`` — all treatment combinations of ``x``."""
+    """``netmeta::combinations`` 鈥?all treatment combinations of ``x``."""
     if isinstance(x, str):
         return _compsplit(x, sep_comps)
     vals = [str(v) for v in np.asarray(x, dtype=object).ravel()]
