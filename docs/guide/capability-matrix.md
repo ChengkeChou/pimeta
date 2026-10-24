@@ -294,7 +294,7 @@ decomposed into the part explained by small-study effects and the part that is
 not. Pinned by `tests/test_limitmeta.py` against `metasens` 1.5.3 on Moore
 1998 and on a synthetic set.
 
-Missing: the Copas selection model, and any Bayesian model averaging.
+Missing: any Bayesian model averaging.
 
 `ma.copas` adds the selection model itself (Copas and Shi 2000, 2001). It is
 the one place in the package where the answer is deliberately a *surface*
@@ -306,14 +306,16 @@ leave unpublished, and the residual-selection test at each step.
 
 The likelihood, the fits at a fixed $(\gamma_0, \gamma_1)$, the sensitivity
 surface, the publication probabilities and the implied number of unpublished
-studies reproduce `metasens` 1.5.3 exactly or near it. The *path* is metasens'
-graphical heuristic — iso-effect contours, a line orthogonal to them, stop
-where residual selection stops being significant — and metasens' contour
-tracer splits a level into more pieces than the connected-component grouping
-used here does (16 against 12 on the synthetic fixture). The adjusted estimate
-therefore agrees to about 1e-5 rather than to machine precision. That is stated
-in `docs/reference/differences.md` §3 rather than hidden, and the tests assert
-the measured agreement.
+studies reproduce `metasens` 1.5.3 exactly or near it. Everything *after* the
+surface — the contour tracing, the per-contour least squares, the weighted
+slope, the orthogonal path — was shown to be the reference's algorithm step for
+step: metasens' own downstream code, run on pimeta's surface, returns
+`slope = 0.14937955364276298`, the value pimeta computes to the last digit,
+with identical per-contour piece sizes. What is left is the surface itself,
+where each grid point is a three-parameter fit and the two optimisers stop in
+different places (1.4e-5 at the worst point), giving 2e-8 on the adjusted
+effect and 4e-5 relative on its standard error. That separation is spelled out
+in `docs/reference/differences.md` §3, and the tests pin both halves.
 
 That path is not inference, though, and the capability matrix row is marked
 "yes" because of `ma.copas_region`, not because of it. The region is the
@@ -327,10 +329,24 @@ simulated, and the tests do not claim it was.
 
 Not offered: Bayesian model averaging (RoBMA). It needs an MCMC sampler, which
 the dependency policy rules out; a half-validated one would be worse than the
-gap.### 12. Time-varying effects — **no**
+gap.
 
-Nothing. No time index, no dynamic heterogeneity, no Gaussian process. This is
-a research direction rather than a missing feature.
+### 12. Time-varying effects — **no**
+
+Two different things are easy to conflate here, and only one of them is done.
+
+A time-varying **hazard ratio** *is* implemented: `ma.piecewise_exp` (row 7)
+splits follow-up at given break points, fits a Poisson model with a log-time
+offset per interval, and pools the interval-specific log hazard ratios. That is
+a treatment effect that changes over time, and it is pinned against `survival`
+and `metafor` in `tests/test_tvhr.py`.
+
+What is absent is a time-varying **effect size** — dynamic heterogeneity, where
+the pooled estimate and $\tau^2$ are functions of a continuous time index, and
+the usual candidates are a Gaussian process or a state-space model on the
+coefficients. There is no reference implementation in R to check one against,
+and this package does not ship models it cannot verify. It is a research
+direction rather than a missing feature.
 
 ### Not on the list: IPD plus aggregate data — **no**
 
@@ -351,8 +367,8 @@ model twice.
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
-| 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py` |
-| 12 | time-varying effects | no | — |
+| 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
+| 12 | time-varying effects (dynamic heterogeneity) | no | — |
 
 Five of these twelve turned out to be further along than the roadmap assumed:
 items 5, 6 and 10 are finished, item 1 needed only a basis rather than a
