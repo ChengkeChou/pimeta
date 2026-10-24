@@ -11,15 +11,19 @@ References: R 4.6.1, metasens 1.5.3, meta 8.5.0.
 
 What is and is not bit-comparable
 ---------------------------------
-The likelihood, the fits at a given ``(gamma0, gamma1)``, the sensitivity
-surface, the publication probabilities and the implied number of unpublished
-studies all reproduce metasens. The *path* the adjusted estimate is reported
-from is metasens' graphical heuristic: it is built from iso-effect contours,
-and metasens' contour tracer splits a level into more pieces than the
-connected-component grouping used here (16 pieces against 12 on the synthetic
-set). That changes the path slightly, so the adjusted estimate agrees to about
-1e-5 rather than to machine precision, and the number of points on the path
-can differ. The tolerances below say so explicitly instead of hiding it.
+Everything downstream of the sensitivity surface is metasens' algorithm
+reproduced exactly: metasens' own contour tracing, per-contour least squares
+and weighted slope, run on pimeta's surface, return the value pimeta computes
+(see ``R_FLEISS_SLOPE_ON_PIMETA_SURFACE``). What differs is the surface
+itself, because every grid point is a three-parameter fit and the two
+optimisers stop in slightly different places -- 1.4e-5 at the worst point on
+Fleiss 1993. That propagates to 2e-8 in the adjusted effect and 4e-5 relative
+in its standard error, which is the agreement asserted below.
+
+On the synthetic set the reference's tracer also emits duplicated polylines
+and degenerate boundary fragments that are then fitted and counted, so that
+fixture cannot be a parity target; its tolerances are recorded as measured
+agreement, not as parity.
 """
 
 import numpy as np
@@ -58,6 +62,15 @@ R_FLEISS_CONTOUR = [
     (9, 3, -0.095526776866085544),
 ]
 R_FLEISS_NOBS = [22, 23, 23, 23, 23, 23, 23, 23, 22, 21, 12, 6]
+
+# metasens' own downstream code -- contourLines, the per-contour lines, the
+# weighted slope, the orthogonal line -- run on **pimeta's** surface.  The
+# value below is what that produced, and it is what pimeta computes on its
+# own, digit for digit.  That is the cross-validation: given the same surface
+# the two implementations of everything after it are identical, so the
+# residual disagreement can only be in the surface itself (the per-point
+# optimiser, which differs by up to 1.4e-5).
+R_FLEISS_SLOPE_ON_PIMETA_SURFACE = 0.14937955364276298
 
 # --- synthetic data with a clear small-study effect -----------------------
 SYN_SE = [0.050, 0.070, 0.090, 0.110, 0.130, 0.150,
@@ -157,12 +170,28 @@ def test_fleiss_contour_levels_and_piece_sizes_match_metasens():
     assert len(r.levels) == 12
 
 
+def test_fleiss_pipeline_matches_metasens_on_the_same_surface():
+    """The contour-to-estimate machinery is metasens', digit for digit.
+
+    metasens' own code was fed pimeta's surface and asked for its slope; it
+    returned the constant below.  pimeta computes the same value from its own
+    contour tracer, its own least squares and its own weighted average, so the
+    two implementations of that stage cannot differ.  What can -- and does --
+    differ is the surface: each grid point is a three-parameter fit, and the
+    two optimisers stop at slightly different places (max 1.4e-5 here).
+    """
+    r = _fleiss_cached()
+    assert r.slope == pytest.approx(R_FLEISS_SLOPE_ON_PIMETA_SURFACE,
+                                    rel=1e-15)
+    assert r.contour["nobs"] == R_FLEISS_NOBS
+
+
 def test_fleiss_reports_the_no_selection_point():
     """Residual selection is never significant, so nothing is adjusted."""
     r = _fleiss_cached()
     assert np.all(np.asarray(r.pval_rsb) > 0.1)
-    assert r.te_adjust == pytest.approx(R_FLEISS_ADJUST[0], abs=1e-6)
-    assert r.se_adjust == pytest.approx(R_FLEISS_ADJUST[1], rel=1e-3)
+    assert r.te_adjust == pytest.approx(R_FLEISS_ADJUST[0], abs=1e-7)
+    assert r.se_adjust == pytest.approx(R_FLEISS_ADJUST[1], rel=1e-4)
 
 
 def test_fleiss_publication_probabilities_match_metasens():

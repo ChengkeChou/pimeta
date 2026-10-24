@@ -8,6 +8,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **Copas validation against `metasens`, separated into its two halves.** The
+  selection model's pipeline was audited stage by stage by feeding pimeta's
+  sensitivity surface to metasens' own downstream code (`contourLines`, the
+  per-contour least squares, the `nobs`-weighted slope, the orthogonal line):
+  it returns `slope = 0.14937955364276298`, the value pimeta computes to the
+  last digit, with identical per-contour piece sizes. So every stage after the
+  surface is the reference's algorithm exactly, and the whole residual
+  disagreement is the surface — 1.4e-5 at the worst grid point, from two
+  optimisers stopping in different places, giving 2e-8 on the adjusted effect
+  and 4e-5 relative on its standard error. The same audit found that
+  `metasens`' contour tracer emits duplicated polylines (one level three
+  times) and 2–5 point boundary fragments with adjusted R² down to −0.33 on
+  the synthetic fixture, and those are fitted as contour lines and weighted by
+  `nobs`; that fixture therefore cannot be a parity target, and
+  `docs/reference/differences.md` now says so with the measured numbers.
 - **One confidence-level convention, everywhere.** `pimeta` had three
   spellings of the same argument: `0.95` (a confidence level), `95` (percent)
   and `0.05` (the alpha). The defaults were internally consistent, so nothing

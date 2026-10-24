@@ -85,24 +85,44 @@ about 1e-6, the residual being R's adaptive-quadrature tolerance.
 | `profile.rma.uni.selmodel` fixes τ² at the full-model estimate on every grid point | τ² is re-estimated at each point, which is the proper profile likelihood |
 | `metafor::news()` (changelog viewer) | not implemented — no analytic content |
 
-### `copas` reports a path, and its contours are traced slightly differently
+### `copas`: cross-validated against metasens, with one reference-side artefact
 
 `metasens::copas` does not return a maximum likelihood estimate. It builds a
 sensitivity surface over the two selection parameters, traces the iso-effect
 contours of that surface, fits a line to each contour, walks the direction
 orthogonal to them, and reports the first point where residual selection stops
-being significant. Steps 1 and 3–4 are statistics; step 2 is a graphical
-heuristic, and its output depends on how the contour tracer splits a level
-into pieces.
+being significant.
 
-`pimeta.copas` reproduces the likelihood, the per-point fits, the surface, the
-publication probabilities and the implied number of unpublished studies.
-For the contour step it groups crossings by connected component, where R's
-`contourLines` produces more pieces: 16 against 12 on the synthetic fixture in
-`tests/test_copas.py`, 12 against 12 on Fleiss 1993. The adjusted estimate
-therefore agrees with metasens to about 1e-5 (and to 2e-8 on Fleiss 1993),
-not to machine precision, and the number of points on the path can differ.
-The tests assert that measured agreement rather than claiming parity.
+The pipeline was validated in two halves rather than as one block.
+
+**Everything after the surface is metasens' algorithm, digit for digit.**
+pimeta's surface (the 20×20 grid of pooled effects) was fed to metasens' own
+downstream code — `contourLines`, the per-contour least squares, the
+`nobs`-weighted combination of slopes, the orthogonal line — and it returned
+`slope = 0.14937955364276298`. pimeta computes the same value from its own
+contour tracer, its own least squares and its own weighting, to the last
+digit, and the per-contour piece sizes `nobs = 22, 23, …, 6` agree exactly.
+`tests/test_copas.py` pins that constant, so the stage cannot drift.
+
+**The surface is the only thing that differs**, because each grid point is a
+three-parameter fit and the two optimisers stop in slightly different places:
+1.4e-5 at the worst point on Fleiss 1993, 5e-7 on a typical one. That
+propagates through the interpolated contour crossings, and the end-to-end
+result is a difference of 2e-8 in the adjusted effect and 4e-5 relative in its
+standard error — small, and attributable rather than mysterious.
+
+**On the synthetic fixture the reference's contour tracer misbehaves.** With
+levels that land on round numbers the grid also contains, R's `contourLines`
+returns the same polyline several times (level 0.51 three times, 0.52 three
+times, 0.53 three times) and emits 2–5 point fragments on the grid boundary,
+one of them with an adjusted R² of −0.33 and another hitting the `−100`
+sentinel that metasens substitutes for `NaN`. Those fragments are fitted as
+contour lines and enter the `nobs`-weighted average, so levels that happen to
+be duplicated are effectively weighted three times. pimeta groups crossings by
+connected component and produces no duplicates, which is why the two disagree
+by 1e-5 there while agreeing to 2e-8 on Fleiss. The divergence is a property of
+the reference, not an approximation in `pimeta`; `tests/test_copas.py` records
+the measured agreement instead of claiming parity.
 
 **`pimeta` also offers the inference that heuristic never had.**
 `ma.copas_region` returns the likelihood-ratio region for
