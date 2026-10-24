@@ -54,6 +54,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   narrower than the one it was meant to fix. A 25-replication guard runs in the
   test suite so a regression to gross miscalibration fails there.
 
+  `curve(robust=True)` adds the CR1 sandwich on the observed within-study
+  residuals with a t reference on `k - p` clusters. Measured over the same 120
+  replications it fixes the middle of the covariate range (0.86-0.98 against
+  0.81-0.87 model-based) and is *worse* at the edge (0.62 against 0.74 at
+  x = 65), where a spline curve is least stable. Neither band is calibrated
+  everywhere at k = 12, so the default stays model-based and both are reported
+  with their numbers rather than one being sold as the fix.
+
 - **Joint pooling of a non-linear treatment effect modifier in two-stage IPD.**
   `ma.ipd_two_stage_curve` pools a spline interaction the way it has to be
   pooled: the whole treatment block `(treat, treat:B_1, ..., treat:B_K)` as a

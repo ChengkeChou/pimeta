@@ -139,17 +139,33 @@ fallback for a small `k`, and `struct="UN"` stays the default because it is the
 honest one when the studies can pay for it.
 
 **What the band actually covers** was measured rather than assumed
-(`tools/coverage_ipd_curve.py`, 120 replications of 12 studies): the nominal 95%
-confidence band for the average curve covered the true curve **0.74 to 0.87** of
-the time, while the prediction band — which is wider — covered 0.88 to 0.94. The
-cause is the one Wald intervals always have here: they condition on the
-covariance estimate, and a third of those fits put a variance at zero while the
-truth was positive. `test="t"` changes nothing (44 residual degrees of freedom
-is not a small-sample correction), and `test="knha"` made it **worse** — 0.31 to
-0.51 — because `rma_mv` computes its residual degrees of freedom from the
-*stacked rows*, so the t reference is nearly z while `s2w` shrinks the variance.
-`knha` is therefore refused rather than shipped, and the under-coverage is
-stated here rather than left for a reader to discover.
+(`tools/coverage_ipd_curve.py`, 120 replications of 12 studies, nominal 95%):
+
+| x | model-based (default) | CR1 + t (``robust=True``) |
+|---|---|---|
+| 45 | 0.758 | 0.875 |
+| 50 | 0.867 | 0.983 |
+| 55 | 0.808 | 0.975 |
+| 60 | 0.817 | 0.858 |
+| 65 | 0.742 | 0.617 |
+
+Neither is calibrated, and the failure is not where a simple story would put
+it. The model-based Wald band under-covers throughout, because it conditions on
+the covariance estimate and a third of the fits put a variance at zero while the
+truth was positive. The cluster-robust CR1 band (sandwich on the observed
+within-study residuals, t on ``k - p`` clusters) fixes the middle — 0.86 to 0.98
+— but is *worse* at the edge of the covariate range, where a spline curve is
+least stable. So no default is offered as "the calibrated one"; both are
+reported, `robust=True` is available and documented with these numbers, and the
+honest reading is that the edge of the range needs more studies, not a different
+quantile.
+
+The prediction band is wider and therefore over-covers under CR1 (0.98 to 1.00)
+while reaching 0.88 to 0.94 model-based. `test="t"` changes nothing (44 residual
+degrees of freedom is not a small-sample correction) and `test="knha"` made the
+model-based band **worse** — 0.31 to 0.51 — because `rma_mv` computes its
+residual degrees of freedom from the *stacked rows*, so the t reference is
+nearly z while `s2w` shrinks the variance. It is refused rather than shipped.
 
 Missing: IPD plus aggregate data.
 

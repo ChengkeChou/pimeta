@@ -396,7 +396,7 @@ The treatment-effect curve on a grid of covariate values.
 ## `IpdCurveResult`
 
 ```python
-IpdCurveResult(names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray', tau2: 'list[float]', Sigma: 'np.ndarray', k: 'int', studies: 'int', excluded: 'dict[str, str]', support: 'tuple[float, float]', method: 'str', level: 'float', test: 'str', basis: 'Basis', per_study: 'list[StudyFit]', fit: 'Any', center: 'float' = 0.0) -> None
+IpdCurveResult(names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray', tau2: 'list[float]', Sigma: 'np.ndarray', k: 'int', studies: 'int', excluded: 'dict[str, str]', support: 'tuple[float, float]', method: 'str', level: 'float', test: 'str', basis: 'Basis', per_study: 'list[StudyFit]', fit: 'Any', center: 'float' = 0.0, _cr2: 'Any' = None) -> None
 ```
 
 A joint pooling of a study-level treatment-effect block.

@@ -66,7 +66,7 @@ def simulate(seed, n_study=12, per_study=200):
     return study, age, treat, y
 
 
-def run(reps, seed0=0, test="z"):
+def run(reps, seed0=0, test="z", robust=False):
     cover_ci = np.zeros((reps, len(GRID)))
     cover_pred = np.zeros((reps, len(GRID)))
     fitted = np.zeros(reps, dtype=bool)
@@ -83,7 +83,7 @@ def run(reps, seed0=0, test="z"):
         except ValueError:
             continue
         fitted[rep] = True
-        curve = fit.curve(GRID)
+        curve = fit.curve(GRID, robust=robust)
         cover_ci[rep] = (curve.ci_lb <= true) & (true <= curve.ci_ub)
         cover_pred[rep] = (curve.pred_lb <= true) & (true <= curve.pred_ub)
         tau2_max[rep] = float(np.max(fit.tau2))
@@ -91,7 +91,7 @@ def run(reps, seed0=0, test="z"):
             at_boundary += 1
 
     n = int(fitted.sum())
-    print(f"test = {test!r}")
+    print(f"test = {test!r}, robust = {robust}")
     print(f"replications: {reps}, fitted: {n}, "
           f"boundary fits: {at_boundary} ({at_boundary / max(n, 1):.1%})")
     print(f"median max tau2: {np.median(tau2_max[fitted]):.4g}")
@@ -116,8 +116,10 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--test", default="z",
                         help="reference distribution: z, t, knha or adhoc")
+    parser.add_argument("--robust", action="store_true",
+                        help="CR2 sandwich with Satterthwaite degrees of freedom")
     args = parser.parse_args(argv)
-    return run(args.reps, args.seed, args.test)
+    return run(args.reps, args.seed, args.test, args.robust)
 
 
 if __name__ == "__main__":

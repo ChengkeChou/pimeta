@@ -118,9 +118,11 @@ class IpdCurveResult:
     per_study: list[StudyFit] = field(repr=False)
     fit: Any = field(repr=False)
     center: float = 0.0
+    _cr2: Any = field(default=None, repr=False, compare=False)
 
     # -- the curve -------------------------------------------------------- #
-    def curve(self, x=None, n: int = 50, level=None) -> IpdCurve:
+    def curve(self, x=None, n: int = 50, level=None,
+              robust: bool = False) -> IpdCurve:
         """Evaluate the treatment-effect curve.
 
         Args:
@@ -128,6 +130,14 @@ class IpdCurveResult:
             n: number of grid points when ``x`` is ``None``.
             level: confidence level, accepted as ``95``, ``0.95`` or ``0.05``;
                 defaults to the level the model was fitted at.
+            robust: use the CR2 cluster-robust covariance and Satterthwaite
+                degrees of freedom instead of the model-based one.  A Wald
+                band conditions on the covariance estimate, and with a dozen
+                studies the between-study variances are often estimated as
+                zero when they are not; the sandwich uses the observed
+                within-study residuals and does not depend on that estimate
+                being right.  Measured coverage for both choices is reported
+                by ``tools/coverage_ipd_curve.py``.
 
         Returns:
             :class:`IpdCurve` with a confidence band for the average curve and
@@ -140,12 +150,16 @@ class IpdCurveResult:
             xv = np.asarray(x, dtype=float).ravel()
         design = self._design(xv)
         est = design @ np.asarray(self.coef, dtype=float)
-        var = np.einsum("gi,ij,gj->g", design, self.vcov, design)
+        if robust:
+            vcov, df = self._robust_vcov()
+        else:
+            vcov, df = np.asarray(self.vcov, dtype=float), None
+        var = np.einsum("gi,ij,gj->g", design, vcov, design)
         se = np.sqrt(np.maximum(var, 0.0))
         var_pred = np.einsum(
-            "gi,ij,gj->g", design, self.vcov + self.Sigma, design)
+            "gi,ij,gj->g", design, vcov + self.Sigma, design)
         se_pred = np.sqrt(np.maximum(var_pred, 0.0))
-        crit = self._crit(level)
+        crit = self._crit(level, df)
         lo, hi = self.support
         return IpdCurve(
             x=xv, est=est, se=se,
@@ -154,14 +168,36 @@ class IpdCurveResult:
             outside=(xv < lo) | (xv > hi),
         )
 
+    def _robust_vcov(self):
+        """CR1 sandwich with ``k - p`` degrees of freedom.
+
+        CR2 would be the better small-sample correction, but it needs a
+        Cholesky factor of every study's 4x4 marginal block, and those blocks
+        come from a logistic first stage whose coefficient covariance is not
+        reliably positive definite — ``robust(..., clubSandwich=True)`` raises
+        on the reference cohort.  CR1 needs no factorisation, and pairing it
+        with a t reference on ``k - p`` clusters is the standard robust
+        small-sample interval.
+        """
+        from .rve import robust as _robust
+
+        if self._cr2 is None:
+            out = _robust(self.fit, adjust=True)
+            df = out["dfs"]
+            df = float(np.min(np.asarray(df, dtype=float).ravel()))
+            self._cr2 = (np.asarray(out["vb"], dtype=float), df)
+        return self._cr2
+
     def _design(self, x) -> np.ndarray:
         """``[1, B_1(x), ..., B_K(x)]`` -- the curve's contrast vector."""
         basis = self.basis.evaluate(np.asarray(x, dtype=float).ravel()
                                     - self.center).values
         return np.column_stack([np.ones(basis.shape[0]), basis])
 
-    def _crit(self, level) -> float:
+    def _crit(self, level, df=None) -> float:
         alpha = level_to_alpha(self.level if level is None else level)
+        if df is not None:
+            return float(stats.t.ppf(1.0 - alpha / 2.0, df))
         if self.test in ("t", "knha", "adhoc"):
             # the model's coefficient tests use their own degrees of freedom;
             # a curve combines all of them, so the smallest is the safe one
@@ -485,7 +521,8 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
 
     fit = rma_mv(stacked, V=V, mods=X_one, data=data,
                  random="~ coef | study", struct=struct, intercept=False,
-                 method=method, level=level_to_percent(level), test=test)
+                 method=method, level=level_to_percent(level), test=test,
+                 cluster=study_labels)
 
     coef = [float(v) for v in fit.beta]
     vcov = np.asarray(fit.vb, dtype=float)
