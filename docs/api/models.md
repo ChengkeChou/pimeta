@@ -1,6 +1,6 @@
 # Models
 
-*81 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*83 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -75,6 +75,8 @@
 | [`TauCorResult`](#taucorresult) | — |
 | [`rho_sensitivity`](#rho_sensitivity) | — |
 | [`RhoSensitivityResult`](#rhosensitivityresult) | — |
+| [`confint_rma_mv`](#confint_rma_mv) | — |
+| [`ConfintMvResult`](#confintmvresult) | — |
 | [`DtaData`](#dtadata) | — |
 | [`DtaCorrectionWarning`](#dtacorrectionwarning) | — |
 | [`ReitsmaResult`](#reitsmaresult) | — |
@@ -1560,6 +1562,43 @@ Pooled estimates along a grid of within-study correlations.
 - `ci_lb, ci_ub` — ``(G, p)`` interval bounds.
 - `tau2` — ``(G, q)`` variance components (``q`` depends on ``struct``).
 - `fits` — the individual model fits, in grid order.
+
+## `confint_rma_mv`
+
+```python
+confint_rma_mv(result, *, tau2=None, rho=None, level=None, tol=0.0001220703125, r_compat=False)
+```
+
+Profile-likelihood interval for one ``tau2`` or ``rho`` of an ``rma_mv``.
+
+**Args**
+
+- `result` — a `RmaMvResult` from `rma_mv`.
+- `tau2` — 1-based index of the between-study variance component to profile, counting only the ``tau2`` components.
+- `rho` — 1-based index of the correlation component to profile.
+- `level` — confidence level, accepted as ``95``, ``0.95`` or ``0.05``; defaults to the level the model was fitted at.
+- `tol` — convergence tolerance handed to the root finder.  The default is R's ``uniroot`` default, so the endpoint matches metafor's.
+- `r_compat` — profile from the fitted values only, as metafor does.  The default re-starts the refit from the variance boundaries as well, because a component that collapses to zero can leave the likelihood higher than the interior branch and metafor's interval would then exclude a point with a larger profile likelihood. ``True`` reproduces metafor; ``False`` is the supremum over the parameter space.  See ``docs/reference/differences.md`` §4.
+
+**Returns**
+
+`ConfintMvResult`, whose ``curve`` holds every point the search evaluated.
+
+**Raises**
+
+- `ValueError` — when neither or both of ``tau2`` and ``rho`` are given, when the model has no such component, or when the index is out of range.
+
+**Example**
+
+>>> fit = ma.rma_mv(yi, V=V, mods=X, random="~ outcome | study", ...                 struct="UN") >>> ma.confint_rma_mv(fit, rho=1)
+
+## `ConfintMvResult`
+
+```python
+ConfintMvResult(kind: 'str', index: 'int', estimate: 'float', ci_lb: 'float', ci_ub: 'float', level: 'float', ll_max: 'float', crit: 'float', method: 'str', at_bound_lb: 'bool' = False, at_bound_ub: 'bool' = False, curve: 'list' = <factory>) -> None
+```
+
+A profile-likelihood interval for one variance component.
 
 ## `DtaData`
 

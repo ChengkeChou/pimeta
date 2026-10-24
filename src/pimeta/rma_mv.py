@@ -316,6 +316,11 @@ class _InterceptComp:
         return 1
 
     @property
+    def vc_names(self) -> list[str]:
+        """What each entry of ``p`` is, in order (metafor's parameter names)."""
+        return ["tau2"]
+
+    @property
     def n_vc(self) -> int:
         return 1
 
@@ -386,6 +391,10 @@ class _CSComp:
     @property
     def n_params(self) -> int:
         return 2
+
+    @property
+    def vc_names(self) -> list[str]:
+        return ["tau2", "rho"]
 
     @property
     def n_vc(self) -> int:
@@ -487,6 +496,11 @@ class _StructComp:
         else:
             n = 1
         return n + (1 if self.has_rho else 0)
+
+    @property
+    def vc_names(self) -> list[str]:
+        n_tau2 = self.n_params - (1 if self.has_rho else 0)
+        return ["tau2"] * n_tau2 + (["rho"] if self.has_rho else [])
 
     @property
     def n_vc(self) -> int:
@@ -659,6 +673,11 @@ class _GENComp:
         return self.q + self._n_rho
 
     @property
+    def vc_names(self) -> list[str]:
+        # the lower-triangular Cholesky factor, as metafor's cholesky=TRUE
+        return ["chol"] * self.n_params
+
+    @property
     def n_vc(self) -> int:
         return self.q
 
@@ -805,6 +824,10 @@ class _UNComp:
     @property
     def n_params(self) -> int:
         return self._n_free_tau2 + self._n_free_rho
+
+    @property
+    def vc_names(self) -> list[str]:
+        return ["tau2"] * self._n_free_tau2 + ["rho"] * self._n_free_rho
 
     @property
     def n_vc(self) -> int:

@@ -37,6 +37,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Profile-likelihood intervals for `rma_mv` variance components.**
+  `ma.confint_rma_mv` fills the one hole metafor itself leaves in a
+  multivariate fit: `rma.mv` reports no standard error for `tau2` or `rho`, and
+  an asymptotic one would be wrong at the boundaries anyway. The new function
+  computes the interval metafor's `confint` computes — fix the component,
+  re-estimate the rest, find where the likelihood has dropped by half a
+  chi-square quantile — and reproduces metafor's profile to 1e-14 at every
+  point it can evaluate, with endpoints agreeing to about 1e-5.
+
+  It differs from metafor in one place, on purpose. A between-study variance
+  can collapse to zero, and then the correlation is not a parameter of the
+  model: the likelihood is the same for every `rho`. Where that flat
+  likelihood is above the threshold, the point belongs in the interval, and
+  metafor's interior-only search reports an endpoint that excludes it. The
+  profile here is the supremum over the parameter space, re-started from the
+  variance boundaries; `r_compat=True` keeps metafor's answer reachable.
+
 - **Within-subject covariance in `ma.vcalc`.** `time1` and `time2` with `phi`
   are now implemented rather than refused, so a design in which the same
   subjects are measured at several time points no longer has to be approximated

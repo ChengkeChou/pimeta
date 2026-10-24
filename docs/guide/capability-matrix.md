@@ -244,12 +244,28 @@ The reporting layer is in `pimeta.mv`:
   cannot be estimated from the data (each study contributes a handful of
   estimates), so what has to be shown is what the assumption is worth.
 
-Two things metafor does *not* report here, and neither does pimeta: `rma.mv`
-returns no `se.tau2` / `se.rho` for these models, and `predict()` returns `NA`
-prediction bounds for a multilevel fit. Interval estimates of the
-between-outcome correlation, and a joint prediction region, would have no R
-reference to check against, so they are not offered rather than offered
-unverified.
+`rma.mv` reports no `se.tau2` / `se.rho` for these models, and that is not an
+omission to be filled with an asymptotic standard error: the approximation is
+unreliable for a variance at its zero boundary and for a correlation at ±1.
+What the parameters do admit is a **profile-likelihood interval**, and
+`ma.confint_rma_mv` computes one — fix the component at a value, re-estimate
+the rest, and read off where the likelihood has fallen by half a chi-square
+quantile. That is what `metafor::confint` does, and the profile itself is
+reproduced to 1e-14 at every point metafor can evaluate; the endpoints agree
+to about 1e-5, which is the tolerance of the root finder both use.
+
+One endpoint is deliberately different. At 99% on the Berkey fit metafor
+reports `[-0.835, 1]`, but a model in which one between-study variance is zero
+has likelihood 1.3813 at *every* correlation — the correlation is then not a
+parameter of the model — and 1.3813 is above that level's threshold of 0.2755.
+An interval excluding it would exclude points with a higher profile
+likelihood, so `pimeta` reports the whole range. `r_compat=True` follows
+metafor's interior branch. See [the differences page](../reference/differences.md) §4.
+
+Still not offered: a joint **prediction** region. A joint confidence ellipsoid
+for the pooled effects is standard (Jackson, Riley and White 2014), but a
+region for a *new* study is a different object and no implementation provides
+one to check against.
 
 Pinned by `tests/test_mv.py` against `metafor` 5.2.1 on the Berkey 1998
 dataset — the example metafor's own `vcalc` documentation uses.

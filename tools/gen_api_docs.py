@@ -75,6 +75,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "mv.vcov": ("models", "Models"),
     "mv.corr": ("models", "Models"),
     "mv.sens": ("models", "Models"),
+    "mv.confint": ("models", "Models"),
     "meta_compose": ("drivers", "High-level drivers"),
     # network meta-analysis
     "netmeta": ("network", "Network meta-analysis"),

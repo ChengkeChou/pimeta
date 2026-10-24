@@ -12,18 +12,23 @@ between-outcome structure back out, and showing what an assumption is worth.
                              fitted model
 ``mv.sens``                  ``rho_sensitivity``: the same model along a grid
                              of assumed within-study correlations
+``mv.confint``               ``confint_rma_mv``: profile-likelihood intervals for
+                             a variance component or a correlation
 ===========================  ==================================================
 """
 
 from __future__ import annotations
 
+from .confint import ConfintMvResult, confint_rma_mv
 from .corr import TauCorResult, tau_cor
 from .sens import RhoSensitivityResult, rho_sensitivity
 from .vcov import shared_control_corr, vcalc
 
 __all__ = [
+    "ConfintMvResult",
     "TauCorResult",
     "RhoSensitivityResult",
+    "confint_rma_mv",
     "rho_sensitivity",
     "shared_control_corr",
     "tau_cor",

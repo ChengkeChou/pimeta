@@ -145,8 +145,10 @@ from .metarate import MetarateResult, metarate
 from .metareg import MetaregResult, metareg
 from .missing import MissingDataWarning, complete_cases, is_missing
 from .mv import (
+    ConfintMvResult,
     RhoSensitivityResult,
     TauCorResult,
+    confint_rma_mv,
     rho_sensitivity,
     shared_control_corr,
     tau_cor,
@@ -808,6 +810,7 @@ __all__ = [
     # multivariate reporting layer
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",
+    "confint_rma_mv", "ConfintMvResult",
     "netcomplex",
     "netcomplexity",
     "netmetareg", "NetmetaregResult",
