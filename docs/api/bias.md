@@ -526,7 +526,7 @@ stop. `copas_region` makes the same point from the frequentist side.
 ## `CopasBayesResult`
 
 ```python
-CopasBayesResult(posterior: 'object', mu: 'float', tau: 'float', rho: 'float', mu_ci: 'tuple[float, float]', tau_ci: 'tuple[float, float]', rho_ci: 'tuple[float, float]', k: 'int', level: 'float' = 95.0, gamma0: 'float' = nan, gamma1: 'float' = nan, fixed_gamma: 'tuple[float, float] | None' = None, priors: 'dict' = <factory>) -> None
+CopasBayesResult(posterior: 'Posterior', mu: 'float', tau: 'float', rho: 'float', mu_ci: 'tuple[float, float]', tau_ci: 'tuple[float, float]', rho_ci: 'tuple[float, float]', k: 'int', level: 'float' = 95.0, gamma0: 'float' = nan, gamma1: 'float' = nan, fixed_gamma: 'tuple[float, float] | None' = None, priors: 'dict' = <factory>) -> None
 ```
 
 Posterior of the Copas selection model.

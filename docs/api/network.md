@@ -1,6 +1,6 @@
 # Network meta-analysis
 
-*67 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*69 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -38,6 +38,8 @@
 | [`nma_timecourse`](#nma_timecourse) | — |
 | [`TimeCourseNmaResult`](#timecoursenmaresult) | — |
 | [`TimeCourseNmaCurve`](#timecoursenmacurve) | — |
+| [`bayes_nma`](#bayes_nma) | — |
+| [`BayesNmaResult`](#bayesnmaresult) | — |
 | [`netconnection`](#netconnection) | — |
 | [`NetconnectionResult`](#netconnectionresult) | — |
 | [`netdistance`](#netdistance) | — |
@@ -710,6 +712,68 @@ TimeCourseNmaCurve(labels: 'list[str]' = <factory>, time: 'np.ndarray' = <factor
 ```
 
 A treatment's trajectory, or a contrast between two of them.
+
+## `bayes_nma`
+
+```python
+bayes_nma(yi, *, study, treat, sei=None, vi=None, reference=None, trt_effects: 'str' = 'random', prior_d_sd: 'float' = 10.0, prior_intercept_sd: 'float' = 100.0, prior_tau_scale: 'float' = 0.5, level=0.95, mcmc: 'dict | None' = None) -> 'BayesNmaResult'
+```
+
+Fit a Bayesian network meta-analysis to arm-level data.
+
+**Args**
+
+- `yi` — arm-level effect estimates, one per arm.
+- `study` — study label per arm.
+- `treat` — treatment label per arm.  A study's arm on the reference treatment is its baseline and is pinned at zero; a study without that treatment gets a deviation on every arm.  Row order is not part of the model.
+- `sei` — standard error per arm.
+- `vi` — variance per arm; pass exactly one of ``sei`` and ``vi``.
+- `reference` — the treatment whose effect is fixed at zero.  Defaults to the first treatment seen.  It changes the parameterisation and not the posterior of any contrast.
+- `trt_effects` — ``"random"`` (default) or ``"fixed"``.
+- `prior_d_sd` — SD of the normal prior on the basic treatment effects.
+- `prior_intercept_sd` — SD of the normal prior on each study's baseline mean.  The baseline is integrated out analytically, so this is a proper prior with a closed-form marginal, not a device.
+- `prior_tau_scale` — scale of the half-normal prior on the between-study SD.  Ignored when ``trt_effects="fixed"``.
+- `level` — credible level, as ``0.95``, ``95`` or the alpha ``0.05``.
+- `mcmc` — sampler overrides — ``n_draws``, ``warmup``, ``chains``, ``seed``, ``check``, ``rhat_max``, ``ess_min``.
+
+**Returns**
+
+`BayesNmaResult`.
+
+**Raises**
+
+- `ValueError` — for data that is not a network (a one-arm study, a repeated arm, a non-positive variance), for an unknown reference, or for an unknown ``mcmc`` key.
+- `RuntimeError` — from `Posterior.check` when the draws did not mix.
+
+**Example**
+
+- `>>> res = bayes_nma(                       # doctest` — +SKIP
+...     [0.1, 0.4, 0.2, 0.5], study=["s1", "s1", "s2", "s2"],
+...     treat=["A", "B", "A", "C"], sei=[0.2, 0.2, 0.3, 0.3])
+- `>>> res.contrast("B", "A")["mean"]          # doctest` — +SKIP
+
+## `BayesNmaResult`
+
+```python
+BayesNmaResult(posterior: 'Posterior', treatments: 'list[str]', reference: 'str', basic: 'list[str]', trt_effects: 'str', tau: 'float | None', tau2: 'float | None', tau_ci: 'tuple[float, float] | None', k: 'int', n_arms: 'int', level: 'float', priors: 'dict' = <factory>, _data: 'Any' = None) -> None
+```
+
+A sampled network meta-analysis.
+
+**Attributes**
+
+- `posterior` — the draws and their diagnostics.
+- `treatments` — treatment labels, in parameter order.
+- `reference` — the treatment whose effect is fixed at zero.
+- `basic` — the treatments that carry a parameter (all but ``reference``).
+- `trt_effects` — ``"random"`` or ``"fixed"``.
+- `tau` — posterior mean of the between-study SD, or ``None`` when fixed.
+- `tau2` — posterior mean of :math:`\tau^2`, or ``None`` when fixed.
+- `tau_ci` — equal-tailed interval for :math:`\tau`.
+- `k` — number of studies.
+- `n_arms` — number of arms.
+- `level` — the credible level the intervals use, as a fraction.
+- `priors` — the priors the model was fitted with, for the record.
 
 ## `netconnection`
 

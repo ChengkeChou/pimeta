@@ -1,6 +1,6 @@
 # API reference
 
-All 506 public names in `pimeta.__all__`, generated from the source docstrings.
+All 508 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -262,6 +262,8 @@ All 506 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`nma_timecourse`](network.md#nma_timecourse) | Network meta-analysis | — |
 | [`TimeCourseNmaResult`](network.md#timecoursenmaresult) | Network meta-analysis | — |
 | [`TimeCourseNmaCurve`](network.md#timecoursenmacurve) | Network meta-analysis | — |
+| [`bayes_nma`](network.md#bayes_nma) | Network meta-analysis | — |
+| [`BayesNmaResult`](network.md#bayesnmaresult) | Network meta-analysis | — |
 | [`netconnection`](network.md#netconnection) | Network meta-analysis | — |
 | [`NetconnectionResult`](network.md#netconnectionresult) | Network meta-analysis | — |
 | [`netdistance`](network.md#netdistance) | Network meta-analysis | — |

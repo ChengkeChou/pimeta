@@ -69,6 +69,15 @@ the entry or the page named.
   summary hiding it.
 - **`copas_region` is a likelihood-ratio projection, not a posterior.** Its
   coverage was not simulated and the tests do not claim it was.
+- **`bayes_nma` covers consistency models only**: no node-splitting or
+  unrelated-mean-effects posterior, no meta-regression, no treatment
+  classes, and a normal likelihood with an identity link. The network has to be
+  arm-level; there is no path from contrast-level data, because a study with no
+  reference-treatment arm pins an arm and that choice is only recoverable from
+  the arms. And its ranking probabilities inherit the model: `prob_best` is the
+  share of the posterior in which a treatment has the smallest effect, which is
+  a statement about the parameters, not about which treatment *is* best in a
+  future patient.
 
 ### Fixed
 
@@ -100,6 +109,67 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **A Bayesian network meta-analysis, validated against an exact posterior
+  rather than against another sampler.** `bayes_nma` fits the aggregate-data
+  arm-level model of Phillippo et al. (2020):
+
+  $$y_{jk} \sim N(\mu_j + \theta_{jk},\ \sigma_{jk}^2), \qquad
+    \theta_{jk} = (d_{t_{jk}} - d_A) + \delta_{jk},\quad
+    \delta_{jk}\sim N(0,\tau^2),$$
+
+  with one arm per study pinned, `d ~ N(0, 10^2)`, `mu_j ~ N(0, 100^2)` and
+  `tau ~ half-N(0, 0.5^2)`, all overridable and all recorded on the result.
+  Every study baseline `mu_j` is **integrated out analytically** — it is a
+  Gaussian block under a Gaussian prior, so the integral is closed form and the
+  chain is `(d, log tau)` instead of `(d, mu_1..mu_k, log tau)`. That is not a
+  cosmetic saving: it is the difference between a six-dimensional posterior and
+  a thirty-six-dimensional one on the fixture.
+
+  The result carries what a posterior can answer and a standard error cannot:
+  `contrast(a, b)` with `prob_positive`, `league_table()`, `rank()` with
+  `prob_best`, `prob_worst`, `mean_rank` and SUCRA computed from the draws, and
+  `intercept(study)`.
+
+  Validation, in the order that lets each layer mean something.
+
+  1. **Algebra, with no reference implementation involved.** `_marginal_loglik`
+     is compared against direct numerical integration over the study baseline
+     (they differ by exactly the `log(2 pi)` of the omitted density constants,
+     to 1e-8). With `trt_effects="fixed"` the model is linear, so the answer is
+     generalised least squares: `0.44048, 0.67886, 0.07975` against pimeta's
+     `0.43804, 0.67965, 0.07635` and multinma's `0.44340, 0.67931, 0.08331`,
+     i.e. both samplers bracket the exact value.
+  2. **The exact posterior, by quadrature.** Because the likelihood is Gaussian
+     in `d` once `tau` is fixed, `p(d | tau, y)` is exactly multivariate normal
+     and `p(y | tau)` is a scalar function, so the whole posterior is one
+     one-dimensional integral — no sampler at all.
+     `tools/quadrature_nma_bayes.py` computes it: on the fixture,
+     `d = (0.4447, 0.7058, 0.0652)` and `tau = 0.2211`. pimeta gives
+     `(0.4450, 0.7070, 0.0660)` and `tau = 0.2190`.
+  3. **`multinma::nma()`**, the same published model, four chains of 5000 +
+     10000: `(0.4343, 0.6846, 0.0812)` and `tau = 0.2280`, i.e. up to **0.022
+     away from the exact answer**, with two divergent transitions reported. On a
+     six-study sub-network of the same fixture it is 0.029 away with six
+     divergent transitions while pimeta is 0.001 away. The test therefore
+     asserts that pimeta is *closer to the exact posterior than the reference
+     is*, and records multinma's numbers, so a version that fixes its mixing
+     shows up as a change rather than as a quietly different tolerance.
+  4. **Known truth.** Data simulated from `d = (0.25, 0.50, 0.10)` and
+     `tau = 0.2`: over 20 replications the posterior means are unbiased within
+     three Monte Carlo standard errors and the intervals cover at least three
+     quarters of them.
+
+  Two things this found that a "compare the numbers" check could not. A study
+  that contains **no** reference-treatment arm still pins one of its arms: with
+  both of its arms given a random effect, a three-study sub-network gives
+  `d_B = 0.437`; with one arm pinned the exact quadrature gives `0.365` and
+  multinma gives `0.353`, so the pinned version is the model and the unpinned
+  one was a plausible-looking mistake. And the `multinma` agreement story
+  reverses once the posterior is known exactly: agreeing with a widely used
+  reference on a small clean network does not establish a likelihood, and
+  disagreeing with it on a hard one does not break it. `tools/
+  quadrature_nma_bayes.py` is committed so the arbiter is reproducible.
 
 - **A posterior for the Copas selection model, checked against an independent
   sampler.** `bayes_copas` fits the model `copas` estimates, with the

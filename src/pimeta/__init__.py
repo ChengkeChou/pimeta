@@ -217,6 +217,7 @@ from .netmeta import (
     treats,
     vikor,
 )
+from .nma.bayes import BayesNmaResult, bayes_nma
 from .nma.design import (
     MultiArmStructure,
     TreatmentNetwork,
@@ -750,6 +751,8 @@ __all__ = [
     "nma_timecourse",
     "TimeCourseNmaResult",
     "TimeCourseNmaCurve",
+    "bayes_nma",
+    "BayesNmaResult",
     "sample_log_posterior",
     "Posterior",
     "rhat",

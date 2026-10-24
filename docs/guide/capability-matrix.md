@@ -746,6 +746,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
 | 14 | dose-response network meta-analysis | yes — every dose function, and a random effect on any of them: closed-form where the parameters are linear, by sampling where they are not | `tests/test_nma_dose.py`, `tests/test_nma_dose_mcmc.py` |
 | 15 | time-course network meta-analysis | yes — every linear-in-parameters basis; a random effect on a non-linear time parameter is not available | `tests/test_nma_timecourse.py` |
+| 16 | Bayesian network meta-analysis | yes — consistency models with a normal likelihood; a study baseline is integrated out, not sampled; validated against an exact posterior, not only against another sampler | `tests/test_nma_bayes.py` |
 
 Five of these turned out to be further along than the roadmap assumed: items
 5, 6 and 10 are finished, item 1 needed only a basis rather than a regression
@@ -765,6 +766,19 @@ estimator; IPD-NMA differs only in taking individual rows instead of contrasts.
 A fourth member of that family, a model with a random effect on a **non-linear**
 basis parameter, is not available, and the reason is structural rather than a
 missing feature: the marginal likelihood stops being closed-form.
+
+Item 16 is a different shape of work again. A **Bayesian** network
+meta-analysis is not a new likelihood: it is the frequentist consistency model
+of item 10 with priors on its parameters, and the treatment effects and study
+baselines are both Gaussian, so the study baselines can be integrated out in
+closed form and the chain stays small. What makes it checkable is the same
+Gaussianity taken one step further: with `tau` fixed the whole posterior is a
+normal distribution in `d`, so the exact answer is one one-dimensional integral
+and no sampler is involved in checking a sampler.
+`tools/quadrature_nma_bayes.py` computes it, and on the fixture `pimeta` is
+within 0.001 of it where `multinma` 0.9.1 is 0.022 away with divergent
+transitions reported. That is the reason items of this kind get an exact check
+before a reference comparison rather than after.
 
 ## Dependency policy
 
@@ -794,7 +808,11 @@ is a hard constraint, and it decides which items above are worth attempting:
 
 Where a new method cannot be validated against an R implementation, it is not
 added. The reference implementations are listed on
-[the differences page](../reference/differences.md).
+[the differences page](../reference/differences.md). An exact posterior counts
+as a reference implementation of the same strength and a different kind: it
+assumes nothing about how the answer is computed, only that the model is written
+down correctly, and it is what caught `multinma`'s warmup pathology on the
+Bayesian network model.
 
 ## What this page changes about the roadmap
 

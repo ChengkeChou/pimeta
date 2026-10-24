@@ -1,0 +1,18 @@
+{
+  "arms": 32,
+  "baseline_rule": "each study's first-listed arm",
+  "d": {
+    "A": 0.0,
+    "B": 0.3,
+    "C": 0.55,
+    "D": 0.15
+  },
+  "k": 14,
+  "model": "y[jk] ~ N(mu[j] + d[t_jk] - d[t_jb] + delta[jk], se^2); delta ~ N(0, tau^2) independent across non-baseline arms",
+  "note": "the CSV row order is part of the model: for a multi-arm study the random effects sit on the arms other than the baseline",
+  "provenance": "simulated by tools/make_nma_bayes_fixture.py",
+  "reference": "A",
+  "seed": 20240617,
+  "study_mean_sd": 1.0,
+  "tau": 0.15
+}
