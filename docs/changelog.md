@@ -37,6 +37,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **IPD plus aggregate data.** `ipd_two_stage(..., aggregate=...)` adds studies
+  that reported only the pooled effect as extra studies in the second stage.
+  Not a new estimator — the same second stage with two more rows — but the
+  difference between a question about the trials that shared their data and a
+  question about all of them. Aggregate estimates must be on the same scale as
+  the pooled term, a study cannot appear both as IPD and as aggregate, and the
+  two kinds of contributor are counted separately (`n_ipd`, `n_aggregate`) and
+  labelled in `per_study_table()`.
+
+  One caveat is emitted rather than documented away: an aggregate estimate and
+  a covariate-adjusted IPD estimate are the same estimand only if the
+  aggregate model adjusted for the same covariables, and for an odds ratio a
+  marginal and a conditional effect differ even when both are right. A fit
+  with covariates warns, because silently pooling a conditional with a
+  marginal is the failure mode the feature creates.
+
+  Pinned by `tests/test_ipd_aggregate.py`: the mixed pool equals `rma` over the
+  combined estimate and variance vectors to 1e-12.
+
 - **Joint inference on discrimination and calibration.**
   `ma.prediction_joint` pools a C-statistic and a calibration slope as a pair.
   Two separate intervals cannot answer either question that matters: "is this

@@ -167,7 +167,26 @@ model-based band **worse** — 0.31 to 0.51 — because `rma_mv` computes its
 residual degrees of freedom from the *stacked rows*, so the t reference is
 nearly z while `s2w` shrinks the variance. It is refused rather than shipped.
 
-Missing: IPD plus aggregate data.
+**IPD plus aggregate data.** `ipd_two_stage(..., aggregate=...)` adds studies
+that reported only the pooled effect, as extra studies in the second stage —
+which is not a new estimator but is the difference between a question about the
+trials that shared their data and a question about all of them. The aggregate
+estimates have to be on the same scale as the pooled term (a log odds ratio for
+a logistic first stage), a study cannot appear both as IPD and as aggregate,
+and the two kinds of contributor are counted separately (`n_ipd`,
+`n_aggregate`) and labelled in `per_study_table()`.
+
+One caveat is emitted rather than documented away: an aggregate estimate and a
+**covariate-adjusted** IPD estimate are the same estimand only if the aggregate
+model adjusted for the same covariables, and for an odds ratio a marginal and a
+conditional effect differ even when both are right. A fit with covariates
+therefore warns. The alternative — silently pooling a conditional with a
+marginal — is the failure mode this feature creates, so it is the one to shout
+about.
+
+Pinned by `tests/test_ipd_aggregate.py`: the mixed pool equals `rma` over the
+combined estimate and variance vectors to 1e-12, which is the only arithmetic
+claim there is.
 
 ### 4. One-stage IPD — **yes**, with a stated model
 
@@ -570,7 +589,7 @@ model twice.
 |---|---|---|---|
 | 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
 | 2 | dose–response | yes | `tests/test_dose.py` |
-| 3 | two-stage IPD | yes | `tests/test_ipd.py` |
+| 3 | two-stage IPD | yes | `tests/test_ipd.py`, `tests/test_ipd_aggregate.py` |
 | 4 | one-stage IPD | yes | `tests/test_onestage.py`, `tests/test_onestage_slopes.py` |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |

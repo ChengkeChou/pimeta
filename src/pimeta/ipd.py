@@ -26,6 +26,7 @@ product as the term to pool:
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -170,6 +171,9 @@ class StudyFit:
     vb: np.ndarray = field(repr=False)
     term: int
     converged: bool
+    #: ``"ipd"`` for a study fitted here, ``"aggregate"`` for one that only
+    #: reported an effect and its standard error.
+    source: str = "ipd"
 
     @property
     def estimate(self) -> float:
@@ -188,6 +192,7 @@ class StudyFit:
             "b": list(self.b),
             "se": list(self.se),
             "converged": self.converged,
+            "source": self.source,
         }
 
 
@@ -229,6 +234,10 @@ class IpdResult:
     test: str
     per_study: list[StudyFit] = field(repr=False)
     fit: Any = field(repr=False)
+    #: how many contributors were individual-participant studies and how many
+    #: were aggregate-data studies added through ``aggregate=``.
+    n_ipd: int = 0
+    n_aggregate: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -251,6 +260,8 @@ class IpdResult:
             "level": self.level,
             "term_fit": "pooled across studies",
             "per_study": [s.to_dict() for s in self.per_study],
+            "n_ipd": self.n_ipd,
+            "n_aggregate": self.n_aggregate,
         }
 
     def coef_table(self) -> list[dict]:
@@ -275,6 +286,7 @@ class IpdResult:
                 "se": float(np.sqrt(s.variance)),
                 "ci_lb": s.estimate - 1.96 * float(np.sqrt(s.variance)),
                 "ci_ub": s.estimate + 1.96 * float(np.sqrt(s.variance)),
+                "source": s.source,
             }
             for s in self.per_study
         ]
@@ -287,6 +299,7 @@ class IpdResult:
             "se": self.se,
             "ci_lb": self.ci_lb,
             "ci_ub": self.ci_ub,
+            "source": "pooled",
         })
         return rows
 
@@ -294,7 +307,7 @@ class IpdResult:
 def ipd_two_stage(y, *, study, treat, covariates=None, family: str = "binomial",
                   term: str = "treat", method: str = "REML",
                   level: float = 0.95, test: str = "z",
-                  min_events: int = 1) -> IpdResult:
+                  min_events: int = 1, aggregate=None) -> IpdResult:
     """Fit one model per study, then pool one coefficient.
 
     Args:
@@ -313,6 +326,20 @@ def ipd_two_stage(y, *, study, treat, covariates=None, family: str = "binomial",
         test: ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
         min_events: studies with fewer events than this are excluded (a study
             with no events in one arm has no finite logistic estimate).
+        aggregate: studies that report only the pooled term.  A mapping with
+            ``study``, ``estimate`` and ``se`` (or a list of such dicts), each
+            on the **same scale as the pooled term** — a log odds ratio for a
+            logistic first stage.  They enter the second stage beside the
+            IPD-derived estimates, which is the whole point: an IPD
+            meta-analysis that cannot take the trials which refused to share
+            their data is answering a question about the trials that did.
+
+            One caveat is not optional and is not checked for you.  An
+            aggregate estimate and a covariate-adjusted IPD estimate are the
+            same number only when the aggregate model adjusted for the same
+            covariables; for an odds ratio, marginal and conditional estimates
+            differ even when both are correct (non-collapsibility).  A warning
+            is emitted whenever covariates are present.
 
     Returns:
         :class:`IpdResult`.
@@ -412,6 +439,61 @@ def ipd_two_stage(y, *, study, treat, covariates=None, family: str = "binomial",
         raise ValueError(
             f"no study could be fitted (excluded: {excluded})")
 
+    n_ipd = len(per_study)
+    if aggregate is not None:
+        records = ([aggregate] if isinstance(aggregate, Mapping)
+                   and "study" in aggregate
+                   and not isinstance(aggregate["study"], (list, tuple))
+                   else None)
+        if records is not None:
+            rows_in = [aggregate]
+        elif isinstance(aggregate, Mapping):
+            keys = ("study", "estimate", "se")
+            for k in keys:
+                if k not in aggregate:
+                    raise ValueError(
+                        f"'aggregate' needs a {k!r} entry; a mapping must have "
+                        "'study', 'estimate' and 'se'")
+            sizes = {k: len(np.asarray(aggregate[k]).ravel()) for k in keys}
+            if len(set(sizes.values())) != 1:
+                raise ValueError(
+                    f"'aggregate' entries have different lengths: {sizes}")
+            rows_in = [
+                {"study": s, "estimate": e, "se": v}
+                for s, e, v in zip(np.asarray(aggregate["study"]).ravel(),
+                                   np.asarray(aggregate["estimate"]).ravel(),
+                                   np.asarray(aggregate["se"]).ravel())
+            ]
+        else:
+            rows_in = list(aggregate)
+        if cov_map:
+            warnings.warn(
+                "aggregate studies are added to a model whose IPD studies "
+                "adjusted for " + ", ".join(cov_map) + "; the two are the "
+                "same estimand only if the aggregate models adjusted for the "
+                "same covariables, and for an odds ratio a marginal and a "
+                "conditional effect differ even when both are right",
+                RuntimeWarning, stacklevel=3)
+        seen = {s.study for s in per_study} | set(excluded)
+        for rec in rows_in:
+            label = _label(rec["study"])
+            est = float(rec["estimate"])
+            se = float(rec["se"])
+            if label in seen:
+                raise ValueError(
+                    f"study {label!r} appears both in the participant data "
+                    "and in 'aggregate'; one study cannot enter twice")
+            if not np.isfinite(est) or not np.isfinite(se) or se <= 0.0:
+                raise ValueError(
+                    f"study {label!r} needs a finite estimate and a positive "
+                    f"standard error, got {est!r} and {se!r}")
+            seen.add(label)
+            per_study.append(StudyFit(
+                study=label, n=0, events=None, coefnames=[term],
+                b=[est], se=[se], vb=np.array([[se * se]]), term=0,
+                converged=True, source="aggregate",
+            ))
+
     estimates = np.array([s.estimate for s in per_study])
     variances = np.array([s.variance for s in per_study])
     model = rma(estimates, vi=variances, method=method, level=level,
@@ -437,4 +519,6 @@ def ipd_two_stage(y, *, study, treat, covariates=None, family: str = "binomial",
         test=str(getattr(model, "test", "z")),
         per_study=per_study,
         fit=model,
+        n_ipd=n_ipd,
+        n_aggregate=len(per_study) - n_ipd,
     )

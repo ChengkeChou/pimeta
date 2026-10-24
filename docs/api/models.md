@@ -319,7 +319,7 @@ Sorted knot vector of length ``nk``.
 ## `IpdResult`
 
 ```python
-IpdResult(term: 'str', b: 'float', se: 'float', zval: 'float', pval: 'float', ci_lb: 'float', ci_ub: 'float', tau2: 'float', QE: 'float', QE_df: 'int', QE_p: 'float', I2: 'float', k: 'int', studies: 'int', excluded: 'dict[str, str]', method: 'str', level: 'float', test: 'str', per_study: 'list[StudyFit]', fit: 'Any') -> None
+IpdResult(term: 'str', b: 'float', se: 'float', zval: 'float', pval: 'float', ci_lb: 'float', ci_ub: 'float', tau2: 'float', QE: 'float', QE_df: 'int', QE_p: 'float', I2: 'float', k: 'int', studies: 'int', excluded: 'dict[str, str]', method: 'str', level: 'float', test: 'str', per_study: 'list[StudyFit]', fit: 'Any', n_ipd: 'int' = 0, n_aggregate: 'int' = 0) -> None
 ```
 
 A pooled individual-participant analysis.
@@ -341,7 +341,7 @@ A pooled individual-participant analysis.
 ## `StudyFit`
 
 ```python
-StudyFit(study: 'str', n: 'int', events: 'int | None', coefnames: 'list[str]', b: 'list[float]', se: 'list[float]', vb: 'np.ndarray', term: 'int', converged: 'bool') -> None
+StudyFit(study: 'str', n: 'int', events: 'int | None', coefnames: 'list[str]', b: 'list[float]', se: 'list[float]', vb: 'np.ndarray', term: 'int', converged: 'bool', source: 'str' = 'ipd') -> None
 ```
 
 One study's first-stage model.
@@ -360,7 +360,7 @@ One study's first-stage model.
 ## `ipd_two_stage`
 
 ```python
-ipd_two_stage(y, *, study, treat, covariates=None, family: 'str' = 'binomial', term: 'str' = 'treat', method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1) -> 'IpdResult'
+ipd_two_stage(y, *, study, treat, covariates=None, family: 'str' = 'binomial', term: 'str' = 'treat', method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1, aggregate=None) -> 'IpdResult'
 ```
 
 Fit one model per study, then pool one coefficient.
@@ -377,6 +377,7 @@ Fit one model per study, then pool one coefficient.
 - `level` — confidence level.
 - `test` — ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
 - `min_events` — studies with fewer events than this are excluded (a study with no events in one arm has no finite logistic estimate).
+- `aggregate` — studies that report only the pooled term.  A mapping with ``study``, ``estimate`` and ``se`` (or a list of such dicts), each on the **same scale as the pooled term** — a log odds ratio for a logistic first stage.  They enter the second stage beside the IPD-derived estimates, which is the whole point: an IPD meta-analysis that cannot take the trials which refused to share their data is answering a question about the trials that did. One caveat is not optional and is not checked for you.  An aggregate estimate and a covariate-adjusted IPD estimate are the same number only when the aggregate model adjusted for the same covariables; for an odds ratio, marginal and conditional estimates differ even when both are correct (non-collapsibility).  A warning is emitted whenever covariates are present.
 
 **Returns**
 
