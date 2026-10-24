@@ -105,6 +105,7 @@ from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
 from .fsn import FsnResult, fsn
 from .gosh import GoshResult, gosh
 from .ipd import IpdResult, StudyFit, ipd_two_stage, linear_model, logistic_model
+from .ipd_curve import IpdCurve, IpdCurveResult, ipd_two_stage_curve
 from .levels import level_to_alpha, level_to_percent
 from .limitmeta import LimitmetaResult, limitmeta
 from .measures import (
@@ -635,6 +636,9 @@ __all__ = [
     "IpdResult",
     "StudyFit",
     "ipd_two_stage",
+    "IpdCurve",
+    "IpdCurveResult",
+    "ipd_two_stage_curve",
     "linear_model",
     "logistic_model",
     "OneStageResult",

@@ -37,6 +37,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Joint pooling of a non-linear treatment effect modifier in two-stage IPD.**
+  `ma.ipd_two_stage_curve` pools a spline interaction the way it has to be
+  pooled: the whole treatment block `(treat, treat:B_1, ..., treat:B_K)` as a
+  vector, with the study's own coefficient covariance as its sampling
+  covariance and an unstructured between-study covariance on top. Pooling the
+  coefficients one at a time — which is all the univariate `term=` route can
+  do — discards the correlation between them, and then
+  `Var{Δ(x)} = b(x)' Cov(μ̂) b(x)` is computed from variances that do not know
+  about each other.
+
+  The result carries the average curve with a confidence band and a prediction
+  band for a new study (which adds the between-study covariance), a joint test
+  of effect modification, and a joint test of non-linearity. The covariate is
+  centred at its median by default and the basis is built once with common
+  knots, both of which Riley et al. (2020) require and neither of which is
+  cosmetic: without centring the linear coefficient is the treatment effect at
+  covariate zero, an extrapolation whose standard error was an order of
+  magnitude too wide in the reference cohort.
+
+  Pinned by `tests/test_ipd_curve.py` against one `glm` per study and
+  `metafor::rma.mv` on the stacked block.
+
+- **Fixed: a balanced study was thrown out of every IPD analysis.** The
+  exclusion rule tested whether the number of events equalled the number of
+  non-events *in the whole study*, which dropped perfectly usable studies and
+  said nothing about the arms. A study is only unusable when an arm has no
+  events or only events. Found by the differential test above, which expected
+  twelve studies and got eleven.
+
 - **Profile-likelihood intervals for `rma_mv` variance components.**
   `ma.confint_rma_mv` fills the one hole metafor itself leaves in a
   multivariate fit: `rma.mv` reports no standard error for `tau2` or `rho`, and

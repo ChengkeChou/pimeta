@@ -1,6 +1,6 @@
 # API reference
 
-All 475 public names in `pimeta.__all__`, generated from the source docstrings.
+All 478 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -114,6 +114,9 @@ All 475 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`IpdResult`](models.md#ipdresult) | Models | — |
 | [`StudyFit`](models.md#studyfit) | Models | — |
 | [`ipd_two_stage`](models.md#ipd_two_stage) | Models | — |
+| [`IpdCurve`](models.md#ipdcurve) | Models | — |
+| [`IpdCurveResult`](models.md#ipdcurveresult) | Models | — |
+| [`ipd_two_stage_curve`](models.md#ipd_two_stage_curve) | Models | — |
 | [`linear_model`](models.md#linear_model) | Models | — |
 | [`logistic_model`](models.md#logistic_model) | Models | — |
 | [`OneStageResult`](models.md#onestageresult) | Models | — |

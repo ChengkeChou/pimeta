@@ -67,6 +67,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "metareg": ("drivers", "High-level drivers"),
     "dose": ("drivers", "High-level drivers"),
     "ipd": ("models", "Models"),
+    "ipd_curve": ("models", "Models"),
     "onestage": ("models", "Models"),
     "prediction": ("models", "Models"),
     "surv": ("models", "Models"),

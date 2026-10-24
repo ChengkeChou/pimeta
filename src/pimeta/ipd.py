@@ -375,10 +375,22 @@ def ipd_two_stage(y, *, study, treat, covariates=None, family: str = "binomial",
         events = None
         if fam == "binomial":
             events = int(np.sum(yg == 1.0))
-            if events < int(min_events) or events == yg.size - events:
+            if events < int(min_events):
                 excluded[g] = (
-                    f"{events} event(s) in {yg.size} participants; a logistic "
-                    "model needs both arms to have events")
+                    f"{events} event(s) in {yg.size} participants; "
+                    f"fewer than min_events={int(min_events)}")
+                continue
+            # A logistic model needs both arms to vary in the outcome.  The
+            # check used to be ``events == non-events``, which threw away
+            # perfectly balanced studies and said nothing about the arms.
+            arms = [yg[tg == 1.0], yg[tg == 0.0]]
+            if any(a.size == 0 for a in arms):
+                excluded[g] = "only one treatment arm is present"
+                continue
+            if any(np.all(a == a[0]) for a in arms):
+                excluded[g] = (
+                    "an arm has 0 or all events, so the logistic "
+                    "maximum-likelihood estimate is infinite")
                 continue
         try:
             if fam == "binomial":

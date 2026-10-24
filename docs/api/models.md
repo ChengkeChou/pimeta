@@ -1,6 +1,6 @@
 # Models
 
-*83 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*86 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -21,6 +21,9 @@
 | [`IpdResult`](#ipdresult) | — |
 | [`StudyFit`](#studyfit) | — |
 | [`ipd_two_stage`](#ipd_two_stage) | — |
+| [`IpdCurve`](#ipdcurve) | — |
+| [`IpdCurveResult`](#ipdcurveresult) | — |
+| [`ipd_two_stage_curve`](#ipd_two_stage_curve) | — |
 | [`linear_model`](#linear_model) | — |
 | [`logistic_model`](#logistic_model) | — |
 | [`OneStageResult`](#onestageresult) | — |
@@ -381,6 +384,74 @@ Fit one model per study, then pool one coefficient.
 
 - `>>> fit = ma.ipd_two_stage(y, study=study, treat=treat)   # doctest` — +SKIP
 - `>>> fit.b, fit.tau2, fit.k                                # doctest` — +SKIP
+
+## `IpdCurve`
+
+```python
+IpdCurve(x: 'np.ndarray', est: 'np.ndarray', se: 'np.ndarray', ci_lb: 'np.ndarray', ci_ub: 'np.ndarray', pred_lb: 'np.ndarray', pred_ub: 'np.ndarray', outside: 'np.ndarray') -> None
+```
+
+The treatment-effect curve on a grid of covariate values.
+
+## `IpdCurveResult`
+
+```python
+IpdCurveResult(names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray', tau2: 'list[float]', Sigma: 'np.ndarray', k: 'int', studies: 'int', excluded: 'dict[str, str]', support: 'tuple[float, float]', method: 'str', level: 'float', test: 'str', basis: 'Basis', per_study: 'list[StudyFit]', fit: 'Any', center: 'float' = 0.0) -> None
+```
+
+A joint pooling of a study-level treatment-effect block.
+
+**Attributes**
+
+- `names` — one name per pooled coefficient, ``["treat", "treat:B[1]", ...]``.
+- `coef, se, vcov` — the pooled coefficients and their covariance.
+- `tau2` — the diagonal of ``Sigma``, one per coefficient.
+- `Sigma` — the between-study covariance matrix of the block.
+- `k, studies, excluded` — contributing studies, studies present, failures.
+- `support` — ``(min, max)`` of the covariate actually observed.
+- `method, level, test` — the second-stage settings.
+- `per_study` — one `ipd.StudyFit` per contributing study.
+- `fit` — the underlying `rma_mv.RmaMvResult`.
+
+## `ipd_two_stage_curve`
+
+```python
+ipd_two_stage_curve(y, *, study, treat, covariate, basis=None, n_knots: 'int' = 4, knots=None, center=None, family: 'str' = 'binomial', covariates=None, method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1) -> 'IpdCurveResult'
+```
+
+Pool a treatment-by-covariate spline jointly across studies.
+
+**Args**
+
+- `y` — the outcome, one entry per participant.
+- `study` — the study label, one entry per participant.
+- `treat` — the treatment indicator (0/1), one entry per participant.
+- `covariate` — the effect modifier, one entry per participant.
+- `basis` — a `basis.Basis` to use instead of building one; ``ma.fp`` gives fractional polynomials, ``ma.rcs`` splines.
+- `n_knots` — knots for the default restricted cubic spline.
+- `knots` — explicit knot positions.  The same knots are used in every study, which is what makes the coefficients comparable.
+- `center` — value the covariate is centred at, by default its median.  The linear coefficient of the block is the treatment effect *at this value*, and without centring it is the effect at covariate = 0, which is usually an extrapolation (age 0, dose 0) and can have a standard error an order of magnitude too wide.  Pass ``0`` to switch centring off.
+- `family` — ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
+- `covariates` — further participant-level covariates, adjusted for but not pooled.
+- `method` — τ² estimator for the second stage.
+- `level` — confidence level.
+- `test` — ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
+- `min_events` — studies with fewer events are excluded (no finite logistic estimate otherwise).
+
+**Returns**
+
+`IpdCurveResult`.
+
+**Raises**
+
+- `ValueError` — when the inputs disagree in length, no study can be fitted, or the basis has fewer than two columns.
+
+**Example**
+
+- `>>> fit = ma.ipd_two_stage_curve(  # doctest` — +SKIP
+...     y, study=study, treat=treat, covariate=age)
+- `>>> fit.test_nonlinearity()["pval"]  # doctest` — +SKIP
+- `>>> fit.curve([45, 55, 65]).to_table()  # doctest` — +SKIP
 
 ## `linear_model`
 

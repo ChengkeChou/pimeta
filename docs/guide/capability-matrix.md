@@ -87,14 +87,48 @@ and its events, and pools one coefficient with `rma`. A covariate interaction
 is pooled the same way — `term="treat:age_c"` builds the product inside each
 study, which is the analysis most IPD reviews are actually for.
 
-Studies that cannot be fitted are not silently dropped: a study with no events,
-or one where a covariate separates the outcome, is named in `result.excluded`
-with the reason.
+Studies that cannot be fitted are not silently dropped: a study where an arm has
+no variation in the outcome, or where a covariate separates it, is named in
+`result.excluded` with the reason.
 
 Pinned by `tests/test_ipd.py` against `glm(family = binomial)` and
 `metafor::rma`.
 
-Missing: the one-stage model (item 4), and IPD plus aggregate data.
+**Non-linear modification** is a different problem, and `ma.ipd_two_stage_curve`
+is the answer to it. A spline interaction is several coefficients from the same
+study, they are correlated, and pooling them one at a time — all the univariate
+`term=` route can do — throws that correlation away; the curve is then built
+from variances that do not know about each other, so its band is not a band. The
+new function pools the whole treatment block as a vector, with an unstructured
+between-study covariance, and evaluates
+
+.. math::
+
+    \\Delta(x) = b(x)'\\hat\\mu,
+    \\qquad \\operatorname{Var}\\{\\hat\\Delta(x)\\}
+    = b(x)' \\operatorname{Cov}(\\hat\\mu)\\, b(x)
+
+It returns two bands — the average curve, and where a *new study's* curve would
+fall, which adds `Sigma` — plus a joint test of effect modification and a joint
+test of non-linearity.
+
+Three details it refuses to paper over. The covariate is centred at its median
+by default: the linear coefficient is the treatment effect at that value, and
+without centring it is the effect at covariate zero, an extrapolation whose
+standard error in the reference cohort was an order of magnitude too wide. The
+basis and its knots are built **once** and evaluated in every study, so the
+coefficients pooled are the same quantity in each. And a study whose arm has no
+variation is excluded *with the reason*, while the curve flags points outside the
+observed covariate range.
+
+Pinned by `tests/test_ipd_curve.py` against one `glm` per study and
+`metafor::rma.mv` on the stacked block: pooled coefficients to 1e-6, the curve to
+1e-6, the two joint tests to 1e-5. That cohort's between-study covariance
+estimates to zero, which is a property of 30 studies with noisy coefficients and
+not of the implementation, so a second test builds heterogeneous studies directly
+to check that the prediction band really is wider than the confidence band.
+
+Missing: IPD plus aggregate data.
 
 ### 4. One-stage IPD — **yes**, with a stated model
 
