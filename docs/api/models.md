@@ -416,7 +416,7 @@ A joint pooling of a study-level treatment-effect block.
 ## `ipd_two_stage_curve`
 
 ```python
-ipd_two_stage_curve(y, *, study, treat, covariate, basis=None, n_knots: 'int' = 4, knots=None, center=None, family: 'str' = 'binomial', covariates=None, method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1) -> 'IpdCurveResult'
+ipd_two_stage_curve(y, *, study, treat, covariate, basis=None, n_knots: 'int' = 4, knots=None, center=None, struct: 'str' = 'UN', family: 'str' = 'binomial', covariates=None, method: 'str' = 'REML', level: 'float' = 0.95, test: 'str' = 'z', min_events: 'int' = 1) -> 'IpdCurveResult'
 ```
 
 Pool a treatment-by-covariate spline jointly across studies.
@@ -431,6 +431,7 @@ Pool a treatment-by-covariate spline jointly across studies.
 - `n_knots` — knots for the default restricted cubic spline.
 - `knots` — explicit knot positions.  The same knots are used in every study, which is what makes the coefficients comparable.
 - `center` — value the covariate is centred at, by default its median.  The linear coefficient of the block is the treatment effect *at this value*, and without centring it is the effect at covariate = 0, which is usually an extrapolation (age 0, dose 0) and can have a standard error an order of magnitude too wide.  Pass ``0`` to switch centring off.
+- `struct` — structure of the between-study covariance.  ``"UN"`` (default) estimates every variance and correlation, which needs a lot of studies; ``"HCS"`` gives each coefficient its own variance but one common correlation, and is what to use when ``k`` is small.  See `IpdCurveResult.diagnostics`.
 - `family` — ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
 - `covariates` — further participant-level covariates, adjusted for but not pooled.
 - `method` — τ² estimator for the second stage.

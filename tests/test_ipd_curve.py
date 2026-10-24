@@ -231,6 +231,34 @@ def test_the_tables_and_the_record(fit):
         np.array(KNOTS) - fit.center, rel=1e-12)
 
 
+def test_diagnostics_say_when_the_covariance_is_not_identified(fit):
+    diag = fit.diagnostics()
+    assert diag["k"] == 30
+    assert diag["n_variance_parameters"] == 10      # 4 variances + 6 correlations
+    # this cohort has no detectable between-study heterogeneity
+    assert diag["boundary"]
+    assert diag["tau2_at_zero"] == [1, 2, 3, 4]
+    assert any("prediction band necessarily equals" in n for n in diag["notes"])
+
+
+def test_a_structured_covariance_is_available_for_a_small_k():
+    """Six studies cannot carry an unstructured 4x4 covariance comfortably."""
+    study, age, treat, y = cohort(n_study=6, per_study=200, spread=4.0)
+    with pytest.warns(RuntimeWarning, match="not well identified"):
+        unstructured = ma.ipd_two_stage_curve(
+            y, study=study, treat=treat, covariate=age, knots=KNOTS,
+            struct="UN")
+    common = ma.ipd_two_stage_curve(
+        y, study=study, treat=treat, covariate=age, knots=KNOTS,
+        struct="HCS")
+    # HCS holds one correlation for the whole block instead of six
+    assert (common.diagnostics()["n_variance_parameters"]
+            < unstructured.diagnostics()["n_variance_parameters"])
+    assert common.k >= 4
+    band = common.curve([55.0])
+    assert band.ci_ub[0] > band.ci_lb[0]
+
+
 def test_a_basis_with_no_curve_cannot_be_tested_for_non_linearity():
     study, age, treat, y = cohort(n_study=6, per_study=200)
     flat = ma.ipd_two_stage_curve(y, study=study, treat=treat, covariate=age,

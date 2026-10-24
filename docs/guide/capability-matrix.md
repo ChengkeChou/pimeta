@@ -128,6 +128,16 @@ estimates to zero, which is a property of 30 studies with noisy coefficients and
 not of the implementation, so a second test builds heterogeneous studies directly
 to check that the prediction band really is wider than the confidence band.
 
+**When the covariance cannot be identified**, `diagnostics()` says so instead of
+leaving it to be discovered later: it reports how many studies each variance
+parameter is estimated from, which `tau2` components sit at zero, which
+correlations sit on ±1 (which makes `Sigma` singular and the likelihood flat, so
+another implementation may stop elsewhere on the same ridge), and the condition
+number of `Sigma`. A fit that trips any of these emits a `RuntimeWarning`.
+`struct="HCS"` — one common correlation instead of `K(K+1)/2` of them — is the
+fallback for a small `k`, and `struct="UN"` stays the default because it is the
+honest one when the studies can pay for it.
+
 Missing: IPD plus aggregate data.
 
 ### 4. One-stage IPD — **yes**, with a stated model

@@ -41,6 +41,7 @@ curve reports the covariate range the data actually support.
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -207,6 +208,67 @@ class IpdCurveResult:
     def K(self) -> int:
         return len(self.names) - 1
 
+    # -- can the covariance be believed? ----------------------------------- #
+    def diagnostics(self) -> dict:
+        """Whether the between-study covariance is identifiable at this ``k``.
+
+        A covariance matrix over ``K + 1`` coefficients has ``(K+1)(K+2)/2``
+        parameters, and every one of them has to be estimated from whole
+        studies.  With a dozen studies the estimate routinely lands on a
+        boundary -- a variance at zero, or a correlation at +/-1 -- and the
+        likelihood is then flat in that direction: two correct implementations
+        can pick different points on it, and the prediction band inherits the
+        difference.  This method says whether that happened.
+
+        Returns:
+            A dict with ``k``, ``n_variance_parameters``,
+            ``studies_per_parameter``, ``tau2_at_zero``, ``rho_at_bound``,
+            ``condition`` (of ``Sigma``), ``boundary`` and ``notes`` (a list of
+            sentences, empty when nothing is wrong).
+        """
+        tau2 = np.asarray(self.tau2, dtype=float)
+        rho = np.asarray(
+            self.fit.rho if self.fit.rho is not None else [], dtype=float)
+        n_vc = int((self.fit.parms or (self.fit.p + tau2.size)) - self.fit.p)
+        at_zero = [i + 1 for i, v in enumerate(tau2) if v <= 1e-10]
+        at_bound = [i + 1 for i, v in enumerate(rho)
+                    if abs(abs(v) - 1.0) <= 1e-6]
+        singular = np.linalg.svd(np.asarray(self.Sigma, dtype=float),
+                                 compute_uv=False)
+        condition = (float(singular[0] / singular[-1])
+                     if singular[-1] > 0.0 else float("inf"))
+
+        notes = []
+        if tau2.size and len(at_zero) == tau2.size:
+            notes.append(
+                "every between-study variance is zero, so no heterogeneity "
+                "was detected and the prediction band necessarily equals the "
+                "confidence band; that is an estimate, not a failure")
+        elif at_zero:
+            notes.append(
+                f"between-study variance component(s) {at_zero} sit at zero; "
+                "the curve for those directions is fixed, not estimated")
+        if at_bound:
+            notes.append(
+                f"correlation(s) {at_bound} sit on +/-1, which makes Sigma "
+                "singular: the likelihood is flat there and another "
+                "implementation may stop at a different point on the same "
+                "ridge")
+        if n_vc and self.k < 3 * n_vc:
+            notes.append(
+                f"{self.k} studies for {n_vc} variance parameters; consider "
+                "struct='HCS' (a common correlation) or fewer basis columns")
+        return {
+            "k": self.k,
+            "n_variance_parameters": n_vc,
+            "studies_per_parameter": (self.k / n_vc) if n_vc else float("nan"),
+            "tau2_at_zero": at_zero,
+            "rho_at_bound": at_bound,
+            "condition": condition,
+            "boundary": bool(at_zero or at_bound),
+            "notes": notes,
+        }
+
     # -- reporting -------------------------------------------------------- #
     def coef_table(self) -> list[dict]:
         return [
@@ -235,6 +297,7 @@ class IpdCurveResult:
 
 def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
                         n_knots: int = 4, knots=None, center=None,
+                        struct: str = "UN",
                         family: str = "binomial",
                         covariates=None, method: str = "REML",
                         level: float = 0.95, test: str = "z",
@@ -257,6 +320,11 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
             which is usually an extrapolation (age 0, dose 0) and can have a
             standard error an order of magnitude too wide.  Pass ``0`` to
             switch centring off.
+        struct: structure of the between-study covariance.  ``"UN"`` (default)
+            estimates every variance and correlation, which needs a lot of
+            studies; ``"HCS"`` gives each coefficient its own variance but one
+            common correlation, and is what to use when ``k`` is small.  See
+            :meth:`IpdCurveResult.diagnostics`.
         family: ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
         covariates: further participant-level covariates, adjusted for but not
             pooled.
@@ -402,7 +470,7 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
     data = {"coef": index.tolist(), "study": study_labels}
 
     fit = rma_mv(stacked, V=V, mods=X_one, data=data,
-                 random="~ coef | study", struct="UN", intercept=False,
+                 random="~ coef | study", struct=struct, intercept=False,
                  method=method, level=level_to_percent(level), test=test)
 
     coef = [float(v) for v in fit.beta]
@@ -413,7 +481,7 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
     Sigma = np.asarray(G, dtype=float)
     tau2 = [float(v) for v in np.diag(Sigma)]
 
-    return IpdCurveResult(
+    result = IpdCurveResult(
         names=list(names),
         coef=coef,
         se=[float(v) for v in fit.se],
@@ -432,3 +500,13 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
         per_study=per_study,
         fit=fit,
     )
+    # A boundary estimate is not an error, but it is not something to discover
+    # three sections later either: on the boundary the likelihood is flat in
+    # that direction and the prediction band is a choice of stopping point.
+    problems = result.diagnostics()["notes"]
+    if problems:
+        warnings.warn(
+            "the between-study covariance of the treatment block is not well "
+            "identified: " + " | ".join(problems),
+            RuntimeWarning, stacklevel=2)
+    return result
