@@ -16,18 +16,37 @@ permissions:
 
 jobs:
   test:
-    name: test · py${{ matrix.python }} · numpy${{ matrix.numpy }}
+    name: test · py${{ matrix.python }} · numpy${{ matrix.numpy }} · shard ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
+        # The suite takes hours of wall clock, so each interpreter runs a
+        # quarter of it.  `tools/shard_tests.py` reads .test_durations.json (a
+        # checked-in map of test id to seconds) and cuts the run into equally
+        # *timed* quarters rather than equally numbered ones; without the map
+        # it falls back to splitting by count.  The combinations are written
+        # out rather than crossed, because a GitHub matrix cannot cross a
+        # literal list with `include` entries predictably.
         include:
           # Oldest supported interpreter on the NumPy 1.x side of the 2.0 split.
-          - { python: "3.10", numpy: "1" }
-          - { python: "3.11", numpy: "1" }
+          - { python: "3.10", numpy: "1", shard: 1 }
+          - { python: "3.10", numpy: "1", shard: 2 }
+          - { python: "3.10", numpy: "1", shard: 3 }
+          - { python: "3.10", numpy: "1", shard: 4 }
+          - { python: "3.11", numpy: "1", shard: 1 }
+          - { python: "3.11", numpy: "1", shard: 2 }
+          - { python: "3.11", numpy: "1", shard: 3 }
+          - { python: "3.11", numpy: "1", shard: 4 }
           # Current interpreters on NumPy 2.x.
-          - { python: "3.12", numpy: "2" }
-          - { python: "3.13", numpy: "2" }
+          - { python: "3.12", numpy: "2", shard: 1 }
+          - { python: "3.12", numpy: "2", shard: 2 }
+          - { python: "3.12", numpy: "2", shard: 3 }
+          - { python: "3.12", numpy: "2", shard: 4 }
+          - { python: "3.13", numpy: "2", shard: 1 }
+          - { python: "3.13", numpy: "2", shard: 2 }
+          - { python: "3.13", numpy: "2", shard: 3 }
+          - { python: "3.13", numpy: "2", shard: 4 }
     steps:
       - uses: actions/checkout@v5
 
@@ -46,13 +65,26 @@ jobs:
       - name: Show resolved versions
         run: python -c "import sys,numpy,scipy,matplotlib,pimeta; print(sys.version.split()[0], '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| matplotlib', matplotlib.__version__, '| pimeta', pimeta.__version__)"
 
+      - name: Work out which quarter of the suite this shard runs
+        # By recorded time rather than by file count: the slowest file is
+        # orders of magnitude slower than the fastest, so an equal number of
+        # files is an unequal amount of work.
+        run: |
+          python tools/shard_tests.py --shard ${{ matrix.shard }} --of 4 > shard.txt
+          echo "this shard runs $(wc -l < shard.txt) tests"
+
       - name: Run the test suite with coverage
         # `pipefail` keeps pytest's exit code through the `tee`; the log is
         # needed by the next step because the runner log itself is not
         # readable without a token.
         run: |
           set -o pipefail
-          python -m pytest tests/ -q --cov=src/pimeta \
+          mapfile -t ids < shard.txt
+          if [ ${#ids[@]} -eq 0 ]; then
+            echo "nothing assigned to this shard"
+            exit 0
+          fi
+          python -m pytest "${ids[@]}" -q --cov=src/pimeta \
             --cov-report=term-missing:skip-covered --cov-report=xml 2>&1 | tee pytest.log
 
       - name: Surface the failure in the check annotations
@@ -90,10 +122,12 @@ jobs:
               print(f"::error title=pytest warnings::{text_warn[:3000]}")
 
       - name: Upload coverage report
+        # Each shard covers a quarter of the suite, so the artefact is named
+        # after the shard rather than pretending to be the whole picture.
         if: matrix.python == '3.12'
         uses: actions/upload-artifact@v6
         with:
-          name: coverage-xml
+          name: coverage-xml-shard${{ matrix.shard }}
           path: coverage.xml
           if-no-files-found: warn
           retention-days: 7
