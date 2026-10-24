@@ -559,7 +559,7 @@ A one-stage IPD network meta-analysis.
 ## `nma_dose`
 
 ```python
-nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None, rho=None, family: 'str' = 'linear', treatment_specific: 'bool' = True, knots=None, n_knots: 'int | None' = None, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 0.95, anchor: 'float' = 0.0, max_iter: 'int' = 500, start=None, tol: 'float' = 1e-09) -> 'NmaDoseResult'
+nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None, rho=None, family: 'str' = 'linear', treatment_specific: 'bool' = True, knots=None, n_knots: 'int | None' = None, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 0.95, anchor: 'float' = 0.0, max_iter: 'int' = 500, start=None, tol: 'float' = 1e-09, inference: 'str' = 'reml', mcmc: 'dict | None' = None) -> 'NmaDoseResult'
 ```
 
 Fit a dose-response model to a network of contrasts.
@@ -584,6 +584,8 @@ Fit a dose-response model to a network of contrasts.
 - `max_iter` — optimiser iteration cap.
 - `start` — optional starting values for the dose-response parameters.
 - `tol` — convergence tolerance on the variance parameters.
+- `inference` — ``"reml"`` (default) profiles the variance parameters by restricted maximum likelihood; ``"mcmc"`` samples the posterior instead, which is the only way to fit a **random effect on the curve** with a dose function that is not linear in its parameters — the marginal likelihood is then an integral with no closed form. A Bayesian fit also reports draw-based credible and prediction intervals rather than delta-method ones.
+- `mcmc` — sampler settings and priors for ``inference="mcmc"``. Recognised keys are ``n_draws``, ``warmup``, ``chains``, ``seed``, ``prior_beta`` (scale of the normal prior on the curve parameters) and ``prior_het`` (scale of the half-normal prior on every between-study standard deviation).
 
 **Returns**
 
@@ -600,7 +602,7 @@ Fit a dose-response model to a network of contrasts.
 ## `NmaDoseResult`
 
 ```python
-NmaDoseResult(family: 'str', treatments: 'list[str]', curves: 'list[str]', names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray' = <factory>, tau2: 'float' = nan, D: 'np.ndarray | None' = None, k: 'int' = 0, studies: 'list' = <factory>, dose_range: 'dict' = <factory>, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 95.0, loglik: 'float' = nan, anchor: 'float' = 0.0, n_knots: 'int | None' = None, knots: 'list[float] | None' = None, treatment_specific: 'bool' = True, fit: 'Any' = None) -> None
+NmaDoseResult(family: 'str', treatments: 'list[str]', curves: 'list[str]', names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray' = <factory>, tau2: 'float' = nan, D: 'np.ndarray | None' = None, k: 'int' = 0, studies: 'list' = <factory>, dose_range: 'dict' = <factory>, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 95.0, loglik: 'float' = nan, anchor: 'float' = 0.0, n_knots: 'int | None' = None, knots: 'list[float] | None' = None, treatment_specific: 'bool' = True, inference: 'str' = 'reml', posterior: 'Any' = None, fit: 'Any' = None) -> None
 ```
 
 A fitted dose-response network.
@@ -620,8 +622,10 @@ A fitted dose-response network.
 - `dose_range` — the observed range of dose, per treatment.
 - `struct, coef_struct` — the heterogeneity structure.
 - `method, level` — settings.
-- `loglik` — the maximised (restricted) log-likelihood.
+- `loglik` — the maximised (restricted) log-likelihood, or for a Bayesian fit the log posterior at the draw with the highest density.
 - `anchor` — the dose at which every curve is zero.
+- `inference` — ``"reml"`` or ``"mcmc"``.
+- `posterior` — the `bayes.Posterior` when ``inference`` is ``"mcmc"``, else ``None``.  When it is present, ``coef`` and ``se`` hold the posterior mean and standard deviation, and every interval the result reports is a draw-based credible interval rather than a delta-method one.
 - `fit` — the raw optimiser output, for diagnosing a boundary.
 
 ## `NmaDoseCurve`

@@ -663,12 +663,15 @@ parameters (coefficients to 1e-7, standard errors to 1e-6 relative, `tau2` to
 (parameters to 1e-4, residual sum of squares to 1e-8), and against `rms::rcs`
 for the spline basis itself (1e-9).
 
-Not attempted, and why: a random effect on `(emax, ed50)`. The marginal
-likelihood is then an integral with no closed form, so it needs MCMC, which the
-dependency policy rules out. `MBNMAdose` is the reference implementation that
-does exactly that, and it could not be installed here because it needs `rjags`
-and a JAGS binary, which requires an elevated install — so the validation went
-to implementations that are deterministic instead.
+Not attempted, and why: `coef_struct="UN"` under the sampler. A full
+between-curve covariance needs its own parameterisation and its own validation,
+and a half-checked one is worse than a stated limit.
+
+A random effect on `(emax, ed50)` **is** now available, through
+`inference="mcmc"` — see item 14 — because the sampler in `pimeta.bayes` makes
+the integral unnecessary. The cost is time, not dependencies, and the price of a
+random walk on a nearly flat ridge is long runs: the diagnostics say so and
+`check()` refuses to summarise a chain that has not converged.
 
 ### 15. Time-course network meta-analysis — **yes**
 
@@ -727,7 +730,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
 | 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
-| 14 | dose-response network meta-analysis | yes — every dose function except a random effect on a non-linear parameter | `tests/test_nma_dose.py` |
+| 14 | dose-response network meta-analysis | yes — every dose function, and a random effect on any of them: closed-form where the parameters are linear, by sampling where they are not | `tests/test_nma_dose.py`, `tests/test_nma_dose_mcmc.py` |
 | 15 | time-course network meta-analysis | yes — every linear-in-parameters basis; a random effect on a non-linear time parameter is not available | `tests/test_nma_timecourse.py` |
 
 Five of these turned out to be further along than the roadmap assumed: items

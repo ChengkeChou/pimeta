@@ -37,6 +37,55 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **A random effect on a nonlinear dose-response curve, by sampling.**
+  `nma_dose(inference="mcmc")` fits the model that used to be refused:
+  :math:`\beta_{it} = \beta_t + b_{it}` with
+  :math:`b_{it} \sim N(0, \operatorname{diag}(\sigma_t^2))`, so a study's whole
+  Emax/ED50 relationship may deviate, not just its level. For a dose function
+  linear in its parameters the marginal likelihood is closed-form and REML
+  handles it, which is why the refusal was specific: for `emax` and
+  `exponential` the marginal likelihood is an integral.
+
+  The deviations are sampled **non-centred** (:math:`b = \sigma z`), because a
+  centred random walk struggles when the between-study scale is much smaller
+  than the fixed effect. Priors are stated rather than buried:
+  :math:`\beta \sim N(0, 10^2)` and every between-study SD
+  :math:`\sim \text{half-N}(0, 0.5^2)`.
+
+  A Bayesian fit does not reuse the delta method: `curve()` and `contrast()`
+  push every draw through the curve and take quantiles, and the prediction band
+  adds one sampled between-study deviation per draw. On a ratio parameter like
+  ED50 that is not the same interval as a quadratic approximation at the
+  estimate, which is the reason for doing it this way.
+
+  Validation, and its limits, stated plainly. **No independent Bayesian
+  reference could be run in this environment**: `MBNMAdose` is the right one and
+  needs JAGS, whose installer host is unreachable from here, and `rstan` 2.32.7
+  cannot compile a new model under R 4.6 (its `cxxfunction` fails on an invalid
+  connection; `multinma` works only because it ships precompiled models). The
+  Stan program for the identical model is in `tests/reference/dose_mcmc.stan`
+  for a toolchain that works. What is checked instead:
+
+  - the **flat-prior limit**, where the posterior is proportional to the
+    likelihood: with `prior_beta = 1e6` the posterior mean agrees with the
+    deterministic `nls` fit (already pinned to 1e-4) to 0.04 on the parameters
+    and the posterior SD to a few per cent — and the test says why they are not
+    *equal*, because an Emax/ED50 posterior is skewed and the maximum-likelihood
+    standard error is a quadratic approximation at the mode;
+  - the **engine** against exact posteriors, covered by `tests/test_bayes.py`;
+  - **coverage**: with the random curve switched on, the prediction band covers
+    the generating curve at the doses the data support.
+
+  Two honest costs. The sampler is a random walk, so a nearly flat ridge — and
+  Emax/ED50 is one wherever the observed doses do not bracket the ED50 — needs
+  long runs: on the full fixture the B curve reached `R-hat = 1.05` with 16000
+  draws where an easier subset reached 1.005 with 8000. That is why `check()`
+  runs by default and **raises** rather than returning a summary of a chain that
+  has not converged; the alternative would be a number that looks like an
+  estimate and is not one. And `coef_struct="UN"` is refused for the sampler: a
+  full between-curve covariance needs its own parameterisation and its own
+  validation.
+
 - **Markov chain Monte Carlo, as an optional engine that adds no dependency.**
   `pimeta.bayes` is a complete sampler written against numpy: adaptive
   random-walk Metropolis with a multivariate normal proposal built by the

@@ -94,6 +94,7 @@ from scipy import stats
 from scipy.optimize import minimize, minimize_scalar
 
 from ..basis import _rcs_matrix, default_knots
+from ..bayes import sample_log_posterior
 from ..levels import level_to_alpha
 
 __all__ = ["NmaDoseCurve", "NmaDoseResult", "dose_functions", "nma_dose"]
@@ -172,6 +173,26 @@ def _value(family: str, dose, params) -> np.ndarray:
         return p[0] * x / (scale + x)
     if family == "exponential":
         return p[0] * (1.0 - np.exp(-x / scale))
+    raise ValueError(
+        f"{family!r} is linear in its parameters; use the design row")
+
+
+def _value_rows(family: str, dose, params) -> np.ndarray:
+    """``f(x; params)`` with one parameter vector per row.
+
+    The nonlinear dose functions are the reason a random effect on the curve
+    needs a sampler, so they also need a form that takes a *per-row* parameter
+    vector: a study's Emax and ED50 are its own.
+    """
+    x = np.asarray(dose, dtype=float).ravel()
+    p = np.atleast_2d(np.asarray(params, dtype=float))
+    if p.shape[0] == 1:
+        p = np.broadcast_to(p, (x.size, p.shape[1]))
+    scale = np.exp(np.clip(p[:, 1], -30.0, 30.0))
+    if family == "emax":
+        return p[:, 0] * x / (scale + x)
+    if family == "exponential":
+        return p[:, 0] * (1.0 - np.exp(-x / scale))
     raise ValueError(
         f"{family!r} is linear in its parameters; use the design row")
 
@@ -286,8 +307,15 @@ class NmaDoseResult:
         dose_range: the observed range of dose, per treatment.
         struct, coef_struct: the heterogeneity structure.
         method, level: settings.
-        loglik: the maximised (restricted) log-likelihood.
+        loglik: the maximised (restricted) log-likelihood, or for a Bayesian
+            fit the log posterior at the draw with the highest density.
         anchor: the dose at which every curve is zero.
+        inference: ``"reml"`` or ``"mcmc"``.
+        posterior: the :class:`~pimeta.bayes.Posterior` when ``inference`` is
+            ``"mcmc"``, else ``None``.  When it is present, ``coef`` and ``se``
+            hold the posterior mean and standard deviation, and every interval
+            the result reports is a draw-based credible interval rather than a
+            delta-method one.
         fit: the raw optimiser output, for diagnosing a boundary.
     """
 
@@ -312,6 +340,8 @@ class NmaDoseResult:
     n_knots: int | None = None
     knots: list[float] | None = None
     treatment_specific: bool = True
+    inference: str = "reml"
+    posterior: Any = field(repr=False, default=None)
     fit: Any = field(repr=False, default=None)
 
     # -- the machinery a prediction needs, rebuilt from the stored settings -- #
@@ -333,6 +363,27 @@ class NmaDoseResult:
         p = _n_parameters(self.family, n_knots=self.n_knots)
         lo = block * p
         return np.asarray(self.coef, dtype=float)[lo:lo + p]
+
+    def _curve_draws(self, treat, dose, sign: float = 1.0) -> np.ndarray | None:
+        """``f_t(x)`` for every posterior draw: ``(n_draws, n_dose)``.
+
+        A Bayesian fit does not need a delta method: pushing each draw through
+        the curve and taking quantiles is exact, and it stays honest when the
+        posterior is skewed, which for a ratio like ED50 it usually is.
+        """
+        if self.posterior is None:
+            return None
+        x = np.asarray(dose, dtype=float).ravel()
+        block = self._block_of(treat)
+        draws = np.asarray(self.posterior.draws)
+        if block is None:
+            return np.zeros((draws.shape[0], x.size))
+        p = _n_parameters(self.family, n_knots=self.n_knots)
+        params = draws[:, block * p:(block + 1) * p]
+        if self.family in _LINEAR_IN_PARAMETERS:
+            return sign * (_basis(self.family, x, knots=self.knots) @ params.T).T
+        return sign * np.vstack([
+            _value(self.family, x, row) for row in params])
 
     def _curve_value(self, treat, dose) -> np.ndarray:
         """``f_t(x)`` on the fitted parameters: zero where there is no curve."""
@@ -430,6 +481,10 @@ class NmaDoseResult:
         crit = float(stats.norm.ppf(1.0 - alpha / 2.0))
         signs = [1.0] * len(parts) if signed is None else list(signed)
         size = parts[0][1].size
+        lo, hi = self.dose_range.get(parts[0][0], (self.anchor, self.anchor))
+        outside = (parts[0][1] < lo) | (parts[0][1] > hi)
+        if self.posterior is not None:
+            return self._band_from_draws(parts, signs, alpha, labels, outside)
         est = np.zeros(size)
         jac = np.zeros((size, len(self.coef)))
         for (treat, x), s in zip(parts, signs):
@@ -439,8 +494,6 @@ class NmaDoseResult:
         var = np.maximum(var, 0.0)
         se = np.sqrt(var)
         extra = self._prediction_variance(jac)
-        lo, hi = self.dose_range.get(parts[0][0], (self.anchor, self.anchor))
-        outside = (parts[0][1] < lo) | (parts[0][1] > hi)
         return NmaDoseCurve(
             labels=list(labels) if labels is not None
             else [f"{parts[0][0]} vs dose {self.anchor:g}"],
@@ -451,6 +504,59 @@ class NmaDoseResult:
             ci_ub=est + crit * se,
             pred_lb=est - crit * np.sqrt(var + extra),
             pred_ub=est + crit * np.sqrt(var + extra),
+            outside=outside,
+        )
+
+    def _band_from_draws(self, parts, signs, alpha, labels,
+                         outside) -> NmaDoseCurve:
+        """Credible band: push every draw through the curve, then take quantiles.
+
+        The prediction band adds one draw of the between-study deviation per
+        posterior draw, so it is the interval a *new* study's curve would fall
+        in — built by sampling, not by adding a variance to an interval, which
+        for a curve that is nonlinear in its parameters would be a different
+        number.
+        """
+        curves = None
+        for (treat, x), s in zip(parts, signs):
+            piece = self._curve_draws(treat, x, sign=s)
+            assert piece is not None
+            curves = piece if curves is None else curves + piece
+        assert curves is not None
+        n_draw = curves.shape[0]
+        p = _n_parameters(self.family, n_knots=self.n_knots)
+        predict = curves.copy()
+        if self.D is not None and np.size(self.D):
+            rng = np.random.default_rng(0)
+            chol = np.linalg.cholesky(
+                np.asarray(self.D) + 1e-12 * np.eye(np.asarray(self.D).shape[0]))
+            noise = rng.standard_normal((n_draw, chol.shape[0])) @ chol.T
+            for (treat, x), s in zip(parts, signs):
+                block = self._block_of(treat)
+                if block is None:
+                    continue
+                params = noise[:, block * p:(block + 1) * p]
+                xv = np.asarray(x, dtype=float)
+                if self.family in _LINEAR_IN_PARAMETERS:
+                    basis = _basis(self.family, xv, knots=self.knots)
+                    predict += s * (basis @ params.T).T
+                else:
+                    predict += s * np.vstack([
+                        _value(self.family, xv, row) for row in params])
+        if np.isfinite(self.tau2) and self.tau2 > 0.0:
+            rng = np.random.default_rng(1)
+            predict = predict + rng.normal(0.0, np.sqrt(self.tau2), (n_draw, 1))
+        tail = alpha / 2.0
+        return NmaDoseCurve(
+            labels=list(labels) if labels is not None
+            else [f"{parts[0][0]} vs dose {self.anchor:g}"],
+            dose=parts[0][1].copy(),
+            est=np.mean(curves, axis=0),
+            se=np.std(curves, axis=0, ddof=1),
+            ci_lb=np.quantile(curves, tail, axis=0),
+            ci_ub=np.quantile(curves, 1.0 - tail, axis=0),
+            pred_lb=np.quantile(predict, tail, axis=0),
+            pred_ub=np.quantile(predict, 1.0 - tail, axis=0),
             outside=outside,
         )
 
@@ -513,9 +619,13 @@ class NmaDoseResult:
             + (f" ({self.coef_struct})" if self.D is not None else ""),
         ]
         if np.isfinite(self.tau2):
-            parts.append(f"  tau2 = {self.tau2:.6f} (tau = {np.sqrt(self.tau2):.6f})")
+            if self.tau2 > 0.0:
+                parts.append(
+                    f"  tau2 = {self.tau2:.6f} (tau = {np.sqrt(self.tau2):.6f})")
+            else:
+                parts.append("  tau2 = 0 (no between-study variation)")
         else:
-            parts.append("  tau2 = 0 (fixed effect)")
+            parts.append("  no study-level term in this structure")
         parts.append(f"  log-likelihood ({self.method}) = {self.loglik:.6f}")
         width = max([len(n) for n in self.names] + [6])
         for name, est, se in zip(self.names, self.coef, self.se):
@@ -538,7 +648,8 @@ def nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None,
              knots=None, n_knots: int | None = None, struct: str = "study",
              coef_struct: str = "DIAG", method: str = "REML",
              level: float = 0.95, anchor: float = 0.0, max_iter: int = 500,
-             start=None, tol: float = 1e-9) -> NmaDoseResult:
+             start=None, tol: float = 1e-9, inference: str = "reml",
+             mcmc: dict | None = None) -> NmaDoseResult:
     """Fit a dose-response model to a network of contrasts.
 
     Args:
@@ -574,6 +685,18 @@ def nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None,
         max_iter: optimiser iteration cap.
         start: optional starting values for the dose-response parameters.
         tol: convergence tolerance on the variance parameters.
+        inference: ``"reml"`` (default) profiles the variance parameters by
+            restricted maximum likelihood; ``"mcmc"`` samples the posterior
+            instead, which is the only way to fit a **random effect on the
+            curve** with a dose function that is not linear in its parameters —
+            the marginal likelihood is then an integral with no closed form. A
+            Bayesian fit also reports draw-based credible and prediction
+            intervals rather than delta-method ones.
+        mcmc: sampler settings and priors for ``inference="mcmc"``. Recognised
+            keys are ``n_draws``, ``warmup``, ``chains``, ``seed``,
+            ``prior_beta`` (scale of the normal prior on the curve parameters)
+            and ``prior_het`` (scale of the half-normal prior on every
+            between-study standard deviation).
 
     Returns:
         :class:`NmaDoseResult`.
@@ -589,6 +712,16 @@ def nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None,
         >>> print(fit.curve("drugB", [0, 5, 10]))
     """
     family = _check_family(family)
+    if str(inference).lower() == "mcmc":
+        return _nma_dose_mcmc(
+            yi, study=study, treat1=treat1, treat2=treat2, dose1=dose1,
+            dose2=dose2, vi=vi, vcov=vcov, rho=rho, family=family,
+            treatment_specific=treatment_specific, knots=knots,
+            n_knots=n_knots, struct=struct, coef_struct=coef_struct,
+            level=level, anchor=anchor, settings=mcmc)
+    if str(inference).lower() != "reml":
+        raise ValueError(
+            f"unknown 'inference' {inference!r}; use 'reml' or 'mcmc'")
     if struct not in ("FE", "study", "coef", "coef+study"):
         raise ValueError(
             f"unknown 'struct' {struct!r}; use 'FE', 'study', 'coef' or "
@@ -1036,4 +1169,256 @@ def nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None,
         knots=knots,
         treatment_specific=bool(treatment_specific),
         fit={"theta": theta_hat.tolist(), "loglik": -float(value)},
+    )
+
+
+# --------------------------------------------------------------------------- #
+# the Bayesian fit
+# --------------------------------------------------------------------------- #
+_MCMC_DEFAULTS: dict[str, Any] = {
+    "n_draws": 4000,
+    "warmup": 2000,
+    "chains": 4,
+    "seed": None,
+    "prior_beta": 10.0,
+    "prior_het": 0.5,
+    "check": True,
+}
+
+
+def _nma_dose_mcmc(yi, *, study, treat1, treat2, dose1, dose2, vi, vcov, rho,
+                   family, treatment_specific, knots, n_knots, struct,
+                   coef_struct, level, anchor,
+                   settings: dict | None = None) -> NmaDoseResult:
+    """Fit the hierarchical dose-response model by sampling the posterior.
+
+    The model is the same one :func:`nma_dose` fits, with the random effect
+    where the closed-form version cannot have it: on the **curve parameters
+    themselves**,
+
+    .. math::
+
+        \\beta_{it} = \\beta_t + b_{it}, \\qquad
+        b_{it} \\sim N(0, \\operatorname{diag}(\\sigma_t^2)),
+
+    so a study's whole dose-response relationship may deviate, not just its
+    level. For a dose function that is linear in its parameters the marginal
+    likelihood of that model is closed-form and REML handles it; for ``emax`` or
+    ``exponential`` it is an integral, and this function samples :math:`b_{it}`
+    instead of integrating it out.
+
+    The deviations are sampled **non-centred** (:math:`b = \\sigma z` with
+    :math:`z \\sim N(0, 1)`), because a centred random walk struggles when the
+    between-study scale is much smaller than the fixed effect — the same
+    funnel that makes hierarchical models need reparameterisation everywhere
+    else.
+
+    Priors, stated rather than buried:
+
+    - :math:`\\beta_t \\sim N(0, 10^2)` on the scale the model is written on, so
+      an effect and a log-ED50 are both given a weak prior of the same width.
+    - every between-study standard deviation, including the study level when
+      ``struct`` has one, :math:`\\sigma \\sim \\text{half-N}(0, 0.5^2)`. On a
+      log-effect scale a between-study SD of 1 is already enormous, so this is
+      weakly informative by construction rather than tuned here.
+
+    ``coef_struct`` is limited to ``"DIAG"``: a full covariance between a
+    curve's coefficients would need its own parameterisation and its own
+    validation, and a half-checked one is worse than a stated limit.
+    """
+    cfg = dict(_MCMC_DEFAULTS)
+    if settings:
+        unknown = set(settings) - set(cfg)
+        if unknown:
+            raise ValueError(
+                f"unknown 'mcmc' setting(s): {', '.join(sorted(map(str, unknown)))}; "
+                f"known keys are {', '.join(sorted(cfg))}")
+        cfg.update(settings)
+    if coef_struct != "DIAG":
+        raise ValueError(
+            "inference='mcmc' supports coef_struct='DIAG' only: a full "
+            "between-curve covariance needs a parameterisation this engine does "
+            "not implement, and an unvalidated one would be worse than the limit")
+
+    # the frequentist fixed-effect fit does all the input validation, the design
+    # and the identifiability checks, and gives the sampler somewhere to start
+    fe = nma_dose(yi, study=study, treat1=treat1, treat2=treat2, dose1=dose1,
+                  dose2=dose2, vi=vi, vcov=vcov, rho=rho, family=family,
+                  treatment_specific=treatment_specific, knots=knots,
+                  n_knots=n_knots, struct="FE", level=level, anchor=anchor)
+    y = np.asarray(yi, dtype=float).ravel()
+    k = y.size
+    studies = [str(s) for s in np.asarray(study).ravel()]
+    studies_unique = list(dict.fromkeys(studies))
+    index = {s: i for i, s in enumerate(studies_unique)}
+    sid = np.array([index[s] for s in studies])
+    a1 = [str(t) for t in np.asarray(treat1).ravel()]
+    a2 = [str(t) for t in np.asarray(treat2).ravel()]
+    d1 = np.asarray(dose1, dtype=float).ravel()
+    d2 = np.asarray(dose2, dtype=float).ravel()
+    if vcov is not None:
+        V = np.asarray(vcov, dtype=float)
+    else:
+        v = np.asarray(vi, dtype=float).ravel()
+        V = np.diag(v)
+        if rho is not None:
+            r = float(rho)
+            for s in studies_unique:
+                sel = np.flatnonzero(sid == index[s])
+                if sel.size < 2:
+                    continue
+                sd = np.sqrt(v[sel])
+                V[np.ix_(sel, sel)] = r * np.outer(sd, sd)
+                V[sel, sel] = v[sel]
+    chol_V, logdet_V = _chol(V)
+
+    blocks_names = fe._blocks()
+    p = _n_parameters(family, n_knots=fe.n_knots)
+    n_par = len(blocks_names) * p
+    block_of = {t: i for i, t in enumerate(blocks_names)} \
+        if treatment_specific else None
+
+    def block_index(treat: str) -> int | None:
+        if not treatment_specific:
+            return 0
+        assert block_of is not None
+        return block_of.get(treat)
+
+    blk2 = np.full(k, -1, dtype=int)
+    blk1 = np.full(k, -1, dtype=int)
+    for i in range(k):
+        found = block_index(a2[i])
+        if found is not None:
+            blk2[i] = found
+        found = block_index(a1[i])
+        if found is not None:
+            blk1[i] = found
+    if family in _LINEAR_IN_PARAMETERS:
+        Xd = np.zeros((k, n_par))
+        for i in range(k):
+            for treat, dose, sign in ((a2[i], d2[i], 1.0), (a1[i], d1[i], -1.0)):
+                b = block_index(treat)
+                if b is None:
+                    continue
+                Xd[i, b * p:(b + 1) * p] += sign * _basis(
+                    family, np.array([dose]), knots=fe.knots)[0]
+    else:
+        Xd = None
+
+    use_study = struct in ("study", "coef+study")
+    use_coef = struct in ("coef", "coef+study")
+    n_sd = (1 if use_study else 0) + (n_par if use_coef else 0)
+    n_z = len(studies_unique) * n_par
+    prior_beta = float(cfg["prior_beta"])
+    prior_het = float(cfg["prior_het"])
+
+    def unpack(theta: np.ndarray):
+        beta = theta[:n_par]
+        pos = n_par
+        tau = float(np.exp(theta[pos])) if use_study else 0.0
+        pos += 1 if use_study else 0
+        sd = np.exp(theta[pos:pos + n_par]) if use_coef else np.full(n_par, 0.0)
+        pos += n_par if use_coef else 0
+        z = theta[pos:pos + n_z].reshape(len(studies_unique), n_par)
+        return beta, tau, sd, z
+
+    def mean_vector(beta, sd, z):
+        # a study's parameters are the pooled ones plus its own deviation, and
+        # ``sd`` is zero unless the curve itself carries a random effect
+        per_study = beta[None, :] + z * sd[None, :]
+        if Xd is not None:
+            return np.sum(Xd * per_study[sid], axis=1)
+        mu = np.zeros(k)
+        for b in range(len(blocks_names)):
+            params_study = per_study[:, b * p:(b + 1) * p]
+            up = blk2 == b
+            down = blk1 == b
+            if up.any():
+                mu[up] += _value_rows(family, d2[up], params_study[sid[up]])
+            if down.any():
+                mu[down] -= _value_rows(family, d1[down], params_study[sid[down]])
+        return mu
+
+    def logpost(theta: np.ndarray) -> float:
+        beta, tau, sd, z = unpack(theta)
+        if not np.all(np.isfinite(theta)):
+            return -np.inf
+        mu = mean_vector(beta, sd, z)
+        resid = y - mu
+        value = -0.5 * logdet_V - 0.5 * _quadratic_form(chol_V, resid)
+        value += -0.5 * float(beta @ beta) / prior_beta ** 2
+        if use_study:
+            value += (-0.5 * (tau / prior_het) ** 2
+                      + float(np.log(max(tau, 1e-300))))
+        if use_coef:
+            value += float(np.sum(-0.5 * (sd / prior_het) ** 2
+                                  + np.log(np.maximum(sd, 1e-300))))
+        value += float(np.sum(-0.5 * z * z))
+        return float(value)
+
+    start = np.zeros(n_par + n_sd + n_z)
+    start[:n_par] = np.asarray(fe.coef, dtype=float)
+    pos = n_par
+    if use_study:
+        start[pos] = np.log(0.1)
+        pos += 1
+    if use_coef:
+        start[pos:pos + n_par] = np.log(0.1)
+    schedule = ([np.arange(n_par)]
+                + ([np.arange(n_par, n_par + n_sd)] if n_sd else [])
+                + [np.array([n_par + n_sd + i * n_par + j for j in range(n_par)])
+                   for i in range(len(studies_unique))])
+    post = sample_log_posterior(
+        logpost, start,
+        names=(fe.names
+               + (["log_sd_study"] if use_study else [])
+               + ([f"log_sd[{name}]" for name in fe.names] if use_coef else [])
+               + [f"z[{s}:{name}]" for s in studies_unique for name in fe.names]),
+        n_draws=int(cfg["n_draws"]), warmup=int(cfg["warmup"]),
+        chains=int(cfg["chains"]), seed=cfg["seed"],
+        init_sd=0.1, blocks=schedule)
+    if cfg["check"]:
+        post.check(rhat_max=1.05, ess_min=100.0)
+
+    draws = post.draws
+    beta_draws = draws[:, :n_par]
+    coef = np.mean(beta_draws, axis=0)
+    vcov_beta = np.cov(beta_draws, rowvar=False)
+    vcov_beta = np.atleast_2d(vcov_beta)
+    se = np.sqrt(np.maximum(np.diag(vcov_beta), 0.0))
+    pos = n_par
+    tau2 = float(np.mean(np.exp(2.0 * draws[:, pos]))) if use_study \
+        else float("nan")
+    pos += 1 if use_study else 0
+    D = None
+    if use_coef:
+        sd_draws = np.exp(draws[:, pos:pos + n_par])
+        D = np.diag(np.mean(sd_draws ** 2, axis=0))
+    return NmaDoseResult(
+        family=family,
+        treatments=fe.treatments,
+        curves=list(fe.curves),
+        names=list(fe.names),
+        coef=[float(v) for v in coef],
+        se=[float(v) for v in se],
+        vcov=vcov_beta,
+        tau2=tau2,
+        D=D,
+        k=k,
+        studies=studies_unique,
+        dose_range=dict(fe.dose_range),
+        struct=struct,
+        coef_struct=coef_struct,
+        method="MCMC",
+        level=fe.level,
+        loglik=float(np.max(post.logpost)),
+        anchor=float(anchor),
+        n_knots=fe.n_knots,
+        knots=fe.knots,
+        treatment_specific=bool(treatment_specific),
+        inference="mcmc",
+        posterior=post,
+        fit={"accept": [float(v) for v in post.accept],
+             "rhat_max": float(np.max(post.rhat())),
+             "ess_min": float(np.min(post.ess()))},
     )
