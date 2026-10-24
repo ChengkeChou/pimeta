@@ -597,8 +597,8 @@ block-diagonal `V` and `struct="GEN"`: coefficients to 1e-9, standard errors to
 1e-6, variance components to 1e-6, the curve to 1e-9.
 
 Scope: this is the **pairwise** model, treatment against a common comparator.
-A network version needs the consistency equations of a network meta-analysis on
-top, which is item 9's machinery rather than this one's, and is not attempted.
+The network version — consistency on the whole treatment difference over time —
+is item 15.
 
 ### 13. Network meta-analysis with individual participant data — **yes**
 
@@ -670,6 +670,41 @@ does exactly that, and it could not be installed here because it needs `rjags`
 and a JAGS binary, which requires an elevated install — so the validation went
 to implementations that are deterministic instead.
 
+### 15. Time-course network meta-analysis — **yes**
+
+`ma.nma_timecourse` fits `y = g_b(t) - g_a(t) + e` with the same parameter
+vector used wherever a treatment appears, so the network's consistency equation
+cancels at **every** time, including times nobody measured. Four bases over
+time (`constant`, `linear`, `quadratic`, `rcs`), four heterogeneity structures,
+and a reference treatment whose trajectory is identically zero — necessary
+because a common shift of every trajectory leaves every contrast unchanged.
+
+The two things specific to time:
+
+- **The baseline.** With a constant term, the difference at $t = 0$ is the
+  ordinary NMA effect, so `basis="constant"` on one row per study *is*
+  standard network meta-analysis. The tests pin that against `netmeta`: same
+effects to 1e-8, same standard errors to 1e-8 relative, same `tau2` to 1e-8.
+- **The correlation.** A study reporting the effect at 3, 6 and 12 months
+  measured the same participants three times. `rho` gives a constant
+  within-study correlation, `phi` the AR(1) decay `phi**|t_i - t_j|`. It is
+  required rather than defaulted, and a study contributing more than one
+  *treatment pair* is **refused** when `rho`/`phi` is given: two arms measured
+  at the same time share the control, so their contrasts are correlated through
+  it in a way that depends on the arm sizes, and no single number expresses
+  that. Build the covariance and pass `vcov`.
+
+Pinned against `metafor::rma.mv` with exactly that AR(1) covariance, for all
+three linear bases: coefficients to 1e-7, standard errors to 1e-6 relative,
+`tau2` to 2e-7.
+
+Not attempted: random effects on a non-linear time parameter. Every basis here
+is linear in its parameters, so a random trajectory is a linear mixed model and
+needs no integration; a model with, say, a free asymptote or a free half-life
+would need MCMC. `MBNMAtime` fits exactly that class, and it could not be
+installed here for the same reason as `MBNMAdose`: `rjags` needs a JAGS binary
+and an elevated install.
+
 ### Not on the list: IPD plus aggregate data — **yes**
 
 `ipd_two_stage(..., aggregate=...)`; see item 3. It needed nothing beyond the
@@ -693,6 +728,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
 | 14 | dose-response network meta-analysis | yes — every dose function except a random effect on a non-linear parameter | `tests/test_nma_dose.py` |
+| 15 | time-course network meta-analysis | yes — every linear-in-parameters basis; a random effect on a non-linear time parameter is not available | `tests/test_nma_timecourse.py` |
 
 Five of these turned out to be further along than the roadmap assumed: items
 5, 6 and 10 are finished, item 1 needed only a basis rather than a regression

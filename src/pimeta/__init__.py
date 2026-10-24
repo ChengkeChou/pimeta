@@ -222,6 +222,11 @@ from .nma.design import (
 )
 from .nma.dose import NmaDoseCurve, NmaDoseResult, nma_dose
 from .nma.ipd import IpdNmaResult, ipd_nma
+from .nma.timecourse import (
+    TimeCourseNmaCurve,
+    TimeCourseNmaResult,
+    nma_timecourse,
+)
 from .onestage import OneStageResult, ipd_one_stage
 from .plotting import (
     PlotResult,
@@ -739,6 +744,9 @@ __all__ = [
     "nma_dose",
     "NmaDoseResult",
     "NmaDoseCurve",
+    "nma_timecourse",
+    "TimeCourseNmaResult",
+    "TimeCourseNmaCurve",
     "netconnection",
     "NetconnectionResult",
     "netdistance",

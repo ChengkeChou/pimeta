@@ -37,6 +37,42 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Time-course network meta-analysis.** `pimeta.nma.timecourse` fits
+  `y = g_b(t) - g_a(t) + e` across a network, with the same parameter vector
+  used wherever a treatment appears — so consistency cancels at **every** time,
+  including times no study measured, as an identity rather than as a property a
+  lucky fit might have.
+
+  Four bases over time (`constant`, `linear`, `quadratic`, `rcs`), four
+  heterogeneity structures (fixed, a random study level, a random trajectory,
+  both), and an explicit reference treatment: every contrast is identified only
+  up to a common shift of all trajectories, so one of them is fixed at zero and
+  left out of `curves` rather than estimated as a flat direction.
+
+  Two things are specific to time. **The baseline**: with a constant term the
+  difference at `t = 0` is the ordinary NMA effect, so `basis="constant"` on one
+  row per study *is* standard network meta-analysis — pinned against `netmeta`,
+  with effects, standard errors and `tau2` all agreeing to 1e-8. **The
+  correlation**: a study reporting the effect at 3, 6 and 12 months measured the
+  same participants three times, so `rho` (constant) or `phi` (AR(1) decay
+  `phi**|t_i - t_j|`) is required rather than defaulted.
+
+  Validated against `metafor::rma.mv` with exactly that AR(1) covariance for all
+  three linear bases: coefficients to 1e-7, standard errors to 1e-6 relative,
+  `tau2` to 2e-7.
+
+  One refusal is a genuine modelling statement rather than input validation: a
+  study that contributes contrasts for **more than one pair of treatments**
+  cannot be described by a single `rho` or `phi`. Two arms measured at the same
+  time share the control, so their contrasts are correlated through it in a way
+  that depends on the arm sizes; the module says so and points at `vcov`.
+
+  Building it changed one test. The restricted cubic spline nests the straight
+  line, so its likelihood "should" be at least as good — and under REML it is
+  not, because restricted likelihoods of models with different fixed effects are
+  not comparable. The comparison now uses ML, which is the only place it is
+  meaningful.
+
 - **Dose-response network meta-analysis.** `pimeta.nma.dose` fits a dose
   function per treatment to a network of contrasts,
   `y_i = f_b(x_b; β_b) - f_a(x_a; β_a) + e_i`, with six dose functions

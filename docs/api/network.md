@@ -1,6 +1,6 @@
 # Network meta-analysis
 
-*64 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*67 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -35,6 +35,9 @@
 | [`nma_dose`](#nma_dose) | — |
 | [`NmaDoseResult`](#nmadoseresult) | — |
 | [`NmaDoseCurve`](#nmadosecurve) | — |
+| [`nma_timecourse`](#nma_timecourse) | — |
+| [`TimeCourseNmaResult`](#timecoursenmaresult) | — |
+| [`TimeCourseNmaCurve`](#timecoursenmacurve) | — |
 | [`netconnection`](#netconnection) | — |
 | [`NetconnectionResult`](#netconnectionresult) | — |
 | [`netdistance`](#netdistance) | — |
@@ -628,6 +631,81 @@ NmaDoseCurve(labels: 'list[str]' = <factory>, dose: 'np.ndarray' = <factory>, es
 ```
 
 A treatment's dose-response curve, or a contrast between two curves.
+
+## `nma_timecourse`
+
+```python
+nma_timecourse(yi, *, study, treat1, treat2, time, time2=None, vi=None, vcov=None, rho: 'float | None' = None, phi: 'float | None' = None, basis: 'str' = 'linear', reference: 'str | None' = None, knots=None, n_knots: 'int | None' = None, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 0.95, max_iter: 'int' = 500, tol: 'float' = 1e-09, start=None) -> 'TimeCourseNmaResult'
+```
+
+Fit a time-course model to a network of contrasts.
+
+**Args**
+
+- `yi` — the observed contrast per row, on the linear-predictor scale.
+- `study` — study label per row.
+- `treat1, treat2` — the two treatments compared, ``treat2`` minus ``treat1`` in sign.
+- `time` — the time of the ``treat2`` arm.
+- `time2` — the time of the ``treat1`` arm; ``time`` for both when omitted, which is the usual case of two arms measured on the same schedule.
+- `vi` — variance of ``yi`` per row; ignored when ``vcov`` is given.
+- `vcov` — full covariance of ``yi``.  Rows from one study are correlated whenever they come from the same participants, which is the normal case for repeated measurements.
+- `rho` — a constant within-study correlation between a study's contrasts.
+- `phi` — an AR(1) correlation ``phi**|t_i - t_j|`` between them.  Give ``rho`` or ``phi`` or ``vcov``; all three at once is refused.
+- `basis` — ``"constant"``, ``"linear"``, ``"quadratic"`` or ``"rcs"``; see the module docstring.
+- `reference` — the treatment whose trajectory is identically zero.  Every comparison is identified only up to a common shift of all the trajectories, so one of them has to be fixed; left out, the treatment that appears in ``treat1`` most often is used, which is the control in a normally-oriented dataset.
+- `knots, n_knots` — for ``basis="rcs"``.
+- `struct` — ``"FE"``, ``"study"`` (default), ``"coef"`` or ``"coef+study"``.
+- `coef_struct` — ``"DIAG"`` or ``"UN"`` for the trajectory's random effects.
+- `method` — ``"REML"`` (default) or ``"ML"``.
+- `level` — confidence level; ``0.95``, ``95`` and ``0.05`` are all read as the same 95%.
+- `max_iter` — optimiser iteration cap.
+- `tol` — convergence tolerance on the variance parameters.
+- `start` — optional starting values for the coefficients.
+
+**Returns**
+
+`TimeCourseNmaResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched inputs, an unknown basis, more than one correlation assumption, a study with fewer distinct times than the basis has parameters, or a covariance that is not positive definite.
+
+**Example**
+
+>>> fit = ma.nma_timecourse(effect, study=study, treat1=arm1, ...                         treat2=arm2, time=month, vi=vi, phi=0.6) >>> print(fit.contrast("placebo", 0, "drug", 12))
+
+## `TimeCourseNmaResult`
+
+```python
+TimeCourseNmaResult(basis: 'str', treatments: 'list[str]', curves: 'list[str]', names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray' = <factory>, reference: 'str' = '', tau2: 'float' = nan, D: 'np.ndarray | None' = None, k: 'int' = 0, studies: 'list' = <factory>, times: 'dict' = <factory>, rho: 'float | None' = None, phi: 'float | None' = None, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 95.0, loglik: 'float' = nan, n_knots: 'int | None' = None, knots: 'list[float] | None' = None, fit: 'Any' = None) -> None
+```
+
+A fitted time-course network.
+
+**Attributes**
+
+- `basis` — the basis over time.
+- `treatments` — every treatment in the network.
+- `curves` — the treatments with a fitted trajectory.  A treatment seen at a single time has one, but only as many parameters as its data can support.
+- `names` — coefficient names, one block per treatment, constant first.
+- `coef, se` — the coefficients and their standard errors.
+- `vcov` — their covariance.
+- `tau2` — the between-study variance of the study level, or ``NaN`` when ``struct`` has no level term.
+- `D` — the between-study covariance of the trajectories, or ``None``.
+- `k` — contrasts fitted.
+- `studies` — the study labels.
+- `times` — the observed times per treatment.
+- `rho, phi` — the within-study correlation that was assumed.
+- `struct, coef_struct, method, level` — settings.
+- `loglik` — the maximised (restricted) log-likelihood.
+
+## `TimeCourseNmaCurve`
+
+```python
+TimeCourseNmaCurve(labels: 'list[str]' = <factory>, time: 'np.ndarray' = <factory>, est: 'np.ndarray' = <factory>, se: 'np.ndarray' = <factory>, ci_lb: 'np.ndarray' = <factory>, ci_ub: 'np.ndarray' = <factory>, pred_lb: 'np.ndarray' = <factory>, pred_ub: 'np.ndarray' = <factory>, outside: 'np.ndarray' = <factory>) -> None
+```
+
+A treatment's trajectory, or a contrast between two of them.
 
 ## `netconnection`
 
