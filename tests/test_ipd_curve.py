@@ -265,3 +265,55 @@ def test_a_basis_with_no_curve_cannot_be_tested_for_non_linearity():
                                   basis=ma.fp(age, [1]))
     with pytest.raises(ValueError, match="non-linear"):
         flat.test_nonlinearity()
+
+
+def test_knha_is_refused_rather_than_shipped():
+    """Its degrees of freedom count rows, not studies, so the band shrinks."""
+    study, age, treat, y = cohort(n_study=6, per_study=200)
+    with pytest.raises(ValueError, match="knha"):
+        ma.ipd_two_stage_curve(y, study=study, treat=treat, covariate=age,
+                               knots=KNOTS, test="knha")
+
+
+def test_the_band_covers_the_truth_at_the_rate_the_manual_reports():
+    """A floor, not a target.
+
+    ``tools/coverage_ipd_curve.py`` measures 0.74-0.87 at k = 12 with the z
+    band, against a nominal 0.95: a Wald interval ignores the uncertainty in
+    the covariance estimate, and a third of the fits put a variance at zero
+    while the truth is positive.  This runs a handful of replications so that a
+    regression to *gross* miscalibration fails here rather than in a manual run.
+    """
+    rng = np.random.default_rng(20261024)
+    n_study, per_study = 12, 200
+    points = [45.0, 55.0, 65.0]
+    true = np.array([0.30 + (-0.012) * (x - 55) + 0.0009 * (x - 55) ** 2
+                     for x in points])
+    hits = np.zeros(len(points))
+    reps = 0
+    while reps < 25:
+        pid = np.arange(1, n_study * per_study + 1)
+        study = (pid - 1) // per_study + 1
+        age = 40.0 + 30.0 * ((pid * 37) % 101) / 101.0
+        treat = (pid % 2).astype(float)
+        z = age - 55.0
+        a = [0.30, -0.012, 0.0009]
+        coef = [ai + rng.normal(0.0, sd, n_study)
+                for ai, sd in zip(a, (0.35, 0.006, 0.0004))]
+        curve = (coef[0][study - 1] + coef[1][study - 1] * z
+                 + coef[2][study - 1] * z ** 2)
+        eta = -0.4 + 0.10 * treat + 0.03 * z + treat * curve
+        y = (rng.random(eta.size) < 1.0 / (1.0 + np.exp(-eta))).astype(int)
+        try:
+            fit = ma.ipd_two_stage_curve(y, study=study, treat=treat,
+                                         covariate=age, knots=KNOTS)
+        except ValueError:
+            continue
+        reps += 1
+        band = fit.curve(points)
+        hits += ((band.ci_lb <= true) & (true <= band.ci_ub)).astype(float)
+    assert reps == 25
+    # pooled over the three covariate values, so 75 observations: a floor that
+    # catches gross miscalibration without pretending to be a precise estimate
+    coverage = hits.sum() / (reps * len(points))
+    assert 0.6 <= coverage <= 1.0, coverage

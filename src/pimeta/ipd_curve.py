@@ -330,7 +330,9 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
             pooled.
         method: τ² estimator for the second stage.
         level: confidence level.
-        test: ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
+        test: ``"z"`` (default) or ``"t"``.  ``"knha"``/``"adhoc"`` are refused:
+            their degrees of freedom are computed from the stacked rows rather
+            than from the studies, which makes the band narrower, not wider.
         min_events: studies with fewer events are excluded (no finite logistic
             estimate otherwise).
 
@@ -376,6 +378,18 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
     if fam not in ("binomial", "gaussian"):
         raise ValueError(
             f"unknown family {family!r}; use 'binomial' or 'gaussian'")
+    if str(test).lower() in ("knha", "adhoc"):
+        # `rma_mv`'s residual degrees of freedom count *rows*, and a stacked
+        # multivariate fit has K rows per study -- so the t reference is almost
+        # z while the variance is scaled by s2w.  Simulated coverage with
+        # test="knha" was 0.31 to 0.51 for a nominal 0.95, i.e. worse than the
+        # z interval it was meant to fix.  Refusing is better than shipping it.
+        raise ValueError(
+            "test='knha' is not available here: its degrees of freedom are "
+            "computed from the stacked rows rather than from the studies, so "
+            "the interval is narrower than the z one instead of wider. Use "
+            "test='z' (default) or 't', and see "
+            "tools/coverage_ipd_curve.py for what the band actually covers")
 
     if basis is None:
         if center is None:

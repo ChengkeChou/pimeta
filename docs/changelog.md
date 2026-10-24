@@ -37,6 +37,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **A Monte-Carlo coverage study of the IPD curve, and what it found.**
+  `tools/coverage_ipd_curve.py` simulates the two-stage IPD analysis with a
+  known true curve and reports how often the band contains it. At 120
+  replications of 12 studies the nominal 95% confidence band covered **0.74 to
+  0.87**; the prediction band, being wider, covered 0.88 to 0.94. The cause is
+  not the curve arithmetic — it is the Wald interval conditioning on the
+  covariance estimate, plus a third of the fits placing a variance at zero while
+  the truth was positive.
+
+  `test="t"` leaves that unchanged (44 residual degrees of freedom is not a
+  small-sample correction). `test="knha"` made it **worse**: 0.31 to 0.51. Its
+  degrees of freedom are counted from the stacked rows of the multivariate fit,
+  so the t reference is essentially z while `s2w` shrinks the variance. That
+  option is now refused with the reason, instead of shipping a band that is
+  narrower than the one it was meant to fix. A 25-replication guard runs in the
+  test suite so a regression to gross miscalibration fails there.
+
 - **Joint pooling of a non-linear treatment effect modifier in two-stage IPD.**
   `ma.ipd_two_stage_curve` pools a spline interaction the way it has to be
   pooled: the whole treatment block `(treat, treat:B_1, ..., treat:B_K)` as a

@@ -436,7 +436,7 @@ Pool a treatment-by-covariate spline jointly across studies.
 - `covariates` — further participant-level covariates, adjusted for but not pooled.
 - `method` — τ² estimator for the second stage.
 - `level` — confidence level.
-- `test` — ``"z"``, ``"t"``, ``"knha"`` or ``"adhoc"`` for the second stage.
+- `test` — ``"z"`` (default) or ``"t"``.  ``"knha"``/``"adhoc"`` are refused: their degrees of freedom are computed from the stacked rows rather than from the studies, which makes the band narrower, not wider.
 - `min_events` — studies with fewer events are excluded (no finite logistic estimate otherwise).
 
 **Returns**

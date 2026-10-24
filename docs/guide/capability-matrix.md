@@ -138,6 +138,19 @@ number of `Sigma`. A fit that trips any of these emits a `RuntimeWarning`.
 fallback for a small `k`, and `struct="UN"` stays the default because it is the
 honest one when the studies can pay for it.
 
+**What the band actually covers** was measured rather than assumed
+(`tools/coverage_ipd_curve.py`, 120 replications of 12 studies): the nominal 95%
+confidence band for the average curve covered the true curve **0.74 to 0.87** of
+the time, while the prediction band — which is wider — covered 0.88 to 0.94. The
+cause is the one Wald intervals always have here: they condition on the
+covariance estimate, and a third of those fits put a variance at zero while the
+truth was positive. `test="t"` changes nothing (44 residual degrees of freedom
+is not a small-sample correction), and `test="knha"` made it **worse** — 0.31 to
+0.51 — because `rma_mv` computes its residual degrees of freedom from the
+*stacked rows*, so the t reference is nearly z while `s2w` shrinks the variance.
+`knha` is therefore refused rather than shipped, and the under-coverage is
+stated here rather than left for a reader to discover.
+
 Missing: IPD plus aggregate data.
 
 ### 4. One-stage IPD — **yes**, with a stated model
