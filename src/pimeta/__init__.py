@@ -214,6 +214,13 @@ from .netmeta import (
     treats,
     vikor,
 )
+from .nma.design import (
+    MultiArmStructure,
+    TreatmentNetwork,
+    consistency_residuals,
+    multiarm_structure,
+)
+from .nma.ipd import IpdNmaResult, ipd_nma
 from .onestage import OneStageResult, ipd_one_stage
 from .plotting import (
     PlotResult,
@@ -722,6 +729,12 @@ __all__ = [
     "NetleagueResult",
     "decomp_design",
     "DecompDesignResult",
+    "TreatmentNetwork",
+    "MultiArmStructure",
+    "multiarm_structure",
+    "consistency_residuals",
+    "ipd_nma",
+    "IpdNmaResult",
     "netconnection",
     "NetconnectionResult",
     "netdistance",

@@ -500,7 +500,7 @@ requested combination from the fitted components, and `ma.discomb` handles
 disconnected components. All three are pinned against `netmeta` 3.7.0.
 
 Missing: the component *interaction* (inconsistency) model, dose–response NMA,
-time-course NMA, and IPD-NMA.
+and time-course NMA. (IPD-NMA is a separate area and is done; see item 13.)
 
 ### 11. Publication bias — **yes**
 
@@ -599,6 +599,43 @@ Scope: this is the **pairwise** model, treatment against a common comparator.
 A network version needs the consistency equations of a network meta-analysis on
 top, which is item 9's machinery rather than this one's, and is not attempted.
 
+### 13. Network meta-analysis with individual participant data — **yes**
+
+`ma.nma.ipd` fits the one-stage IPD network model: one intercept per study,
+treatment effects against a chosen reference, study-centred covariates as main
+effects, optional treatment-by-covariate interactions, and a random treatment
+effect per study with a full between-study covariance. It is the class of model
+`multinma` fits, except that the between-treatment covariance is estimated
+rather than constrained to a single shared heterogeneity SD.
+
+Covariates are centred **within study**. That is not cosmetic: it keeps the
+treatment parameters on their within-study scale, lets the study intercepts
+absorb between-study differences in the covariate distribution, and makes the
+interaction term a within-study effect modification rather than a
+between-study comparison an ecological bias could produce.
+
+The parameterisation comes from `pimeta.nma.design`, the network layer this was
+built on, so the contrast matrix the algebra tests check is the one the
+likelihood uses: `contrast(a, b)` is a row combination of `B`, and the league
+table is `B` applied to the reference vector.
+
+Pinned against `lme4::lmer(y ~ 0 + study + A + x + (0 + A | study))` on an
+8-study, 3960-participant, three-treatment fixture: effects and the covariate
+coefficient to 1e-8, standard errors to 7e-6, `sigma2` to 9e-8, the
+between-study covariance to 1.4e-5 on its flattest direction, the
+log-likelihood to 1e-10. Two degenerations are pinned too — a two-treatment
+network reproduces `rma`, and a one-study network reproduces weighted least
+squares exactly.
+
+`multinma` 0.9.1 was fitted to the same fixture as an independent check and
+its posterior means agree (0.07 and 0.16 against 0.0702 and 0.1491), but it is
+not the same model, so its posterior SDs are not comparable: it places one
+shared heterogeneity SD on every relative effect (`tau = 0.44` where this
+fixture supports treatment-specific SDs of 0.31 and 0.34) and fits a residual
+SD per study-arm rather than one `sigma2`. A differently parameterised
+Bayesian fit cannot be a tolerance target, which is why the pinned numbers come
+from `lme4`.
+
 ### Not on the list: IPD plus aggregate data — **yes**
 
 `ipd_two_stage(..., aggregate=...)`; see item 3. It needed nothing beyond the
@@ -620,12 +657,13 @@ two-stage model, which is why it could be done as soon as that existed.
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
 | 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
+| 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
 
-Five of these twelve turned out to be further along than the roadmap assumed:
-items 5, 6 and 10 are finished, item 1 needed only a basis rather than a
-regression layer, and item 9 was missing only its reporting layer. All of
-items 1, 5 and 6 were completed in the current development cycle, which is why
-the planning documents written before it overstate the work remaining.
+Five of these turned out to be further along than the roadmap assumed: items
+5, 6 and 10 are finished, item 1 needed only a basis rather than a regression
+layer, and item 9 was missing only its reporting layer. All of items 1, 5 and 6
+were completed in the current development cycle, which is why the planning
+documents written before it overstate the work remaining.
 
 ## Dependency policy
 

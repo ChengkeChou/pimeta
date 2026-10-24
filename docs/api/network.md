@@ -1,6 +1,6 @@
 # Network meta-analysis
 
-*55 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*61 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -26,6 +26,12 @@
 | [`NetleagueResult`](#netleagueresult) | — |
 | [`decomp_design`](#decomp_design) | — |
 | [`DecompDesignResult`](#decompdesignresult) | — |
+| [`TreatmentNetwork`](#treatmentnetwork) | — |
+| [`MultiArmStructure`](#multiarmstructure) | — |
+| [`multiarm_structure`](#multiarm_structure) | — |
+| [`consistency_residuals`](#consistency_residuals) | — |
+| [`ipd_nma`](#ipd_nma) | — |
+| [`IpdNmaResult`](#ipdnmaresult) | — |
 | [`netconnection`](#netconnection) | — |
 | [`NetconnectionResult`](#netconnectionresult) | — |
 | [`netdistance`](#netdistance) | — |
@@ -395,6 +401,154 @@ DecompDesignResult(Q_decomp: 'dict', Q_het_design: 'list[dict]', Q_inc_detach: '
 ```
 
 Decomposition of designs (netmeta::decomp.design).
+
+## `TreatmentNetwork`
+
+```python
+TreatmentNetwork(treatments: 'list[str]', comparisons: 'list[tuple[str, str, str]]', studies: 'list[str]' = <factory>) -> None
+```
+
+The comparison graph of a network meta-analysis.
+
+**Attributes**
+
+- `treatments` — treatment labels, in the order the parameters are indexed.
+- `comparisons` — one row per study comparison, ``(study, treat1, treat2)`` with the *first* treatment named first, so ``+1`` always means "favours `treat1` relative to `treat2`" on the analysis scale.
+- `studies` — the study labels, in order of first appearance.
+
+## `MultiArmStructure`
+
+```python
+MultiArmStructure(arms: 'list[str]', pairs: 'list[tuple[int, int]]', covariance: 'np.ndarray', correlation: 'np.ndarray') -> None
+```
+
+Within-study covariance of a multi-arm study's comparisons.
+
+The ``m = k(k-1)/2`` comparisons of a ``k``-arm study live in a
+``k - 1``-dimensional space: ``(A-B) - (A-C) = C - B``, so the matrix is
+**singular by construction**, with ``m - (k - 1)`` zero eigenvalues.  That
+is not a defect to be repaired, it is the reason a multi-arm study cannot
+be entered as ``m`` independent observations.
+
+**Attributes**
+
+- `arms` — the study's arms, in order.
+- `pairs` — the comparisons, ``(i, j)`` indices into ``arms``.
+- `covariance` — ``(m x m)`` covariance of the comparisons' effect estimates.
+- `correlation` — the matching correlation matrix.
+
+## `multiarm_structure`
+
+```python
+multiarm_structure(arms, variances, *, per: 'str' = 'arm', rho=None) -> 'MultiArmStructure'
+```
+
+Covariance of every pairwise comparison inside one multi-arm study.
+
+Two contrasts that share an arm share that arm's sampling variance: with
+contrast coefficients ``a`` and ``b`` over the arms,
+
+.. math::
+
+    \mathrm{Cov}(y_a, y_b) = \sum_k a_k b_k \mathrm{Var}(A_k),
+
+so ``A vs B`` and ``A vs C`` covary by ``+Var(A)`` while ``A vs B`` and
+``B vs C`` covary by ``-Var(B)``.  The sign is the part that is easy to
+get wrong and easy to test: a simulation of arm means reproduces the whole
+matrix, and ``tests/test_nma_design.py`` does exactly that.
+
+**Args**
+
+- `arms` — arm labels of the study, in order.
+- `variances` — one variance per arm (``per="arm"``, the default) or one per comparison in the order ``(0,1), (0,2), ..., (1,2), ...``.
+- `per` — which of the two ``variances`` means.  It is explicit because a three-arm study has three arms *and* three comparisons, so the length alone cannot say.
+- `rho` — used only with ``per="comparison"``, where the shared-arm variance cannot be recovered; the correlation is then ``rho`` with the sign of the shared arm.
+
+**Returns**
+
+`MultiArmStructure`.
+
+**Raises**
+
+- `ValueError` — wrong length, non-positive variance, an unknown ``per``, or a covariance that is not positive definite.
+
+## `consistency_residuals`
+
+```python
+consistency_residuals(network: 'TreatmentNetwork', effects) -> 'np.ndarray'
+```
+
+Signed sums around every circuit: zero for a consistent network.
+
+**Args**
+
+- `network` — the comparison graph.
+- `effects` — one effect per comparison, on the analysis scale, in the order of ``network.comparisons`` and with the sign convention of `TreatmentNetwork.contrast_matrix`.
+
+**Returns**
+
+One residual per circuit.  All zero by construction when the effects come from treatment parameters; non-zero exactly when they do not.
+
+## `ipd_nma`
+
+```python
+ipd_nma(y, *, study, treat, reference=None, covariates=None, interaction=None, family: 'str' = 'gaussian', method: 'str' = 'REML', level: 'float' = 0.95, struct: 'str' = 'UN', max_iter: 'int' = 500) -> 'IpdNmaResult'
+```
+
+One-stage network meta-analysis of individual participant data.
+
+**Args**
+
+- `y` — the outcome, one entry per participant.
+- `study` — study label per participant.
+- `treat` — treatment arm label per participant.
+- `reference` — the treatment that defines the basic parameters; the first one seen if omitted.
+- `covariates` — optional mapping ``{name: array}`` of participant-level covariates entering as shared main effects.
+- `interaction` — names among ``covariates`` whose effect is allowed to differ by treatment.  The interaction is shared across studies, which is the usual assumption and the one that keeps it estimable with a handful of studies.
+- `family` — ``"gaussian"`` only; see the module docstring.
+- `method` — ``"REML"`` or ``"ML"``.
+- `level` — confidence level.
+- `struct` — ``"UN"`` for an unstructured between-study covariance of the treatment effects, or ``"DIAG"`` for independent ones.
+- `max_iter` — optimiser iteration cap.
+
+**Returns**
+
+`IpdNmaResult`.
+
+**Raises**
+
+- `ValueError` — mismatched lengths, an unknown family, a disconnected network, a reference not in the data, or a covariate requested for interaction that was not supplied.
+
+**Example**
+
+- `>>> fit = ma.ipd_nma(y, study=study, treat=treat)   # doctest` — +SKIP
+- `>>> fit.contrast("B", "A")                          # doctest` — +SKIP
+
+## `IpdNmaResult`
+
+```python
+IpdNmaResult(treatments: 'list[str]', reference: 'str', estimable: 'list[str]', d: 'list[float]', se: 'list[float]', vcov: 'np.ndarray', Sigma: 'np.ndarray', tau2: 'list[float]', gamma: 'list[float]', delta: 'list[float] | None', k: 'int', participants: 'int', network: 'TreatmentNetwork | None' = None, sigma2: 'float' = nan, loglik: 'float' = nan, method: 'str' = 'REML', level: 'float' = 95.0, struct: 'str' = 'UN', interaction: 'list[str] | None' = None, fit: 'Any' = None) -> None
+```
+
+A one-stage IPD network meta-analysis.
+
+**Attributes**
+
+- `treatments` — all treatments in the network, reference first.
+- `reference` — the treatment every effect is relative to.
+- `d` — treatment effects against the reference, on the linear-predictor scale, in the order of `estimable`.
+- `se` — their standard errors.
+- `vcov` — their covariance matrix.
+- `Sigma` — the between-study covariance of the treatment effects.
+- `tau2` — its diagonal.
+- `gamma` — covariate main effects (shared across studies).
+- `delta` — treatment-by-covariate interaction (shared), or ``None``.
+- `k, participants` — studies and rows used.
+- `network` — the `nma.design.TreatmentNetwork` that generated the parameterisation.
+- `sigma2` — residual variance (Gaussian).
+- `loglik` — the maximised log-likelihood.
+- `method, level, struct, interaction` — settings.
+- `fit` — the raw optimiser output, for diagnosing a boundary.
 
 ## `netconnection`
 

@@ -37,6 +37,44 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Individual-participant-data network meta-analysis.** `pimeta.nma.ipd`
+  fits the one-stage IPD network model: a study intercept per study, treatment
+  effects against a reference, optional study-centred covariates as main
+  effects, optional treatment-by-covariate interactions, and a random
+  treatment effect per study with a full between-study covariance (`struct`).
+  The design is built from the parameterisation layer, so the same contrast
+  matrix the algebra tests check is the one the likelihood uses —
+  `contrast(a, b)` is a row of `B`, and the league table is `B` against the
+  reference vector.
+
+  Covariates are centred **within study**, which is what keeps the treatment
+  parameters on their within-study scale and lets the study intercepts absorb
+  between-study differences in the covariate distribution. Interaction terms
+  are formed from the centred covariate, so `delta` is the change in the
+  treatment effect per unit *within-study* deviation, not a between-study
+  comparison that confounding could produce.
+
+  Validated against `lme4::lmer(y ~ 0 + study + A + x + (0 + A | study))` on a
+  3960-participant, 8-study, three-treatment fixture: treatment effects and
+  the covariate coefficient to 1e-8, standard errors to 7e-6, `sigma2` to
+  9e-8, the between-study covariance to 1.4e-5 on its flattest direction, the
+  log-likelihood to 1e-10. Two degenerations are pinned as well — a two-arm
+  network reproduces `rma` (effect to 1e-8, `tau2` to 3e-8) and a one-study
+  network reproduces weighted least squares exactly — because those relate the
+  new code to implementations that are already trusted.
+
+  `multinma` 0.9.1 was also fitted to the same fixture and gives posterior
+  means `d[B] = 0.07`, `d[C] = 0.16`, which is corroboration on the mean
+  structure and nothing more: it is **not** the same model, so its posterior
+  SDs (0.17, 0.18) are not comparable to these standard errors (0.112,
+  0.140). `multinma`'s IPD normal model puts one shared heterogeneity SD on
+  every relative effect — it estimated `tau = 0.44` where this fixture
+  supports treatment-specific variances of 0.095 and 0.115 — and it fits a
+  residual SD per study-arm (22 of them here, against one `sigma2`). Neither
+  choice is wrong, but a Bayesian fit of a differently parameterised model
+  cannot be a tolerance target, so the pinned numbers come from `lme4`, which
+  fits the same likelihood deterministically.
+
 - **A network parameterisation layer, with algebraic tests.**
   `pimeta.nma.design` holds the part of a network meta-analysis that every
   network model shares and none of them should re-invent: the comparison

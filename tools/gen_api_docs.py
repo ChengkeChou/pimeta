@@ -93,6 +93,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "nma.design": ("network", "Network meta-analysis"),
     "nma.graph": ("network", "Network meta-analysis"),
     "nma.impact": ("network", "Network meta-analysis"),
+    "nma.ipd": ("network", "Network meta-analysis"),
     "nma.labels": ("network", "Network meta-analysis"),
     "nma.league": ("network", "Network meta-analysis"),
     "nma.matrix": ("network", "Network meta-analysis"),
