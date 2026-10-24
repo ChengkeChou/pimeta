@@ -556,13 +556,23 @@ scenario agrees on the sign. Projecting a joint confidence set is conservative
 by construction, and it is documented that way; the coverage was not
 simulated, and the tests do not claim it was.
 
-Not offered: Bayesian model averaging (RoBMA). The reason is no longer the
-inference — `pimeta.bayes` provides a sampler — but that the reference
+**Bayesian.** `ma.bayes_copas` gives the posterior of the same model with
+priors on `(mu, tau, rho, gamma0, gamma1)`, which answers the question
+`copas_region` answers from the frequentist side and states the weak
+identification of `rho` as interval width rather than as a chosen stopping
+point. The posterior is sampled by `pimeta.bayes` and checked against an
+independent NUTS implementation (numpyro on jax): worst |z| of 1.15 with the
+selection parameters fixed and 1.43 with them estimated, on 4 x 4000 draws each
+side.
+
+Not offered: Bayesian model averaging (RoBMA). Its continuous core now exists —
+that is `bayes_copas` — so what is missing is the model *set* (no bias, PET,
+PEESE, selection with each of several weight functions, crossed with fixed and
+random effects) and the discrete moves between those models. The reference
 implementation, the `RoBMA` R package, needs JAGS, and JAGS cannot be installed
-in this environment (no win-64 conda-forge build; the SourceForge installer host
-is unreachable). A model no reference can check is the one thing this package
-does not ship, so the gap is recorded rather than filled. The continuous part of
-it — a Bayesian selection model — is checkable and is the next step.
+in this environment (no win-64 conda-forge build; the SourceForge installer
+host is unreachable). A model set no reference can check is the one thing this
+package does not ship.
 
 ### 12. Time-varying effects — **no**
 
@@ -731,7 +741,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
 | 9 | multivariate | yes | `tests/test_mv.py`, `tests/test_mv_confint.py`, `tests/test_mv_region.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
-| 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
+| 11 | publication bias | yes — including a Bayesian posterior for the Copas model | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py`, `tests/test_copas_bayes.py` |
 | 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
 | 14 | dose-response network meta-analysis | yes — every dose function, and a random effect on any of them: closed-form where the parameters are linear, by sampling where they are not | `tests/test_nma_dose.py`, `tests/test_nma_dose_mcmc.py` |

@@ -13,14 +13,16 @@ one is the outcome of a decision rather than an oversight, and the detail is in
 the entry or the page named.
 
 - **RoBMA (Bayesian model averaging over selection models) is not
-  implemented.** The sampler now exists (`pimeta.bayes`, see below), so the
-  blocker is no longer the inference — it is that the reference implementation,
-  the `RoBMA` R package, needs JAGS, and JAGS cannot be installed in this
-  environment: conda-forge has no win-64 build and the SourceForge installer
-  host is unreachable (twenty attempts, connection refused). Shipping a model no
-  reference can check is the one thing this package does not do, so it is
-  recorded as a gap rather than attempted. The continuous part — a Bayesian
-  selection model — is the natural next step and *is* checkable.
+  implemented.** Its continuous core now is — `bayes_copas` gives the posterior
+  of the Copas selection model, with an independent NUTS check — so what is
+  missing is the model *set* (no bias / PET / PEESE / selection with each of
+  several weight functions × fixed / random effects) and the discrete moves
+  between them. The reference implementation, the `RoBMA` R package, needs
+  JAGS, and JAGS cannot be installed in this environment: conda-forge has no
+  win-64 build and the SourceForge installer host is unreachable. Once a model
+  set can be averaged over, it would also have to be checked; shipping it on
+  the strength of "the sampler is fine" is the one thing this package does not
+  do.
 - **Dynamic heterogeneity is not implemented**: a pooled effect and `tau2` that
   are functions of a continuous time index (Gaussian process or state space).
   There is no R implementation to check one against.
@@ -98,6 +100,57 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **A posterior for the Copas selection model, checked against an independent
+  sampler.** `bayes_copas` fits the model `copas` estimates, with the
+  parameters it holds fixed given priors instead: `mu ~ N(0, 10^2)`,
+  `tau ~ half-N(0, 1)`, `rho ~ U(-1, 1)`, `gamma0 ~ N(0, 1)` and
+  `gamma1 ~ half-N(0, 1)`, all overridable and all recorded on the result.
+  `gamma=(g0, g1)` holds the selection parameters fixed, which is what makes
+  the frequentist comparison below possible.
+
+  Why this is a different answer from `copas_region` rather than a
+  re-expression of it: `(gamma0, gamma1)` are weakly identified, and a
+  posterior states that in the width of an interval instead of returning the
+  point where a fitted contour line happened to stop. On the fixture here the
+  posterior interval for `rho` runs from -0.94 to +0.97 — which is the honest
+  report, not a failure.
+
+  Validation is in four layers, because the model, the optimiser and the
+  sampler are three different things and an error in one is invisible from the
+  others.
+
+  1. **The likelihood's limits, algebraically.** With `gamma0 -> infinity`
+     nobody is suppressed, so the selection model must collapse to the ordinary
+     random-effects likelihood — for *every* `rho`, since a correlation with a
+     mechanism that never acts cannot matter. Asserted to 1e-9 across the
+     parameter box, and the sentinel region is checked to return a number or
+     the sentinel, never a `nan`.
+  2. **The optimiser.** With flat priors and fixed `(gamma0, gamma1)` the
+     posterior is proportional to the likelihood, so its centre is the
+     conditional MLE `metasens::copas` reports. The posterior *SD* is not that
+     number and should not be: it is marginal over `rho` and `tau` where
+     metasens reports a conditional SE at the mode.
+  3. **The generator.** 200 replications of a stated selection process, fitted
+     at the true selection parameters: the MLE of `mu` is unbiased within 3
+     Monte Carlo standard errors and its intervals cover 0.85-0.99. This is
+     what makes layers 1-2 a check of the *pair* rather than of one formula
+     against itself.
+  4. **The sampler, independently.** `tools/reference_copas_numpyro.py` runs
+     the identical posterior through numpyro's NUTS on jax, 4 x 4000 draws
+     each side, and compares per-parameter means as a z-score against the
+     combined Monte Carlo error. Measured: worst |z| = **1.15** with the
+     selection parameters fixed and **1.43** with them estimated. An earlier
+     attempt to use rstan for this could not compile; numpyro was already
+     installed, needs no R, and is a gradient sampler, which is the stronger
+     check.
+
+     What layer 4 does **not** do is validate the formula: two samplers on the
+     same wrong target would agree. That is why layers 1-3 come first, and the
+     script's docstring says so.
+
+  The sample size, the priors and the fitted values are all in the test file,
+  and `PIMETA_NUMPYRO_PYTHON` re-runs layer 4 on a machine that has numpyro.
 
 - **A random effect on a nonlinear dose-response curve, by sampling.**
   `nma_dose(inference="mcmc")` fits the model that used to be refused:

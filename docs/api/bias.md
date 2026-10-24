@@ -1,6 +1,6 @@
 # Publication bias
 
-*38 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*40 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -29,6 +29,8 @@
 | [`copas_loglik`](#copas_loglik) | — |
 | [`copas_region`](#copas_region) | — |
 | [`CopasRegion`](#copasregion) | — |
+| [`bayes_copas`](#bayes_copas) | — |
+| [`CopasBayesResult`](#copasbayesresult) | — |
 | [`gosh`](#gosh) | — |
 | [`GoshResult`](#goshresult) | — |
 | [`metainf`](#metainf) | metainf |
@@ -470,6 +472,74 @@ say about the adjusted effect then follows from that set.
 - `gamma1_min` — the smallest ``|gamma1|`` among admissible scenarios; zero means precision-dependent selection is not needed to explain the data.
 - `sign_stable` — whether every admissible scenario has the effect on the same side of zero.  This is the question a reader actually asks, and it is answerable without any of the path machinery.
 - `k` — number of studies.
+
+## `bayes_copas`
+
+```python
+bayes_copas(yi, sei=None, *, gamma=None, prior=None, mcmc=None, level: 'float' = 95.0) -> 'CopasBayesResult'
+```
+
+Posterior of the Copas selection model.
+
+The model is the one `copas` estimates, with the parameters it holds
+fixed instead given priors:
+
+.. math::
+
+    y_i \mid \text{published} \sim \text{the Copas likelihood},\quad
+    \mu \sim N(0, \sigma_\mu^2),\; \tau \sim \text{half-}N(0, s_\tau^2),\;
+    \rho \sim U(-1, 1),\; \gamma_0 \sim N(0, s_0^2),\;
+    \gamma_1 \sim \text{half-}N(0, s_1^2).
+
+:math:`\gamma_1 \ge 0` is the same restriction the sensitivity grid uses,
+and the *side* of the funnel the missing studies are on is carried by the
+sign of :math:`\rho`.  Priors are arguments rather than constants so a
+sensitivity analysis is a keyword, and they are recorded on the result.
+
+Why a posterior rather than the contour heuristic: :math:`(\gamma_0,
+\gamma_1)` are weakly identified, and a posterior says so in the width of
+the interval instead of returning the point where a fitted line happened to
+stop. `copas_region` makes the same point from the frequentist side.
+
+**Args**
+
+- `yi` — observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
+- `sei` — their standard errors.
+- `gamma` — ``(gamma0, gamma1)`` to hold the selection parameters fixed. Used to compare against `copas_fit` at one grid point, and to ask "what if the selection mechanism were known". Left out, they are estimated like the rest.
+- `prior` — overrides for ``mu_sd``, ``tau_scale``, ``gamma0_sd`` and ``gamma1_scale``.
+- `mcmc` — sampler settings: ``n_draws``, ``warmup``, ``chains``, ``seed``, ``check``.
+- `level` — credibility level in percent (``0.95``, ``95`` and ``0.05`` are all read as 95%).
+
+**Returns**
+
+`CopasBayesResult`.
+
+**Raises**
+
+- `ValueError` — fewer than three studies, mismatched lengths, non-positive standard errors, or an unknown key in ``prior``/``mcmc``.
+
+**Example**
+
+- `>>> fit = ma.bayes_copas(yi, sei=sei, mcmc={"seed"` — 1})
+- `>>> print(fit)                          # doctest` — +SKIP
+
+## `CopasBayesResult`
+
+```python
+CopasBayesResult(posterior: 'object', mu: 'float', tau: 'float', rho: 'float', mu_ci: 'tuple[float, float]', tau_ci: 'tuple[float, float]', rho_ci: 'tuple[float, float]', k: 'int', level: 'float' = 95.0, gamma0: 'float' = nan, gamma1: 'float' = nan, fixed_gamma: 'tuple[float, float] | None' = None, priors: 'dict' = <factory>) -> None
+```
+
+Posterior of the Copas selection model.
+
+**Attributes**
+
+- `posterior` — the `bayes.Posterior`, with its draws and diagnostics.
+- `mu, tau, rho, gamma0, gamma1` — posterior medians.
+- `mu_ci, tau_ci, rho_ci` — equal-tailed credible intervals.
+- `k` — studies.
+- `level` — credibility level in percent.
+- `fixed_gamma` — the ``(gamma0, gamma1)`` that were held fixed, or ``None`` when the selection parameters were estimated.
+- `priors` — what was put on the parameters, so the record is complete.
 
 ## `gosh`
 

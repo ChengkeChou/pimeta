@@ -54,13 +54,18 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from scipy import optimize, special, stats
 
+from .bayes import Posterior, sample_log_posterior
+
 __all__ = [
+    "CopasBayesResult",
     "CopasRegion",
     "CopasResult",
+    "bayes_copas",
     "copas",
     "copas_fit",
     "copas_loglik",
@@ -521,6 +526,258 @@ def _egger_intercept(yi, sei):
     xc = x - x.mean()
     return float(y.mean() - (np.sum(xc * (y - y.mean())) / np.sum(xc * xc))
                  * x.mean())
+
+
+# --------------------------------------------------------------------------- #
+# the Bayesian version
+# --------------------------------------------------------------------------- #
+_BAYES_PRIORS: dict[str, float] = {
+    "mu_sd": 10.0,
+    "tau_scale": 1.0,
+    "gamma0_sd": 1.0,
+    "gamma1_scale": 1.0,
+}
+
+_BAYES_DEFAULTS: dict[str, Any] = {
+    "n_draws": 4000,
+    "warmup": 2000,
+    "chains": 4,
+    "seed": None,
+    "check": True,
+}
+
+
+@dataclass
+class CopasBayesResult:
+    """Posterior of the Copas selection model.
+
+    Attributes:
+        posterior: the :class:`~pimeta.bayes.Posterior`, with its draws and
+            diagnostics.
+        mu, tau, rho, gamma0, gamma1: posterior medians.
+        mu_ci, tau_ci, rho_ci: equal-tailed credible intervals.
+        k: studies.
+        level: credibility level in percent.
+        fixed_gamma: the ``(gamma0, gamma1)`` that were held fixed, or
+            ``None`` when the selection parameters were estimated.
+        priors: what was put on the parameters, so the record is complete.
+    """
+
+    posterior: Posterior
+    mu: float
+    tau: float
+    rho: float
+    mu_ci: tuple[float, float]
+    tau_ci: tuple[float, float]
+    rho_ci: tuple[float, float]
+    k: int
+    level: float = 95.0
+    gamma0: float = float("nan")
+    gamma1: float = float("nan")
+    fixed_gamma: tuple[float, float] | None = None
+    priors: dict = field(default_factory=dict)
+
+    def summary(self) -> list[dict]:
+        """The posterior summary table, one row per sampled parameter."""
+        return self.posterior.summary()
+
+    def to_dict(self) -> dict:
+        return {
+            "mu": self.mu,
+            "mu_ci": list(self.mu_ci),
+            "tau": self.tau,
+            "tau_ci": list(self.tau_ci),
+            "rho": self.rho,
+            "rho_ci": list(self.rho_ci),
+            "gamma0": self.gamma0,
+            "gamma1": self.gamma1,
+            "fixed_gamma": None if self.fixed_gamma is None
+            else list(self.fixed_gamma),
+            "k": self.k,
+            "level": self.level,
+            "priors": dict(self.priors),
+            "posterior": self.posterior.to_dict(),
+        }
+
+    def __str__(self) -> str:
+        rows = ["Bayesian Copas selection model"]
+        rows.append(f"  studies            {self.k}")
+        rows.append(f"  adjusted effect    {self.mu:+.4f} "
+                    f"[{self.mu_ci[0]:+.4f}, {self.mu_ci[1]:+.4f}] "
+                    f"({self.level:.0f}% credible)")
+        rows.append(f"  between-study SD   {self.tau:.4f} "
+                    f"[{self.tau_ci[0]:.4f}, {self.tau_ci[1]:.4f}]")
+        rows.append(f"  effect-selection   rho = {self.rho:+.4f} "
+                    f"[{self.rho_ci[0]:+.4f}, {self.rho_ci[1]:+.4f}]")
+        if self.fixed_gamma is not None:
+            rows.append(f"  selection fixed    gamma0 = {self.fixed_gamma[0]:+.4f}"
+                        f", gamma1 = {self.fixed_gamma[1]:+.4f}")
+        else:
+            rows.append(f"  selection          gamma0 = {self.gamma0:+.4f}, "
+                        f"gamma1 = {self.gamma1:.4f} (posterior medians)")
+        rows.append(f"  sampler            {self.posterior.settings.get('inference')}")
+        return "\n".join(rows)
+
+
+def bayes_copas(yi, sei=None, *, gamma=None, prior=None, mcmc=None,
+                level: float = 95.0) -> CopasBayesResult:
+    """Posterior of the Copas selection model.
+
+    The model is the one :func:`copas` estimates, with the parameters it holds
+    fixed instead given priors:
+
+    .. math::
+
+        y_i \\mid \\text{published} \\sim \\text{the Copas likelihood},\\quad
+        \\mu \\sim N(0, \\sigma_\\mu^2),\\; \\tau \\sim \\text{half-}N(0, s_\\tau^2),\\;
+        \\rho \\sim U(-1, 1),\\; \\gamma_0 \\sim N(0, s_0^2),\\;
+        \\gamma_1 \\sim \\text{half-}N(0, s_1^2).
+
+    :math:`\\gamma_1 \\ge 0` is the same restriction the sensitivity grid uses,
+    and the *side* of the funnel the missing studies are on is carried by the
+    sign of :math:`\\rho`.  Priors are arguments rather than constants so a
+    sensitivity analysis is a keyword, and they are recorded on the result.
+
+    Why a posterior rather than the contour heuristic: :math:`(\\gamma_0,
+    \\gamma_1)` are weakly identified, and a posterior says so in the width of
+    the interval instead of returning the point where a fitted line happened to
+    stop. :func:`copas_region` makes the same point from the frequentist side.
+
+    Args:
+        yi: observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
+        sei: their standard errors.
+        gamma: ``(gamma0, gamma1)`` to hold the selection parameters fixed. Used
+            to compare against :func:`copas_fit` at one grid point, and to ask
+            "what if the selection mechanism were known". Left out, they are
+            estimated like the rest.
+        prior: overrides for ``mu_sd``, ``tau_scale``, ``gamma0_sd`` and
+            ``gamma1_scale``.
+        mcmc: sampler settings: ``n_draws``, ``warmup``, ``chains``, ``seed``,
+            ``check``.
+        level: credibility level in percent (``0.95``, ``95`` and ``0.05`` are
+            all read as 95%).
+
+    Returns:
+        :class:`CopasBayesResult`.
+
+    Raises:
+        ValueError: fewer than three studies, mismatched lengths, non-positive
+            standard errors, or an unknown key in ``prior``/``mcmc``.
+
+    Example:
+        >>> fit = ma.bayes_copas(yi, sei=sei, mcmc={"seed": 1})
+        >>> print(fit)                          # doctest: +SKIP
+    """
+    from .levels import level_to_alpha
+    from .rma_uni import RmaResult
+
+    if isinstance(yi, RmaResult):
+        sei_arr = np.sqrt(np.asarray(yi.vi, dtype=float))
+        yi_arr = np.asarray(yi.yi, dtype=float)
+    else:
+        if sei is None:
+            raise ValueError("'sei' is required when 'yi' is an array")
+        yi_arr = np.asarray(yi, dtype=float).ravel()
+        sei_arr = np.asarray(sei, dtype=float).ravel()
+    if yi_arr.size != sei_arr.size:
+        raise ValueError("'yi' and 'sei' must be the same length")
+    if yi_arr.size < 3:
+        raise ValueError("at least three studies are needed")
+    if np.any(sei_arr <= 0.0):
+        raise ValueError("standard errors must be positive")
+
+    priors = dict(_BAYES_PRIORS)
+    if prior:
+        unknown = set(prior) - set(priors)
+        if unknown:
+            raise ValueError(
+                f"unknown prior(s): {', '.join(sorted(map(str, unknown)))}; "
+                f"known keys are {', '.join(sorted(priors))}")
+        priors.update({k: float(v) for k, v in prior.items()})
+    cfg = dict(_BAYES_DEFAULTS)
+    if mcmc:
+        unknown = set(mcmc) - set(cfg)
+        if unknown:
+            raise ValueError(
+                f"unknown 'mcmc' setting(s): {', '.join(sorted(map(str, unknown)))}; "
+                f"known keys are {', '.join(sorted(cfg))}")
+        cfg.update(mcmc)
+    level_pct = 100.0 * (1.0 - level_to_alpha(level))
+    tail = (1.0 - level_pct / 100.0) / 2.0
+
+    fixed = None
+    if gamma is not None:
+        fixed = (float(gamma[0]), float(gamma[1]))
+        if fixed[1] < 0.0:
+            raise ValueError(
+                "'gamma1' must be non-negative: the restriction matches the "
+                "sensitivity grid, and the side of the funnel is carried by "
+                "the sign of rho")
+
+    mu_sd = priors["mu_sd"]
+    tau_scale = priors["tau_scale"]
+    g0_sd = priors["gamma0_sd"]
+    g1_scale = priors["gamma1_scale"]
+
+    def logpost(theta: np.ndarray) -> float:
+        mu = float(theta[0])
+        rho = float(np.tanh(theta[1]))
+        tau = float(np.exp(theta[2]))
+        if fixed is None:
+            g0 = float(theta[3])
+            g1 = float(np.exp(theta[4]))
+        else:
+            g0, g1 = fixed
+        negative = copas_loglik((mu, rho, tau), yi_arr, sei_arr, g0, g1)
+        if negative >= 1e299:          # the invalid region, reported as such
+            return -np.inf
+        value = -negative
+        value += -0.5 * (mu / mu_sd) ** 2
+        value += -0.5 * (tau / tau_scale) ** 2 + theta[2]      # Jacobian
+        value += np.log1p(-rho * rho)                          # rho = tanh(psi)
+        if fixed is None:
+            value += -0.5 * (g0 / g0_sd) ** 2
+            value += -0.5 * (g1 / g1_scale) ** 2 + theta[4]    # Jacobian
+        return float(value)
+
+    start = [float(np.mean(yi_arr)), 0.0,
+             math.log(max(float(np.std(yi_arr, ddof=1)), 1e-3))]
+    names = ["mu", "psi(rho)", "log_tau"]
+    if fixed is None:
+        start += [0.0, 0.0]
+        names += ["gamma0", "log_gamma1"]
+    post = sample_log_posterior(
+        logpost, np.array(start, dtype=float), names=names,
+        n_draws=int(cfg["n_draws"]), warmup=int(cfg["warmup"]),
+        chains=int(cfg["chains"]), seed=cfg["seed"], init_sd=0.15)
+    if cfg["check"]:
+        post.check(rhat_max=1.1, ess_min=100.0)
+
+    draws = post.draws
+    mu_draws = draws[:, 0]
+    rho_draws = np.tanh(draws[:, 1])
+    tau_draws = np.exp(draws[:, 2])
+    g0_draws = np.full(mu_draws.size, fixed[0]) if fixed else draws[:, 3]
+    g1_draws = np.full(mu_draws.size, fixed[1]) if fixed else np.exp(draws[:, 4])
+
+    def interval(x: np.ndarray) -> tuple[float, float]:
+        return (float(np.quantile(x, tail)), float(np.quantile(x, 1.0 - tail)))
+
+    return CopasBayesResult(
+        posterior=post,
+        mu=float(np.median(mu_draws)),
+        tau=float(np.median(tau_draws)),
+        rho=float(np.median(rho_draws)),
+        mu_ci=interval(mu_draws),
+        tau_ci=interval(tau_draws),
+        rho_ci=interval(rho_draws),
+        k=int(yi_arr.size),
+        level=level_pct,
+        gamma0=float(np.median(g0_draws)),
+        gamma1=float(np.median(g1_draws)),
+        fixed_gamma=fixed,
+        priors=priors,
+    )
 
 def copas(yi, sei=None, *, tau=None, mu0=None, se0=None, ngrid=20,
           nlevels=10, levels=None, rho_bound=0.9999, left=None, slope=None,

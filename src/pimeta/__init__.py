@@ -46,8 +46,10 @@ from .conv import (
     to_wide,
 )
 from .copas import (
+    CopasBayesResult,
     CopasRegion,
     CopasResult,
+    bayes_copas,
     copas,
     copas_fit,
     copas_loglik,
@@ -771,6 +773,8 @@ __all__ = [
     "copas_loglik",
     "copas_region",
     "CopasRegion",
+    "bayes_copas",
+    "CopasBayesResult",
     "level_to_alpha",
     "level_to_percent",
     "gosh",
