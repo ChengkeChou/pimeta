@@ -1,6 +1,6 @@
 # API reference
 
-All 493 public names in `pimeta.__all__`, generated from the source docstrings.
+All 496 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -251,6 +251,9 @@ All 493 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`consistency_residuals`](network.md#consistency_residuals) | Network meta-analysis | — |
 | [`ipd_nma`](network.md#ipd_nma) | Network meta-analysis | — |
 | [`IpdNmaResult`](network.md#ipdnmaresult) | Network meta-analysis | — |
+| [`nma_dose`](network.md#nma_dose) | Network meta-analysis | — |
+| [`NmaDoseResult`](network.md#nmadoseresult) | Network meta-analysis | — |
+| [`NmaDoseCurve`](network.md#nmadosecurve) | Network meta-analysis | — |
 | [`netconnection`](network.md#netconnection) | Network meta-analysis | — |
 | [`NetconnectionResult`](network.md#netconnectionresult) | Network meta-analysis | — |
 | [`netdistance`](network.md#netdistance) | Network meta-analysis | — |

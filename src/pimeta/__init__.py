@@ -220,6 +220,7 @@ from .nma.design import (
     consistency_residuals,
     multiarm_structure,
 )
+from .nma.dose import NmaDoseCurve, NmaDoseResult, nma_dose
 from .nma.ipd import IpdNmaResult, ipd_nma
 from .onestage import OneStageResult, ipd_one_stage
 from .plotting import (
@@ -735,6 +736,9 @@ __all__ = [
     "consistency_residuals",
     "ipd_nma",
     "IpdNmaResult",
+    "nma_dose",
+    "NmaDoseResult",
+    "NmaDoseCurve",
     "netconnection",
     "NetconnectionResult",
     "netdistance",

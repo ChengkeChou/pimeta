@@ -37,6 +37,59 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Dose-response network meta-analysis.** `pimeta.nma.dose` fits a dose
+  function per treatment to a network of contrasts,
+  `y_i = f_b(x_b; β_b) - f_a(x_a; β_a) + e_i`, with six dose functions
+  (`linear`, `quadratic`, `loglinear`, `rcs`, and the two saturating forms
+  `emax` and `exponential`), a choice of three heterogeneity structures, and a
+  league table at any pair of doses through `contrast()`.
+
+  The parameterisation is what makes the consistency equations hold: the same
+  `β_t` is used wherever treatment *t* appears, in either position, so summing
+  `d_ab(x) + d_bc(x) - d_ac(x)` around a circuit cancels **as an identity, at
+  any dose** — including doses nobody studied. A model that stored one
+  parameter per comparison would satisfy the equations only at the observed
+  doses and only if the fit happened to. The test asserts it at doses that
+  appear nowhere in the data, and asserts that the same linear functional has
+  the same Jacobian whichever way it is assembled, so no route through the
+  network can produce a different variance for the same number.
+
+  Every curve is anchored at a zero dose, and that is an assumption rather than
+  a convenience: without an anchor, adding a constant to every curve leaves
+  every contrast unchanged, so the model is not identified. `anchor=` changes
+  the anchor dose; a treatment seen only at the anchor gets no curve at all
+  rather than parameters the data cannot support.
+
+  Validated at the level of the model, on an 16-study / 23-contrast fixture
+  simulated from known Emax curves:
+
+  - every dose function that is linear in its parameters against
+    `metafor::rma.mv(yi, V, mods = ~0 + basis, random = ~1 | study)`, with
+    coefficients to 1e-7, standard errors to 1e-6 relative and `tau2` to 5e-8;
+  - `emax` and `exponential` against `nls(..., weights = 1/vi)` with the PORT
+    algorithm: parameters to 1e-4, standard errors to 1e-4 relative, and the
+    residual sum of squares to 1e-8, the last recomputed through the public
+    `contrast()` API rather than read from the fit;
+  - the restricted cubic spline basis itself against `rms::rcs`, to 1e-9.
+
+  Two things the validation settled that are worth recording. `rma.uni` is
+  **not** a reference for this model: it treats a study's several contrasts as
+  independent, so on the same fixture it reports `tau2 = 0.2216` where the
+  model with a study-level random effect gives `0.3013`; `rma.mv` gives
+  `0.3013134977` against pimeta's `0.3013134873`. And `nls` estimates a
+  dispersion from the residuals, which is right when the variances are
+  unknown and wrong here; the comparison is against its covariance divided by
+  `summary()$sigma`, which isolates the known-variance answer.
+
+  Refusals rather than quiet approximations: a random effect on the curve with
+  a dose function that is not linear in its parameters (`emax`, `exponential`
+  — the marginal likelihood would be an integral with no closed form), a curve
+  with fewer distinct doses than parameters, a covariance that is not positive
+  definite, a between-study variance with one study, and an unknown dose
+  function or structure. A boundary `tau2` warns and quotes its size against
+  the mean sampling variance, because a zero heterogeneity estimate is a
+  statement about the data and not a detail of the fit.
+
 - **Individual-participant-data network meta-analysis.** `pimeta.nma.ipd`
   fits the one-stage IPD network model: a study intercept per study, treatment
   effects against a reference, optional study-centred covariates as main

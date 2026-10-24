@@ -499,8 +499,9 @@ $Q$ and the component-difference test. `ma.netcomplex` derives the effect of any
 requested combination from the fitted components, and `ma.discomb` handles
 disconnected components. All three are pinned against `netmeta` 3.7.0.
 
-Missing: the component *interaction* (inconsistency) model, dose–response NMA,
-and time-course NMA. (IPD-NMA is a separate area and is done; see item 13.)
+Missing: the component *interaction* (inconsistency) model and time-course NMA.
+(IPD-NMA and dose-response NMA are separate areas and are done; see items 13
+and 14.)
 
 ### 11. Publication bias — **yes**
 
@@ -636,6 +637,39 @@ SD per study-arm rather than one `sigma2`. A differently parameterised
 Bayesian fit cannot be a tolerance target, which is why the pinned numbers come
 from `lme4`.
 
+### 14. Dose-response network meta-analysis — **yes**
+
+`ma.nma_dose` fits a dose function per treatment to a network of contrasts:
+`y = f_b(x_b) - f_a(x_a) + e`. Six dose functions — `linear`, `quadratic`,
+`loglinear`, `rcs`, `emax`, `exponential` — three heterogeneity structures (no
+between-study variation, a random study level, a random **curve**), and a
+league table at any pair of doses through `contrast()`.
+
+The reason this is a network model rather than a pairwise one is the
+consistency equation. Because the same parameter vector is used wherever a
+treatment appears, `d_ab(x) + d_bc(x) - d_ac(x)` cancels identically at **any**
+dose, including doses nobody studied. A model storing one parameter per
+comparison would satisfy it only at observed doses. The tests assert the
+identity at unseen doses and assert that the same functional has the same
+Jacobian whichever route through the network assembles it.
+
+Every curve is anchored at dose zero. That is an assumption, not a
+convention: without it, adding a constant to every curve leaves every contrast
+unchanged and the model is not identified.
+
+Pinned against `metafor::rma.mv` for the four dose functions linear in their
+parameters (coefficients to 1e-7, standard errors to 1e-6 relative, `tau2` to
+5e-8), against `nls` with the PORT algorithm for `emax` and `exponential`
+(parameters to 1e-4, residual sum of squares to 1e-8), and against `rms::rcs`
+for the spline basis itself (1e-9).
+
+Not attempted, and why: a random effect on `(emax, ed50)`. The marginal
+likelihood is then an integral with no closed form, so it needs MCMC, which the
+dependency policy rules out. `MBNMAdose` is the reference implementation that
+does exactly that, and it could not be installed here because it needs `rjags`
+and a JAGS binary, which requires an elevated install — so the validation went
+to implementations that are deterministic instead.
+
 ### Not on the list: IPD plus aggregate data — **yes**
 
 `ipd_two_stage(..., aggregate=...)`; see item 3. It needed nothing beyond the
@@ -658,6 +692,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
 | 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
+| 14 | dose-response network meta-analysis | yes — every dose function except a random effect on a non-linear parameter | `tests/test_nma_dose.py` |
 
 Five of these turned out to be further along than the roadmap assumed: items
 5, 6 and 10 are finished, item 1 needed only a basis rather than a regression

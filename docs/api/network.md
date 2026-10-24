@@ -1,6 +1,6 @@
 # Network meta-analysis
 
-*61 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*64 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -32,6 +32,9 @@
 | [`consistency_residuals`](#consistency_residuals) | — |
 | [`ipd_nma`](#ipd_nma) | — |
 | [`IpdNmaResult`](#ipdnmaresult) | — |
+| [`nma_dose`](#nma_dose) | — |
+| [`NmaDoseResult`](#nmadoseresult) | — |
+| [`NmaDoseCurve`](#nmadosecurve) | — |
 | [`netconnection`](#netconnection) | — |
 | [`NetconnectionResult`](#netconnectionresult) | — |
 | [`netdistance`](#netdistance) | — |
@@ -549,6 +552,82 @@ A one-stage IPD network meta-analysis.
 - `loglik` — the maximised log-likelihood.
 - `method, level, struct, interaction` — settings.
 - `fit` — the raw optimiser output, for diagnosing a boundary.
+
+## `nma_dose`
+
+```python
+nma_dose(yi, *, study, treat1, treat2, dose1, dose2, vi=None, vcov=None, rho=None, family: 'str' = 'linear', treatment_specific: 'bool' = True, knots=None, n_knots: 'int | None' = None, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 0.95, anchor: 'float' = 0.0, max_iter: 'int' = 500, start=None, tol: 'float' = 1e-09) -> 'NmaDoseResult'
+```
+
+Fit a dose-response model to a network of contrasts.
+
+**Args**
+
+- `yi` — the observed contrast of each row, on the linear-predictor scale.
+- `study` — study label per row.
+- `treat1, treat2` — the two treatments compared, ``treat2`` minus ``treat1`` in sign.  Which is which matters for the dose, not for the model.
+- `dose1, dose2` — the dose of each arm.  ``anchor`` (zero by default) means no drug.
+- `vi` — variance of ``yi`` per row; ignored when ``vcov`` is given.
+- `vcov` — full covariance of ``yi``.  A study with several contrasts — several doses against one control, or a multi-arm study — has correlated rows, and this is where that goes.
+- `rho` — constant within-study correlation, used to build ``vcov`` from ``vi`` as ``rho * sqrt(vi_i * vi_j)`` inside a study.  An assumption, not an estimate; supplied rather than defaulted for that reason.
+- `family` — the dose function, see `dose_functions`.
+- `treatment_specific` — ``True`` (default) gives every treatment its own curve; ``False`` fits one curve shared by all of them, which is the "class" model.
+- `knots, n_knots` — for ``family="rcs"``.  ``n_knots`` is the number of spline columns, placed on the observed doses; ``knots`` gives them explicitly.
+- `struct` — ``"FE"``, ``"study"`` (default), ``"coef"`` or ``"coef+study"``.
+- `coef_struct` — ``"DIAG"`` or ``"UN"`` for the curve's random effects.
+- `method` — ``"REML"`` (default) or ``"ML"``.
+- `level` — confidence level; ``0.95``, ``95`` and ``0.05`` are all read as the same 95%.
+- `anchor` — the dose at which every curve is zero.
+- `max_iter` — optimiser iteration cap.
+- `start` — optional starting values for the dose-response parameters.
+- `tol` — convergence tolerance on the variance parameters.
+
+**Returns**
+
+`NmaDoseResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched inputs, an unknown dose function, a negative dose under ``loglinear``, a covariance that is not positive definite, or a design that cannot identify the curves asked for.
+
+**Example**
+
+>>> fit = ma.nma_dose(yi, study=study, treat1=arm1, treat2=arm2, ...                   dose1=d1, dose2=d2, vi=vi, family="emax") >>> print(fit.curve("drugB", [0, 5, 10]))
+
+## `NmaDoseResult`
+
+```python
+NmaDoseResult(family: 'str', treatments: 'list[str]', curves: 'list[str]', names: 'list[str]', coef: 'list[float]', se: 'list[float]', vcov: 'np.ndarray' = <factory>, tau2: 'float' = nan, D: 'np.ndarray | None' = None, k: 'int' = 0, studies: 'list' = <factory>, dose_range: 'dict' = <factory>, struct: 'str' = 'study', coef_struct: 'str' = 'DIAG', method: 'str' = 'REML', level: 'float' = 95.0, loglik: 'float' = nan, anchor: 'float' = 0.0, n_knots: 'int | None' = None, knots: 'list[float] | None' = None, treatment_specific: 'bool' = True, fit: 'Any' = None) -> None
+```
+
+A fitted dose-response network.
+
+**Attributes**
+
+- `family` — the dose function.
+- `treatments` — every treatment in the network.
+- `curves` — the treatments whose curve was estimated.  A treatment seen only at the anchor dose has no curve — its effect is zero by definition — and is reported here as omitted rather than given a parameter the data cannot identify.
+- `names` — coefficient names, one block per treatment.
+- `coef, se` — the dose-response parameters and their standard errors.
+- `vcov` — their covariance.
+- `tau2` — the between-study variance of the study level, or ``NaN`` when ``struct`` has no level term.
+- `D` — the between-study covariance of the curve's coefficients, or ``None``.
+- `k` — contrasts fitted.
+- `studies` — the study labels.
+- `dose_range` — the observed range of dose, per treatment.
+- `struct, coef_struct` — the heterogeneity structure.
+- `method, level` — settings.
+- `loglik` — the maximised (restricted) log-likelihood.
+- `anchor` — the dose at which every curve is zero.
+- `fit` — the raw optimiser output, for diagnosing a boundary.
+
+## `NmaDoseCurve`
+
+```python
+NmaDoseCurve(labels: 'list[str]' = <factory>, dose: 'np.ndarray' = <factory>, est: 'np.ndarray' = <factory>, se: 'np.ndarray' = <factory>, ci_lb: 'np.ndarray' = <factory>, ci_ub: 'np.ndarray' = <factory>, pred_lb: 'np.ndarray' = <factory>, pred_ub: 'np.ndarray' = <factory>, outside: 'np.ndarray' = <factory>) -> None
+```
+
+A treatment's dose-response curve, or a contrast between two curves.
 
 ## `netconnection`
 
