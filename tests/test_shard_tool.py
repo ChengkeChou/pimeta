@@ -79,6 +79,22 @@ def test_equal_weights_split_by_count():
     assert [len(shard) for shard in shards] == [3, 3, 3]
 
 
+def test_untimed_tests_are_spread_and_not_heaped_on_one_shard():
+    """The bug that made the first CI split useless: 1315 tests in one shard.
+
+    A zero weight never raises a shard's load, so under the load rule alone the
+    same shard stays cheapest and swallows every unmeasured test.
+    """
+    weights = {f"slow{i}": 100.0 for i in range(4)}
+    weights.update({f"fast{i}": 0.0 for i in range(400)})
+    shards = shard_tests.assign(weights, 4)
+    sizes = [len(shard) for shard in shards]
+    assert max(sizes) - min(sizes) <= 1, sizes
+    # one heavy test per shard, and the fast ones spread evenly
+    assert all(sum(1 for t in shard if t.startswith("slow")) == 1
+               for shard in shards)
+
+
 def test_assignment_rejects_a_silly_shard_count():
     try:
         shard_tests.assign({"a": 1.0}, 0)
@@ -95,3 +111,11 @@ def test_record_writes_the_map_it_parsed(tmp_path):
     assert shard_tests.main(["--record", str(log), "--out", str(out)]) == 0
     written = json.loads(out.read_text(encoding="utf-8"))
     assert written["tests/test_mv.py::test_a[1-2]"] == 3.25
+
+
+def test_a_utf16_log_is_read_too(tmp_path):
+    """PowerShell's `>` writes UTF-16; a POSIX shell's tee writes UTF-8."""
+    log = tmp_path / "run.log"
+    log.write_text(REPORT, encoding="utf-16")
+    totals = shard_tests.parse_durations(shard_tests.read_log(log))
+    assert totals["tests/test_copas.py::test_fleiss_surface_matches_metasens"] == 12.0
