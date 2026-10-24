@@ -93,6 +93,12 @@ from .dta import (
     reitsma,
     sroc,
 )
+from .dynamichet import (
+    BayesTauTrendResult,
+    TauTrendResult,
+    bayes_tau_trend,
+    tau_trend,
+)
 from .escalc import EscalcResult, escalc
 from .extras import (
     HettestResult,
@@ -753,6 +759,10 @@ __all__ = [
     "TimeCourseNmaCurve",
     "bayes_nma",
     "BayesNmaResult",
+    "tau_trend",
+    "TauTrendResult",
+    "bayes_tau_trend",
+    "BayesTauTrendResult",
     "sample_log_posterior",
     "Posterior",
     "rhat",

@@ -52,6 +52,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "dta": ("models", "Models"),
     "rma_glmm": ("models", "Models"),
     "rma_ls": ("models", "Models"),
+    "dynamichet": ("models", "Models"),
     "rma_peto_mh": ("models", "Models"),
     "selmodel": ("models", "Models"),
     "basis": ("models", "Models"),

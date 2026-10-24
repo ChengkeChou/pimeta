@@ -1,6 +1,6 @@
 # Models
 
-*100 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*104 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -57,6 +57,10 @@
 | [`hc_rma`](#hc_rma) | hc.rma.uni |
 | [`HcResult`](#hcresult) | hc.rma.uni |
 | [`estimate_tau2`](#estimate_tau2) | — |
+| [`tau_trend`](#tau_trend) | — |
+| [`TauTrendResult`](#tautrendresult) | — |
+| [`bayes_tau_trend`](#bayes_tau_trend) | — |
+| [`BayesTauTrendResult`](#bayestautrendresult) | — |
 | [`sample_log_posterior`](#sample_log_posterior) | — |
 | [`Posterior`](#posterior) | — |
 | [`rhat`](#rhat) | — |
@@ -1308,6 +1312,112 @@ Return tau-squared for a moment/iterative estimator.
 likelihood-based ML/REML are handled by metafor's Fisher-scoring loop in
 ``pooling``). ``n`` is the per-study total sample size, required only for
 ``HS``.
+
+## `tau_trend`
+
+```python
+tau_trend(yi, vi, time, *, mu: 'str' = 'linear', tau: 'str' = 'linear', method: 'str' = 'REML', test: 'str' = 'knha', se: 'str' = 'gls', level=0.95, max_iter: 'int' = 500, tol: 'float' = 1e-10, max_ratio: 'float' = 100.0) -> 'TauTrendResult'
+```
+
+Fit :math:`y_i \sim N(x_i'\beta,\ v_i + \exp(z_i'\alpha))`.
+
+**Args**
+
+- `yi` — effect estimates.
+- `vi` — their sampling variances.
+- `time` — the continuous index — year, follow-up time, dose, any ordering. Centred internally, so the intercepts are the values at the mean time and ``alpha[1]`` is per unit of the original scale.
+- `mu` — shape of the mean, ``"none"``, ``"linear"`` or ``"quadratic"``.
+- `tau` — shape of :math:`\log\tau^2`, same options.  ``"none"`` gives a constant :math:`\tau^2`, which makes the fit an ordinary random-effects model with moderators.
+- `method` — ``"REML"`` (default) or ``"ML"``.
+- `test` — ``"knha"`` (default), ``"t"`` or ``"z"``.  Knapp–Hartung scales the location variance by :math:`RSS/(k-p)` and refers the location tests to a t with ``k-p`` degrees of freedom; the scale tests use ``k-q``.
+- `se` — ``"gls"`` for :math:`(X'WX)^{-1}`, what metafor reports and what the parity tests check; ``"profile"`` for the joint-information block, which propagates the scale uncertainty.  Both are always stored.
+- `level` — confidence level, as ``0.95``, ``95`` or ``0.05``.
+- `max_iter` — optimiser iterations.
+- `tol` — optimiser gradient tolerance.
+- `max_ratio` — warn when the fitted :math:`\tau^2(t)` spans more than this factor across the observed range.  A log-linear scale fitted to data with almost no heterogeneity can run to :math:`\pm\infty` — on a simulation with a constant :math:`\tau^2 = 0.02` the estimate was :math:`\alpha_1 = 10.2`, a 27 000-fold change, which ``metafor`` reports just as happily.  Set to ``inf`` to silence it.
+
+**Returns**
+
+`TauTrendResult`.
+
+**Raises**
+
+- `ValueError` — for mismatched lengths, fewer than three studies, a non-positive variance, a constant ``time``, an unknown shape, or a number of location coefficients that leaves nothing for the scale.
+
+## `TauTrendResult`
+
+```python
+TauTrendResult(beta: 'np.ndarray', se_beta: 'np.ndarray', se_beta_profile: 'np.ndarray', vcov_beta: 'np.ndarray', vcov_beta_profile: 'np.ndarray', alpha: 'np.ndarray', se_alpha: 'np.ndarray', vcov_alpha: 'np.ndarray', vcov: 'np.ndarray', tau2: 'np.ndarray', time_centre: 'float', mu_kind: 'str', tau_kind: 'str', method: 'str', test: 'str', level: 'float', s2w: 'float', loglik: 'float', k: 'int', p: 'int', q: 'int', rss: 'float', converged: 'bool', kind: 'str' = 'frequentist', _refit: 'Callable[[], dict] | None' = None) -> None
+```
+
+A fitted location-scale model with time in the mean and the variance.
+
+**Attributes**
+
+- `beta` — location coefficients, on the centred time scale.
+- `se_beta` — location standard errors as the ``se`` argument asked for.
+- `se_beta_profile` — the same with the scale uncertainty propagated; always computed, so the two can be compared.
+- `alpha` — scale coefficients, :math:`\log\tau^2(t) = z(t)'\alpha`.
+- `se_alpha` — scale standard errors, from the joint observed information.
+- `tau2` — the fitted :math:`\tau^2_i`, one per study.
+- `time_centre` — the constant subtracted before the design was built.
+- `s2w` — the Knapp–Hartung scale factor applied to the location variance.
+- `loglik` — the maximised likelihood, including metafor's :math:`\tfrac12\log|X'X|` term under REML so that the value is directly comparable with ``logLik`` of the R fit.
+
+## `bayes_tau_trend`
+
+```python
+bayes_tau_trend(yi, vi, time, *, mu: 'str' = 'linear', tau: 'str' = 'linear', prior_beta_sd: 'float | None' = None, prior_alpha0_sd: 'float | None' = None, prior_alpha_sd: 'float | None' = None, level=0.95, mcmc: 'dict | None' = None) -> 'BayesTauTrendResult'
+```
+
+Sample the posterior of the location-scale model with time-varying tau^2.
+
+Priors, stated rather than buried:
+
+- :math:`\beta \sim N(0, 100^2)` — flat enough that the location answers
+  agree with the frequentist fit, proper enough that the marginal likelihood
+  exists.
+- :math:`\alpha_0 \sim N(0, 2^2)` — a 95 % prior range of
+  :math:`\tau^2 \in [0.02, 55]`, which excludes nothing anyone would
+  plausibly report.  A first version used :math:`N(0, 1)`; on the fixture
+  that pulled :math:`\alpha_0` from the frequentist :math:`-2.61` to
+  :math:`-2.31`, a 35 % change in :math:`\tau^2` at the mean time, and a
+  prior nobody asked for should not do that.
+- :math:`\alpha_1, \alpha_2 \sim N(0, 0.3^2)` — the shrinkage that makes
+  this the better answer at small ``k``.  It says "unless the data are
+  clear, the heterogeneity does not change with time", which is what stops
+  three influential early studies from deciding the shape.
+
+**Args**
+
+- `yi, vi, time` — as for `tau_trend`.
+- `mu, tau` — as for `tau_trend`.
+- `prior_beta_sd, prior_alpha0_sd, prior_alpha_sd` — override the scales above; all three are recorded on the result.
+- `level` — credible level.
+- `mcmc` — sampler overrides — ``n_draws``, ``warmup``, ``chains``, ``seed``, ``check``, ``rhat_max``, ``ess_min``.
+
+**Returns**
+
+`BayesTauTrendResult`.
+
+**Raises**
+
+- `ValueError` — for the input problems `tau_trend` refuses, for an unknown ``mcmc`` key, and for a non-positive prior scale.
+- `RuntimeError` — from `Posterior.check` when the draws did not mix.
+
+## `BayesTauTrendResult`
+
+```python
+BayesTauTrendResult(posterior: 'Posterior', alpha: 'np.ndarray', alpha_ci: 'np.ndarray', beta: 'np.ndarray', beta_ci: 'np.ndarray', alpha_draws: 'np.ndarray | None' = None, beta_draws: 'np.ndarray | None' = None, time_centre: 'float' = 0.0, mu_kind: 'str' = 'linear', tau_kind: 'str' = 'linear', level: 'float' = 0.95, priors: 'dict' = <factory>, k: 'int' = 0, kind: 'str' = 'bayesian') -> None
+```
+
+A sampled location-scale model with time in the mean and the variance.
+
+Only ``alpha`` is sampled.  Given ``alpha`` the model is Gaussian in
+``beta``, so each draw of ``beta`` comes from its exact conditional
+posterior — the chain stays two- or three-dimensional, and the priors on
+the *shape* of the heterogeneity carry the regularisation instead of the
+sampler's inefficiency doing it by accident.
 
 ## `sample_log_posterior`
 

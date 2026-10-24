@@ -574,11 +574,12 @@ in this environment (no win-64 conda-forge build; the SourceForge installer
 host is unreachable). A model set no reference can check is the one thing this
 package does not ship.
 
-### 12. Time-varying effects — **no**
+### 12. Time-varying effects — **yes**, with a stated scale model
 
-Two different things are easy to conflate here, and only one of them is done.
+Three different things are easy to conflate here, and all three are now
+implemented at a stated scope.
 
-A time-varying **hazard ratio** *is* implemented: `ma.piecewise_exp` (row 7)
+A time-varying **hazard ratio** is implemented: `ma.piecewise_exp` (row 7)
 splits follow-up at given break points, fits a Poisson model with a log-time
 offset per interval, and pools the interval-specific log hazard ratios. That is
 a treatment effect that changes over time, and it is pinned against `survival`
@@ -586,33 +587,38 @@ and `metafor` in `tests/test_tvhr.py`. `ma.piecewise_joint` pools the same
 estimates as a vector and reports the trend tests that comparison needs, pinned
 against `metafor::rma.mv` in `tests/test_tvhr_joint.py`.
 
-What is absent is a time-varying **pooled effect size from aggregate data** —
-dynamic heterogeneity, where the pooled estimate and $\tau^2$ are functions of
-a continuous time index, and the usual candidates are a Gaussian process or a
-state-space model on the coefficients. There is no reference implementation in
-R to check one against, and this package does not ship models it cannot
-verify. It is a research direction rather than a missing feature.
-
-**Time-course meta-analysis from aggregate data** *is* implemented, and it is
-the case most reviews actually meet: a trial reports the treatment effect at 3,
-6 and 12 months. `ma.timecourse` pools them with the within-study correlation
-spelled out — `rho` for a constant one, `phi` for AR(1) decay
+**Time-course meta-analysis from aggregate data** is implemented for the case
+most reviews actually meet: a trial reports the treatment effect at 3, 6 and 12
+months. `ma.timecourse` pools them with the within-study correlation spelled
+out — `rho` for a constant one, `phi` for AR(1) decay
 `phi**|t_i - t_j|`, which `ma.vcalc` builds — and a curve over time that can be
 linear or a spline. `curve()` returns a confidence band for the average curve
 and a prediction band for a new study's curve, `test_trend()` asks whether the
 effect changes with time at all, and `test_nonlinear()` whether a spline was
-needed.
+needed. The correlation is required rather than defaulted, because the
+alternative — treating a study's three estimates as independent — is the error
+that makes a time trend look more precise than it is. Pinned against
+`metafor::rma.mv` with the same block-diagonal `V` and `struct="GEN"`:
+coefficients to 1e-9, standard errors to 1e-6, the curve to 1e-9. The network
+version is item 15.
 
-The correlation is required rather than defaulted, because the alternative —
-treating a study's three estimates as independent — is the error that makes a
-time trend look more precise than it is; the difference in the trend's standard
-error is pinned in the tests. Pinned against `metafor::rma.mv` with the same
-block-diagonal `V` and `struct="GEN"`: coefficients to 1e-9, standard errors to
-1e-6, variance components to 1e-6, the curve to 1e-9.
+**Dynamic heterogeneity** — the pooled effect *and* :math:`\tau^2` as functions
+of a continuous index — is implemented in `pimeta.dynamichet`. `ma.tau_trend`
+fits the location-scale model
+:math:`y_i \sim N(x_i'\beta, v_i + \exp(z_i'\alpha))` by ML or REML, and
+`ma.bayes_tau_trend` fits the same model with a shrinkage prior on the scale
+slope. Both report a time-varying prediction interval, which is the summary to
+publish instead of a single :math:`I^2`; both refuse to let the mean model be
+left out silently, because omitting it turns a mean trend into heterogeneity.
+The full development record is on
+[its own page](dynamic-heterogeneity.md).
 
-Scope: this is the **pairwise** model, treatment against a common comparator.
-The network version — consistency on the whole treatment difference over time —
-is item 15.
+What is *not* available is a **non-parametric** scale — a spline or
+Gaussian-process :math:`\log\tau^2(t)`. That is a stated limit rather than a
+missing switch: a flexible scale needs its own reference implementation, its own
+inference story at small `k`, and a shrinkage prior whose behaviour has been
+measured, and none of those can be borrowed. `tau="quadratic"` is the middle
+ground the module offers.
 
 ### 13. Network meta-analysis with individual participant data — **yes**
 
@@ -742,7 +748,7 @@ two-stage model, which is why it could be done as soon as that existed.
 | 9 | multivariate | yes | `tests/test_mv.py`, `tests/test_mv_confint.py`, `tests/test_mv_region.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | yes — including a Bayesian posterior for the Copas model | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py`, `tests/test_copas_bayes.py` |
-| 12 | time-varying effects (dynamic heterogeneity) | partly — time-course from aggregate data is done; the state-space version is not | `tests/test_timecourse.py` |
+| 12 | time-varying effects (dynamic heterogeneity) | yes — location-scale with linear or quadratic time in both the mean and the variance, validated against an exact posterior; a non-parametric scale is not available | `tests/test_timecourse.py`, `tests/test_dynhet.py` |
 | 13 | IPD network meta-analysis | yes | `tests/test_nma_design.py`, `tests/test_ipd_nma.py` |
 | 14 | dose-response network meta-analysis | yes — every dose function, and a random effect on any of them: closed-form where the parameters are linear, by sampling where they are not | `tests/test_nma_dose.py`, `tests/test_nma_dose_mcmc.py` |
 | 15 | time-course network meta-analysis | yes — every linear-in-parameters basis; a random effect on a non-linear time parameter is not available | `tests/test_nma_timecourse.py` |

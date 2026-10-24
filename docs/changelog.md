@@ -23,9 +23,17 @@ the entry or the page named.
   set can be averaged over, it would also have to be checked; shipping it on
   the strength of "the sampler is fine" is the one thing this package does not
   do.
-- **Dynamic heterogeneity is not implemented**: a pooled effect and `tau2` that
-  are functions of a continuous time index (Gaussian process or state space).
-  There is no R implementation to check one against.
+- **Dynamic heterogeneity is implemented for a parametric scale only.** The
+  pooled effect and :math:`\tau^2` may each be constant, linear or quadratic in
+  a continuous index, and both estimators are validated. A **non-parametric**
+  scale — a spline or a Gaussian process on :math:`\log\tau^2(t)` — is not
+  available: it needs its own reference implementation, its own inference story
+  at small `k`, and a shrinkage prior whose behaviour has been measured, and
+  none of those can be borrowed from the parametric case. Related: the Bayesian
+  fit is a random walk over the two or three scale coefficients (the location
+  coefficients are integrated out rather than sampled), and the frequentist
+  time-varying prediction interval does not carry the uncertainty of
+  :math:`\hat\tau^2(t)`.
 - **`MBNMAdose` and `MBNMAtime` were not used as references**, for the same JAGS
   reason. The dose-response and time-course models were validated against
   `metafor::rma.mv`, `nls` and `netmeta` instead, which are deterministic; the
@@ -109,6 +117,75 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **Dynamic heterogeneity: a pooled effect and a :math:`\\tau^2` that both move
+  with time.** `tau_trend` fits the location-scale model
+  :math:`y_i \\sim N(x_i'\\beta,\\ v_i + \\exp(z_i'\\alpha))` — the model
+  ``metafor::rma(yi, vi, mods = ~ time, scale = ~ time)`` fits — by ML or REML,
+  with the location coefficients profiled out and an analytic gradient for the
+  scale coefficients (checked against central differences, because a wrong
+  gradient still converges). `bayes_tau_trend` fits the same model with a
+  shrinkage prior on the scale slope and integrates the location coefficients
+  out analytically instead of sampling them.
+
+  Four nestings times two estimators, plus the Knapp–Hartung variant, against
+  `metafor` 5.2.1: location coefficients to **1e-10**, location standard errors
+  to 2e-9, scale coefficients to **5e-7**, scale standard errors to 8e-9,
+  maximised log-likelihood to **1e-14**, and the Knapp–Hartung scale factor to
+  6e-8. Two nestings are checked without R as well: `mu="none", tau="none"`
+  reproduces `ma.rma`'s REML :math:`\\tau^2` to 1e-5.
+
+  The Bayesian posterior is not checked against another sampler. Given the scale
+  coefficients the model is Gaussian in the location coefficients, so
+  `tools/quadrature_dynhet.py` computes the exact posterior by two-dimensional
+  quadrature with no MCMC; the sampler lands on it at z between -0.01 and 0.03
+  on every parameter and reproduces every posterior SD to two decimals.
+
+  Three things this found, each of which changed the code rather than only the
+  documentation:
+
+  1. **Omitting the mean trend is not a small mistake.** On a 60-study
+     simulation with a *constant* :math:`\\tau^2 = 0.15` and a mean effect that
+     climbs by 1.5 units, `mu="none"` reports :math:`\\hat\\tau^2 = 0.50` at one
+     end of the literature and 0.16 at the other. The module warns when the
+     location model is held constant while the scale is allowed to move, and
+     the numbers are pinned in a test.
+  2. **A small :math:`\\tau^2` sends the log-linear scale to infinity.** On a
+     simulation with a constant :math:`\\tau^2 = 0.02` the fit returned
+     :math:`\\alpha_1 = 10.2` — a 27 000-fold change across the range — and
+     `metafor` returns the same value, so it is the model and not the
+     implementation. A fit whose :math:`\\tau^2(t)` spans more than two orders of
+     magnitude now warns; the estimate is not "corrected", because there is
+     nothing to correct it to.
+  3. **The default prior on the scale intercept was too narrow.**
+     :math:`\\alpha_0 \\sim N(0, 1)` pulled :math:`\\alpha_0` from the
+     frequentist -2.61 to -2.31, a 35 % change in :math:`\\tau^2`, when the data
+     supply :math:`\\mathrm{se} = 0.38`. It is now :math:`N(0, 2^2)`.
+
+  Two corrections to claims that are commonly made about this model, both
+  measured rather than argued. `metafor` reports the location variance as
+  :math:`(X'WX)^{-1}` with the estimated scale treated as known; propagating the
+  scale uncertainty through the joint information changes that SE by **0.25 %**,
+  because the Gaussian expected information is block-diagonal between location
+  and scale. And the test of :math:`\\alpha_1 = 0` is not a
+  boundary test in general: :math:`\\alpha_1` may be negative, so zero is an
+  interior point and :math:`\\chi^2_1` is right *when heterogeneity is present*;
+  the boundary is on :math:`\\alpha_0`, which is why `test_trend` also offers a
+  parametric bootstrap that is valid under the no-heterogeneity null.
+
+  What the coverage study does **not** support is worth recording too. Over 120
+  replications at `k = 40` the location interval covers 0.917 with a z reference
+  and 0.925 with Knapp–Hartung against a nominal 0.95, while the scale interval
+  covers 0.950 and 0.967. The Monte Carlo standard error of a coverage rate at
+  120 replications is 0.025, so the two location figures are not distinguishable
+  from each other and the shortfall is not repaired by Knapp–Hartung; neither is
+  it the scale uncertainty, which accounts for 0.25 %. The honest statement is
+  that the location interval is a little short of nominal for a reason this
+  study does not identify, and `docs/guide/dynamic-heterogeneity.md` says so.
+
+  `docs/guide/dynamic-heterogeneity.md` is the development record: the decision
+  matrix by sample size, the rules that separate a real trend from an artefact,
+  the validation layers and the limits.
 
 - **A Bayesian network meta-analysis, validated against an exact posterior
   rather than against another sampler.** `bayes_nma` fits the aggregate-data

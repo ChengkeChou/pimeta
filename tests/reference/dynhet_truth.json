@@ -1,0 +1,17 @@
+{
+  "a0": -2.0,
+  "a1": 0.08,
+  "b0": 0.3,
+  "b1": 0.015,
+  "k": 36,
+  "mean_time": 2007.5,
+  "model": "y_i ~ N(mu(t_i), v_i + tau2(t_i)); mu(t) = b0 + b1*(t - mean(t)); log tau2(t) = a0 + a1*(t - mean(t))",
+  "note": "both the mean and the heterogeneity trend, so that fitting mu='none' has something to be wrong about",
+  "provenance": "simulated by tools/make_dynhet_fixture.py",
+  "seed": 1,
+  "tau2_ratio": 16.444646771097055,
+  "year_range": [
+    1990.0,
+    2025.0
+  ]
+}
