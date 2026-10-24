@@ -37,6 +37,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Random slopes in the one-stage IPD model.** `re_slopes=` puts
+  fixed-design coefficients into the random part, so `re_slopes=["treat"]` is
+  lme4's `(1 + treat | study)` and `struct="DIAG"` is
+  `(1 | study) + (0 + treat | study)`. This is a new likelihood rather than a
+  new argument: `V_i = sigma2 (I + Z_i Lambda Z_i')` does not invert by a
+  rank-one update, so the closed form is gone. Woodbury keeps every step at
+  `q x q` — `Omega_i^-1 = I - Z_i M_i^-1 Z_i'` with `M_i = Lambda^-1 + Z_i'Z_i`
+  — so a study of 10 000 participants costs what a study of ten costs, and
+  `sigma2` is still profiled out analytically.
+
+  `OneStageResult.contrast(L)` reports a confidence band for linear
+  combinations and, because the interaction can be random, a prediction band
+  for a new study's curve — the one-stage counterpart of
+  `ipd_two_stage_curve` for a non-linear treatment effect modifier.
+
+  Pinned by `tests/test_onestage_slopes.py` against `lme4` 2.0.6 on 24 studies
+  of 165–275 participants: fixed effects to 1e-6 relative, variance components
+  to 1e-5 absolute, log-likelihood to 1e-6, under REML with an unstructured
+  covariance, under REML with a diagonal one, and under ML.
+
+  The fixture had to be rebuilt to be worth pinning. A first attempt with 25–60
+  participant studies put both implementations on the correlation boundary
+  (`rho-hat = 0.99998`), because the sampling noise in each study's own
+  intercept and slope is comparable to the variance being estimated — two
+  implementations agreeing on a boundary is not evidence. The pinned fixture
+  estimates `rho-hat = 0.339` against 0.5 true.
+
+  Still not implemented: a residual variance that differs by study, which is one
+  variance per study against a handful of participants each.
+
 - **A joint prediction region for `rma.mv`.** `ma.predict_region` returns the
   ellipsoid $(\theta - \hat\mu)'(V+\Sigma)^{-1}(\theta-\hat\mu) \le c_{1-\alpha}$
   for a new study's true effect vector, `observation=` switches the question to

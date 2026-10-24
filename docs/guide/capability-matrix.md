@@ -186,11 +186,39 @@ quadrature.
 Pinned by `tests/test_onestage.py` against `lme4` 2.0.6: `lmer` under REML and
 ML, and `glmer` for the binary model.
 
-Deliberately not implemented: study-specific residual variances, random
-treatment slopes, and non-linear covariate terms. A random intercept with fixed
-effects is the model the Cochrane guidance describes as the standard one-stage
-analysis; the rest are extensions with their own identification problems, and a
-package that has no dependency to lean on should not claim them.
+**Random slopes.** `re_slopes=` puts fixed-design coefficients into the random
+part, so `re_slopes=["treat"]` is `lmer`'s `(1 + treat | study)` and
+`struct="DIAG"` is `(1 | study) + (0 + treat | study)`. That is a new
+likelihood, not a new argument: $V_i = \sigma^2 (I + Z_i \Lambda Z_i')$ does
+not invert by a rank-one update, so the closed form is gone. Woodbury keeps
+every step at $q \times q$ —
+$\Omega_i^{-1} = I - Z_i M_i^{-1} Z_i'$ with $M_i = \Lambda^{-1} + Z_i'Z_i$
+and $\log|\Omega_i| = \log|\Lambda| + \log|M_i|$ — so a study of 10 000
+participants costs what a study of ten costs, and $\sigma^2$ is still profiled
+out analytically.
+
+Pinned by `tests/test_onestage_slopes.py` on 24 studies of 165–275
+participants, against `lme4` 2.0.6: fixed effects to 1e-6 relative, variance
+components to 1e-5 absolute, log-likelihood to 1e-6 — under REML with an
+unstructured covariance, under REML with a diagonal one, and under ML. The
+fixture is large on purpose. A first attempt with 25–60 participant studies
+put both implementations on the correlation boundary ($\hat\rho = 0.99998$)
+because the sampling noise in each study's own intercept and slope is
+comparable to the variance being estimated, and two implementations agreeing
+on a boundary is not evidence. The pinned fixture estimates
+$\hat\rho = 0.339$ against 0.5 true.
+
+**A non-linear interaction** is the same code plus a contrast: pass the basis
+columns as `covariates=`, name them in `re_slopes=`, and read the curve off
+with `fit.contrast(L)`, which returns a confidence band for the average curve
+and — because the interaction is random — a prediction band for a new study's
+curve. That is the one-stage counterpart of `ma.ipd_two_stage_curve`, and the
+same caveats apply: the Wald band is asymptotic in the number of studies, and
+at 12 studies it does not cover what it claims.
+
+Deliberately not implemented: a residual variance that differs by study. That
+is one variance per study against a handful of participants each, and the
+profile likelihood answers it with a boundary.
 
 The two-stage and one-stage routes can disagree. That is a result, not a bug —
 compare them with `ma.ipd_two_stage` when it matters.
@@ -493,12 +521,12 @@ model twice.
 | 1 | non-linear meta-regression | yes | `tests/test_basis.py` |
 | 2 | dose–response | yes | `tests/test_dose.py` |
 | 3 | two-stage IPD | yes | `tests/test_ipd.py` |
-| 4 | one-stage IPD | yes | `tests/test_onestage.py` |
+| 4 | one-stage IPD | yes | `tests/test_onestage.py`, `tests/test_onestage_slopes.py` |
 | 5 | diagnostic test accuracy | yes | `tests/test_dta.py` |
 | 6 | robust variance estimation | yes | `tests/test_rve.py` |
 | 7 | survival outcomes | yes | `tests/test_surv.py`, `tests/test_tvhr.py` |
 | 8 | prediction-model performance | yes | `tests/test_prediction.py` |
-| 9 | multivariate | yes | `tests/test_mv.py` |
+| 9 | multivariate | yes | `tests/test_mv.py`, `tests/test_mv_confint.py`, `tests/test_mv_region.py` |
 | 10 | component NMA | yes | `tests/test_netmeta_api.py`, `tests/test_pimeta.py` |
 | 11 | publication bias | yes | `tests/test_selmodel_models.py`, `tests/test_metabias.py`, `tests/test_limitmeta.py`, `tests/test_copas.py`, `tests/test_copas_region.py` |
 | 12 | time-varying effects (dynamic heterogeneity) | no | — |
@@ -542,7 +570,7 @@ numerics*, not by topic:
 | 1 | `rcs` and fractional-polynomial bases, the non-linearity test, `predict_curve` | **done** — item 1 is finished; it unblocks items 2 and 3 |
 | 2 | dose–response | item 1 plus the covariance construction; **done** — it needed the covariance, not a new estimator |
 | 3 | IPD data layer and two-stage | **done** — it needed a first stage and a data layer, not a new estimator |
-| 4 | one-stage IPD, continuous then binary | **done** — the only item that needed a genuinely new likelihood |
+| 4 | one-stage IPD, continuous then binary | **done** — the only item that needed a genuinely new likelihood; random slopes added on top of it |
 | 5 | KM reconstruction and RMST | **done** — data layer, strictly verifiable, feeds item 3 |
 | 6 | prediction-model performance | **done** — four metrics, each on its own scale and variance, pooled by the existing engine |
 | — | RoBMA, time-varying effects | declined, see the dependency policy |

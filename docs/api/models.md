@@ -503,7 +503,7 @@ Maximum-likelihood logistic regression by iteratively reweighted least squares.
 ## `OneStageResult`
 
 ```python
-OneStageResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', coefnames: 'list[str]', tau2: 'float', sigma2: 'float | None', loglik: 'float', method: 'str', participants: 'int', studies: 'int', family: 'str', converged: 'bool', level: 'float', test: 'str' = 'z') -> None
+OneStageResult(b: 'list[float]', se: 'list[float]', zval: 'list[float]', pval: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', vb: 'np.ndarray', coefnames: 'list[str]', tau2: 'float', sigma2: 'float | None', loglik: 'float', method: 'str', participants: 'int', studies: 'int', family: 'str', converged: 'bool', level: 'float', test: 'str' = 'z', D: 'np.ndarray | None' = None, re_names: 'list[str]' = <factory>, struct: 'str' = 'UN') -> None
 ```
 
 A one-stage individual-participant model.
@@ -527,7 +527,7 @@ A one-stage individual-participant model.
 ## `ipd_one_stage`
 
 ```python
-ipd_one_stage(y, *, study, treat, covariates=None, family: 'str' = 'gaussian', method: 'str' = 'REML', level: 'float' = 0.95, quadrature: 'int' = 15, max_iter: 'int' = 500) -> 'OneStageResult'
+ipd_one_stage(y, *, study, treat, covariates=None, family: 'str' = 'gaussian', method: 'str' = 'REML', level: 'float' = 0.95, quadrature: 'int' = 15, max_iter: 'int' = 500, re_slopes=None, struct: 'str' = 'UN') -> 'OneStageResult'
 ```
 
 Fit one model to every participant, with participants nested in studies.
@@ -543,6 +543,8 @@ Fit one model to every participant, with participants nested in studies.
 - `level` — confidence level.
 - `quadrature` — number of Gauss–Hermite nodes (binomial only).
 - `max_iter` — optimiser iteration cap.
+- `re_slopes` — names of fixed-effect columns whose coefficients vary randomly across studies, or a ``(participants, q - 1)`` matrix of such columns. The random intercept is always included, so ``re_slopes=["treat"]`` is the lme4 model ``(1 + treat | study)``.
+- `struct` — ``"UN"`` (default) for a full between-study covariance of the random terms, or ``"DIAG"`` for independent random effects.
 
 **Returns**
 
