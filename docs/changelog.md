@@ -37,6 +37,37 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **A joint prediction region for `rma.mv`.** `ma.predict_region` returns the
+  ellipsoid $(\theta - \hat\mu)'(V+\Sigma)^{-1}(\theta-\hat\mu) \le c_{1-\alpha}$
+  for a new study's true effect vector, `observation=` switches the question to
+  its *observed* estimates, and the projection onto one outcome is reported
+  (wider than a per-outcome interval, as projecting a joint region is). With
+  `J = 1` it is exactly the univariate prediction interval — the only algebra
+  check available, because metafor returns `NA` prediction bounds for a
+  multilevel fit.
+
+  The reference distribution was not assumed.
+  `tools/coverage_predict_region.py` fits 300 replications of two correlated
+  outcomes and draws a fresh study from the *true* law, so the count includes
+  the error in $\hat\mu$, $\hat{V}$ and $\hat\Sigma$:
+
+  | k | chi-square | Hotelling | two per-outcome z intervals |
+  |---|---|---|---|
+  | 10 | 0.767 | 0.827 | 0.777 |
+  | 20 | 0.917 | 0.930 | 0.897 |
+  | 40 | 0.937 | 0.947 | 0.910 |
+  | 80 | 0.940 | 0.940 | 0.897 |
+
+  The chi-square reference is asymptotic in the number of studies, so a fit with
+  20 or fewer residual degrees of freedom now warns and quotes these numbers.
+  `test="t"` swaps in the Hotelling `J(m-1)/(m-J) F(J, m-J)` reference, better
+  wherever it differs and identical at `k = 80`; with `J = 1` it is `t^2` on one
+  degree of freedom fewer than a univariate prediction interval uses.
+
+  The last column is why the region exists: per-outcome intervals never reach
+  0.95 at *any* `k`, including `k = 80` where the ellipsoid has converged,
+  because independent intervals cannot be joint.
+
 - **A Monte-Carlo coverage study of the IPD curve, and what it found.**
   `tools/coverage_ipd_curve.py` simulates the two-stage IPD analysis with a
   known true curve and reports how often the band contains it. At 120

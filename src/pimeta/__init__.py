@@ -147,9 +147,11 @@ from .metareg import MetaregResult, metareg
 from .missing import MissingDataWarning, complete_cases, is_missing
 from .mv import (
     ConfintMvResult,
+    PredictionRegion,
     RhoSensitivityResult,
     TauCorResult,
     confint_rma_mv,
+    predict_region,
     rho_sensitivity,
     shared_control_corr,
     tau_cor,
@@ -815,6 +817,7 @@ __all__ = [
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",
     "confint_rma_mv", "ConfintMvResult",
+    "predict_region", "PredictionRegion",
     "netcomplex",
     "netcomplexity",
     "netmetareg", "NetmetaregResult",

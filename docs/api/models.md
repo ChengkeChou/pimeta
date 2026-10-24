@@ -1,6 +1,6 @@
 # Models
 
-*86 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*88 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -80,6 +80,8 @@
 | [`RhoSensitivityResult`](#rhosensitivityresult) | — |
 | [`confint_rma_mv`](#confint_rma_mv) | — |
 | [`ConfintMvResult`](#confintmvresult) | — |
+| [`predict_region`](#predict_region) | — |
+| [`PredictionRegion`](#predictionregion) | — |
 | [`DtaData`](#dtadata) | — |
 | [`DtaCorrectionWarning`](#dtacorrectionwarning) | — |
 | [`ReitsmaResult`](#reitsmaresult) | — |
@@ -1671,6 +1673,48 @@ ConfintMvResult(kind: 'str', index: 'int', estimate: 'float', ci_lb: 'float', ci
 ```
 
 A profile-likelihood interval for one variance component.
+
+## `predict_region`
+
+```python
+predict_region(result, *, level=None, observation=None, test='z', df=None) -> 'PredictionRegion'
+```
+
+Joint prediction region for a new study.
+
+**Args**
+
+- `result` — a `RmaMvResult` with a multivariate random term (``random="~ outcome | study"`` with ``struct="UN"`` or similar).
+- `level` — confidence level, accepted as ``95``, ``0.95`` or ``0.05``; defaults to the level the model was fitted with.
+- `observation` — the new study's sampling covariance (``J x J``), when the question is where its *observed* estimates would fall rather than where its true effects would.
+- `test` — ``"z"`` (default) for the asymptotic :math:`\chi^2_J` reference, or ``"t"`` for the Hotelling :math:`F` small-sample one.
+- `df` — denominator degrees of freedom for ``test="t"``; defaults to ``k - p``.  Ignored by ``test="z"``.
+
+**Returns**
+
+`PredictionRegion`.
+
+**Raises**
+
+- `ValueError` — when the fit has no between-study covariance matrix, when ``observation`` has the wrong shape, when that matrix is not positive definite, or when ``test="t"`` is asked for with too few degrees of freedom to form the reference.
+
+Warns:
+    RuntimeWarning: with ``test="z"`` and 20 or fewer residual degrees of
+        freedom, quoting the measured coverage at small ``k``.
+
+**Example**
+
+- `>>> r = ma.predict_region(fit)                 # doctest` — +SKIP
+- `>>> r.contains([-0.3, 0.4])                    # doctest` — +SKIP
+- `>>> r.marginal()                               # doctest` — +SKIP
+
+## `PredictionRegion`
+
+```python
+PredictionRegion(names: 'list[str]', center: 'np.ndarray', cov: 'np.ndarray', crit: 'float', level: 'float', k: 'int', for_observation: 'bool' = False, test: 'str' = 'z', df: 'list[float] | None' = None) -> None
+```
+
+An ellipsoidal prediction region for a new study's effect vector.
 
 ## `DtaData`
 

@@ -1,0 +1,140 @@
+"""Monte-Carlo coverage of the joint prediction region.
+
+`predict_region` makes a claim a reader can check: draw a new study from the
+model's own law, and it lands inside the ellipsoid :math:`1-\\alpha` of the
+time.  Nothing in metafor implements a joint prediction region for `rma.mv`, so
+there is no second implementation to agree with -- simulation is the only
+evidence available.
+
+Design
+------
+``J`` outcomes, ``k`` studies.  Study :math:`i` has true effects
+
+    theta_i ~ N(mu, Sigma)
+
+and reports them with sampling covariance :math:`V_i`,
+
+    y_i = theta_i + e_i,   e_i ~ N(0, V_i).
+
+Each replication fits the model once, then draws a **fresh** study's true
+effects from the *true* :math:`(\\mu, \\Sigma)` and asks whether the region
+contains them.  The fit is never told the truth, so what is measured is the
+whole procedure: estimation error in :math:`\\hat\\mu`, in :math:`\\hat V`, and
+in :math:`\\hat\\Sigma`.
+
+Reported per ``k``:
+
+- ``chi2`` and ``F`` -- coverage of the same ellipsoid under the two reference
+  distributions ``test="z"`` and ``test="t"``.  The covariance is identical, so
+  only the critical value changes and the comparison is exact.
+- ``marginal`` -- how often a fresh study falls inside *both* per-outcome
+  :math:`z` intervals.  That is the naive answer the joint region replaces, and
+  it is anti-conservative exactly because it ignores the correlation.
+- ``boundary`` -- how often a between-study variance is estimated at zero.
+  Coverage is an average over estimable and non-estimable fits alike, so it is
+  reported split as well.
+
+Usage::
+
+    python tools/coverage_predict_region.py --reps 300
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+
+import numpy as np
+from scipy import stats
+
+import pimeta as ma
+
+MU = np.array([0.30, -0.20])
+SIGMA = np.array([[0.06, 0.03], [0.03, 0.09]])
+LEVEL = 0.95
+
+
+def one_fit(rng, k, mu=MU, sigma=SIGMA):
+    """Simulate one meta-analysis; return the fit and a fresh study's truth."""
+    theta = rng.multivariate_normal(mu, sigma, k)
+    vi = rng.uniform(0.01, 0.03, (k, 2))
+    V = np.zeros((k, 2, 2))
+    V[:, 0, 0] = vi[:, 0]
+    V[:, 1, 1] = vi[:, 1]
+    V[:, 0, 1] = V[:, 1, 0] = 0.5 * np.sqrt(vi[:, 0] * vi[:, 1])
+    yi = theta + rng.normal(0.0, 1.0, (k, 2)) * np.sqrt(vi)
+
+    big = np.zeros((2 * k, 2 * k))
+    for i in range(k):
+        big[2 * i:2 * i + 2, 2 * i:2 * i + 2] = V[i]
+    X = np.zeros((2 * k, 2))
+    X[np.arange(2 * k), np.tile([0, 1], k)] = 1.0
+    fit = ma.rma_mv(yi.ravel(), V=big, mods=X,
+                    data={"coef": list(np.tile([0, 1], k)),
+                          "study": [f"s{i}" for i in range(k)
+                                    for _ in range(2)]},
+                    random="~ coef | study", struct="UN", intercept=False)
+    return fit, rng.multivariate_normal(mu, sigma)
+
+
+def _mean(x):
+    return float(np.mean(x)) if np.size(x) else float("nan")
+
+
+def _se(p, n):
+    return float(np.sqrt(p * (1.0 - p) / n))
+
+
+def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
+    print(f"J = {MU.size} outcomes, nominal coverage {level:.2f}, "
+          f"{reps} replications per k")
+    print(f"true mu = {MU.tolist()}, true Sigma = {SIGMA.tolist()}")
+    print("the F reference is the Hotelling one, m = k - p")
+    print()
+    print(f"{'k':>5}{'chi2':>8}{'MC se':>8}{'F':>8}{'MC se':>8}"
+          f"{'marginal':>10}{'boundary':>10}{'chi2|ok':>9}{'F|ok':>8}")
+    z = stats.norm.ppf(0.5 + 0.5 * level)
+    rows = []
+    for k in k_list:
+        rng = np.random.default_rng([seed0, k])
+        hit_z = np.zeros(reps, dtype=bool)
+        hit_f = np.zeros(reps, dtype=bool)
+        marg = np.zeros(reps, dtype=bool)
+        bad = np.zeros(reps, dtype=bool)
+        for r in range(reps):
+            fit, fresh = one_fit(rng, k)
+            reg = ma.predict_region(fit, level=level)
+            d = reg.distance(fresh)
+            tst = ma.predict_region(fit, level=level, test="t")
+            hit_z[r] = d <= reg.crit
+            hit_f[r] = d <= tst.crit
+            marg[r] = bool(np.all(
+                np.abs(fresh - reg.center) <= z * np.sqrt(np.diag(reg.cov))))
+            bad[r] = bool(np.any(np.asarray(fit.sigma2, dtype=float) <= 1e-10))
+        pz, pf, pm = hit_z.mean(), hit_f.mean(), marg.mean()
+        okz, okf = hit_z[~bad], hit_f[~bad]
+        print(f"{k:5d}{pz:8.3f}{_se(pz, reps):8.3f}{pf:8.3f}{_se(pf, reps):8.3f}"
+              f"{pm:10.3f}{bad.mean():10.3f}"
+              f"{_mean(okz):9.3f}{_mean(okf):8.3f}")
+        rows.append((k, pz, pf, pm))
+    print()
+    print("marginal is the coverage of two per-outcome z intervals: it "
+          "under-covers because it ignores the correlation")
+    for j, name in ((1, "chi2"), (2, "F")):
+        worst = max(abs(row[j] - level) for row in rows)
+        print(f"worst |coverage({name}) - {level:.2f}| = {worst:.3f}")
+    return rows
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--reps", type=int, default=150)
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--k", type=int, nargs="+", default=[10, 20, 40, 80])
+    args = parser.parse_args(argv)
+    run(args.reps, tuple(args.k), args.seed)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

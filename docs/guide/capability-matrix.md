@@ -335,10 +335,41 @@ An interval excluding it would exclude points with a higher profile
 likelihood, so `pimeta` reports the whole range. `r_compat=True` follows
 metafor's interior branch. See [the differences page](../reference/differences.md) §4.
 
-Still not offered: a joint **prediction** region. A joint confidence ellipsoid
-for the pooled effects is standard (Jackson, Riley and White 2014), but a
-region for a *new* study is a different object and no implementation provides
-one to check against.
+A region for a *new* study is a different object, and `ma.predict_region`
+provides it.  For pooled effects $\hat\mu$ with covariance $V$ and a
+between-study covariance $\Sigma$, a new study's true effects satisfy
+
+$$(\theta_{\text{new}} - \hat\mu)' (V + \Sigma)^{-1}
+  (\theta_{\text{new}} - \hat\mu) \le c_{1-\alpha}$$
+
+which is the ellipsoid to report in place of one interval per outcome.  Passing
+the new study's sampling covariance as `observation=` adds it and answers the
+question about its *observed* estimates instead.  With $J = 1$ the region is
+exactly the univariate prediction interval — the only algebra check available,
+since metafor returns `NA` prediction bounds for a multilevel fit.
+
+Two numbers have to be reported with it, and both were measured
+(`tools/coverage_predict_region.py`, 300 replications, two correlated
+outcomes, nominal 0.95):
+
+| k | chi-square reference | Hotelling reference | two per-outcome z intervals |
+|---|---|---|---|
+| 10 | 0.767 | 0.827 | 0.777 |
+| 20 | 0.917 | 0.930 | 0.897 |
+| 40 | 0.937 | 0.947 | 0.910 |
+| 80 | 0.940 | 0.940 | 0.897 |
+
+The chi-square reference is asymptotic in the number of studies, so at small
+$k$ the region covers less than it claims; `test="t"` swaps in the Hotelling
+$J(m-1)/(m-J)\,F(J, m-J)$ reference with $m = k - p$, which is better
+everywhere it differs and identical at $k = 80$.  A fit with 20 or fewer
+residual degrees of freedom warns and quotes these numbers rather than letting
+a reader assume the nominal level.
+
+The third column is the point.  The per-outcome intervals the region replaces
+never reach 0.95 at *any* $k$ — including $k = 80$, where the ellipsoid has
+converged — because independent intervals cannot be joint: a point can sit
+inside both and outside the region they are supposed to describe.
 
 Pinned by `tests/test_mv.py` against `metafor` 5.2.1 on the Berkey 1998
 dataset — the example metafor's own `vcalc` documentation uses.
