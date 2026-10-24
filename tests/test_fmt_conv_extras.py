@@ -139,8 +139,13 @@ def test_hettest_runs():
 
 
 def test_vcalc_runs():
-    out = ma.vcalc(BCGY, BCGV)
-    assert out is not None
+    # BCGV holds sampling *variances*, so it is the 'vi' argument; BCGY holds
+    # the effects, which belong in rma() rather than here.
+    out = ma.vcalc(BCGV, cluster=[1] * 7 + [2] * 6,
+                   obs=[0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5], rho=0.5)
+    assert out.shape == (13, 13)
+    assert np.allclose(np.diag(out), BCGV)
+    assert np.allclose(out, out.T)
 
 
 def test_matreg_runs():

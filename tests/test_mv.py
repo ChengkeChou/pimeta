@@ -204,15 +204,111 @@ def test_vcalc_r_compat_reproduces_metafor_silence():
     assert V[0, 1] / np.sqrt(vi[0] * vi[1]) == pytest.approx(1.0, rel=EXACT)
 
 
-def test_vcalc_rejects_a_within_subject_design_instead_of_approximating():
-    with pytest.raises(NotImplementedError):
-        ma.vcalc([0.04, 0.05], cluster=[1, 1], grp1=["a", "a"],
-                 grp2=["a", "a"], time1=[1.0, 2.0], time2=[1.0, 1.0])
-
-
 def test_vcalc_rejects_a_correlation_outside_minus_one_to_one():
     with pytest.raises(ValueError, match=r"\[-1, 1\]"):
         ma.vcalc([0.04, 0.05], cluster=[1, 1], obs=[1, 2], rho=1.5)
+
+
+# --------------------------------------------------------------------------- #
+# vcalc — within-subject designs (time1 / time2 with phi)
+# --------------------------------------------------------------------------- #
+
+# Ishak et al. (2007) is the dataset metafor's own `vcalc` example uses, with
+# the AR(1) autocorrelation of 0.97 that its help page estimates from the data.
+# These five rows are Barichella (measured at times 1 and 3) and Burchiel
+# (times 1, 2 and 3); the four entries are what R returns for them.
+R_ISHAK_PHI = 0.97
+R_ISHAK_VI = [7.3, 5.7, 8.0, 8.0, 5.0]
+R_ISHAK_TIME = [1.0, 3.0, 1.0, 2.0, 3.0]
+R_ISHAK_STUDY = ["Barichella (2003)", "Barichella (2003)",
+                 "Burchiel (1999)", "Burchiel (1999)", "Burchiel (1999)"]
+R_ISHAK_V = {(0, 1): 6.0693520102314036,
+             (2, 3): 7.7599999999999989,
+             (2, 4): 5.9507741009048551,
+             (3, 4): 6.1348186607266548}
+
+
+def test_vcalc_within_subject_recovers_metafor_ar1_matrix():
+    """R: ``vcalc(vi, cluster=study, time1=time, phi=0.97)``."""
+    V = ma.vcalc(np.array(R_ISHAK_VI), cluster=R_ISHAK_STUDY,
+                 time1=R_ISHAK_TIME, phi=R_ISHAK_PHI)
+    for (i, j), want in R_ISHAK_V.items():
+        assert V[i, j] == pytest.approx(want, rel=EXACT)
+        assert V[j, i] == pytest.approx(want, rel=EXACT)
+    # different trials are independent, and the diagonal is still vi
+    assert V[0, 2] == 0.0
+    assert np.allclose(np.diag(V), R_ISHAK_VI, rtol=EXACT)
+
+
+def test_vcalc_within_subject_correlation_is_phi_to_the_time_gap():
+    vi = [0.1, 0.1, 0.1]
+    V = ma.vcalc(vi, cluster=[1, 1, 1], time1=[1.0, 2.0, 4.0], phi=0.5)
+    corr = V / np.sqrt(np.outer(vi, vi))
+    assert corr[0, 1] == pytest.approx(0.5, rel=EXACT)       # one unit
+    assert corr[1, 2] == pytest.approx(0.25, rel=EXACT)      # two units
+    assert corr[0, 2] == pytest.approx(0.125, rel=EXACT)     # three units
+
+
+def test_vcalc_multiplies_the_outcome_and_arm_factors():
+    """metafor's entry is the outcome correlation *times* the arm correlation."""
+    vi = [0.04, 0.05]
+    V = ma.vcalc(vi, cluster=[1, 1], obs=[1, 2], rho=0.6,
+                 time1=[1.0, 2.0], phi=0.7)
+    # 'obs' says 0.6 and the one-unit time gap says 0.7
+    assert V[0, 1] / np.sqrt(vi[0] * vi[1]) == pytest.approx(0.42, rel=EXACT)
+
+
+# Every argument at once, and the correlations R returns for that design.
+R_ALL_ARGS_CORR = np.array([
+    [1.0, 0.42000000000000000, 0.14599927901768631, 0.09961174629530393],
+    [0.42000000000000004, 1.0, 0.10219949531238040, 0.14230249470757705],
+    [0.14599927901768631, 0.10219949531238039, 1.0, 0.41988149502066152],
+    [0.09961174629530393, 0.14230249470757705, 0.41988149502066158, 1.0],
+])
+
+
+def test_vcalc_every_argument_at_once_matches_metafor():
+    """Two constructs, two measures, three arms, two time points, four weights."""
+    vi = [0.10, 0.12, 0.15, 0.16]
+    V = ma.vcalc(vi, cluster=["A"] * 4, type=[1, 1, 2, 2], obs=[1, 2, 1, 2],
+                 grp1=[1, 1, 1, 1], grp2=[2, 2, 3, 3],
+                 time1=[1.0, 2.0, 1.0, 2.0], time2=[1.0, 2.0, 1.0, 2.0],
+                 w1=[20, 20, 20, 22], w2=[20, 20, 18, 18],
+                 rho=(0.6, 0.3), phi=0.7)
+    corr = V / np.sqrt(np.outer(vi, vi))
+    assert corr == pytest.approx(R_ALL_ARGS_CORR, abs=EXACT)
+
+
+def test_vcalc_requires_phi_with_a_time_index():
+    with pytest.raises(ValueError, match="phi"):
+        ma.vcalc([0.04, 0.05], cluster=[1, 1], time1=[1.0, 2.0])
+
+
+def test_vcalc_requires_phi_to_lie_in_the_unit_interval():
+    with pytest.raises(ValueError, match=r"\[-1, 1\]"):
+        ma.vcalc([0.04, 0.05], cluster=[1, 1], time1=[1.0, 2.0], phi=1.5)
+
+
+def test_vcalc_needs_the_second_condition_for_a_second_time():
+    with pytest.raises(ValueError, match="grp2"):
+        ma.vcalc([0.04, 0.05], cluster=[1, 1], time1=[1.0, 2.0],
+                 time2=[1.0, 1.0], phi=0.5)
+
+
+def test_vcalc_warns_when_phi_makes_a_block_singular():
+    """R's ``checkpd`` warning; phi = 1 correlates every estimate with every
+    other one inside a cluster."""
+    with pytest.warns(RuntimeWarning, match="not positive definite"):
+        ma.vcalc([0.04, 0.05, 0.06], cluster=[1, 1, 1],
+                 time1=[1.0, 2.0, 3.0], phi=1.0)
+
+
+def test_vcalc_can_skip_the_positive_definiteness_check():
+    V = ma.vcalc([0.04, 0.05, 0.06], cluster=[1, 1, 1],
+                 time1=[1.0, 2.0, 3.0], phi=1.0, check_pd=False)
+    # phi = 1 makes the correlation exactly 1, which is what the check warns
+    # about and does not prevent
+    assert V[0, 1] == pytest.approx(np.sqrt(0.04 * 0.05), rel=EXACT)
 
 
 # --------------------------------------------------------------------------- #

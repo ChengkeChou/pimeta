@@ -37,6 +37,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Within-subject covariance in `ma.vcalc`.** `time1` and `time2` with `phi`
+  are now implemented rather than refused, so a design in which the same
+  subjects are measured at several time points no longer has to be approximated
+  by a constant correlation. The correlation of two estimates one unit apart in
+  time is `phi`, two units apart `phi²`, and two estimates at the same time are
+  the same estimate. This is metafor's AR(1) structure.
+
+  The change also reorganised the function around the construction metafor
+  actually uses: the correlation entry is the product of an *outcome* factor
+  (`obs` / `type`) and an *arm-and-time* factor
+  (`grp1` / `grp2` / `time1` / `time2` / `w1` / `w2`), either of which is 1
+  when its arguments are absent. Previously the two were alternative branches,
+  so a design that needed both could not be expressed. Pinned against metafor
+  5.2.1 on the Ishak et al. (2007) dataset its own `vcalc` example uses
+  (agreement 1e-16) and on a design using every argument at once. `vcalc`
+  gained metafor's positive-definiteness warning as `check_pd`, which is what
+  catches a `phi` of 1; a row whose two conditions are the same is now
+  rejected instead of producing a variance of zero.
+
 - **Copas selection model.** `ma.copas` implements the selection model of
   Copas and Shi (2000, 2001): a study is published when
   `gamma0 + gamma1/se + delta > 0`, so large studies almost surely and small

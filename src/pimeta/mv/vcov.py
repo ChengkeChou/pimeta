@@ -33,14 +33,32 @@ was asked for, and raises when there is nothing to apply.  Pass
 ``r_compat=True`` for the metafor behaviour; see
 ``docs/reference/differences.md`` §4.
 
-Not implemented: within-subject designs (``time1`` / ``time2`` with ``phi``).
-Those need the autocorrelation structure rather than a correlation matrix, and
-an approximate version would be worse than the gap.  Asking for them raises.
+A fifth structure is a *within-subject* design, where the same subjects are
+measured at several time points: ``time1`` (and optionally ``time2``) with
+``phi`` replaces the fixed correlation by an autocorrelation
+
+.. math::
+
+    \\rho_{ij} = \\phi^{|t_i - t_j|}
+
+so two measurements one unit apart correlate ``phi``, two units apart
+``phi**2``, and two measurements at the same time are the same estimate and
+correlate 1.  ``phi`` must lie in ``[-1, 1]``; ``phi = 1`` makes the block
+singular, and the positive-definiteness check warns rather than returning it
+quietly.
+
+metafor builds the correlation as a *product* of two factors -- how related
+the outcomes are (``obs`` / ``type``) and how related the arms and measurement
+times are (``grp1`` / ``grp2`` / ``time1`` / ``time2`` / ``w1`` / ``w2``) --
+and so does this function.  Either factor is 1 when its arguments are absent,
+which is why they can be given independently.
 """
 
 from __future__ import annotations
 
 import math
+import warnings
+from collections.abc import Callable
 
 import numpy as np
 
@@ -156,13 +174,121 @@ def _pair_corr(rho, levels, name, rho_names=None):
     return lambda i, j: float(arr[i, j])
 
 
+def _construct_block(idx, obs_codes, typ_codes, pair_obs, pair_typ, const):
+    """Correlation implied by *which outcomes* the estimates measure.
+
+    One factor of metafor's correlation entry.  With ``type`` and ``obs`` the
+    two estimates of one construct are perfectly correlated, two measures of
+    that construct take the within-construct correlation, and two different
+    constructs take the between-construct correlation.  Each of the four
+    combinations of the two arguments has its own reading of ``rho``, and the
+    caller has already resolved which lookup to pass.
+    """
+    n = idx.size
+    out = np.empty((n, n), dtype=float)
+    if typ_codes is None:
+        if obs_codes is None:
+            out.fill(const)
+            return out
+        od = obs_codes[idx]
+        for a in range(n):
+            for b in range(n):
+                out[a, b] = (1.0 if od[a] == od[b]
+                             else pair_obs(od[a], od[b]))
+        return out
+    td = typ_codes[idx]
+    if obs_codes is None:
+        for a in range(n):
+            for b in range(n):
+                out[a, b] = (1.0 if td[a] == td[b]
+                             else pair_typ(td[a], td[b]))
+        return out
+    od = obs_codes[idx]
+    for a in range(n):
+        for b in range(n):
+            if td[a] != td[b]:
+                out[a, b] = pair_typ(td[a], td[b])
+            elif od[a] == od[b]:
+                out[a, b] = 1.0
+            else:
+                out[a, b] = pair_obs(od[a], od[b])
+    return out
+
+
+def _arms_block(idx, g1, g2, t1, t2, w1v, w2v, phi):
+    """Correlation implied by *which arms, at which time points*, a row compares.
+
+    Two contrasts that share an arm share that arm's sampling error, and two
+    measurements taken at different times share less of it:
+
+    .. math::
+
+        \\operatorname{Cov}(e_i, e_j) =
+            \\sum_{(a, b)} \\pm\\, \\phi^{|t_a - t_b|}
+            \\sqrt{\\frac{1}{w_{a,i}}\\frac{1}{w_{b,j}}}
+
+    over the four arm matches, divided by the two contrasts' arm-scale
+    standard deviations.  With every time equal and every weight 1 this is
+    exactly 0.5 for two contrasts on a common control, which is where
+    metafor's famous 0.5 comes from.
+
+    The lower triangle is the one evaluated and then mirrored onto the upper
+    triangle, because the four terms are not symmetric when rows disagree
+    about which condition is ``grp1``.  That is what R's ``vcalc`` does.
+    """
+    i = idx[:, None]
+    j = idx[None, :]
+
+    def proximity(a, b):
+        return np.where(a == b, 1.0, phi ** np.abs(a - b))
+
+    num = (
+        np.where(g1[i] == g1[j], proximity(t1[i], t1[j]), 0.0)
+        * np.sqrt((1.0 / w1v[i]) * (1.0 / w1v[j]))
+        - np.where(g1[i] == g2[j], proximity(t1[i], t2[j]), 0.0)
+        * np.sqrt((1.0 / w1v[i]) * (1.0 / w2v[j]))
+        - np.where(g2[i] == g1[j], proximity(t2[i], t1[j]), 0.0)
+        * np.sqrt((1.0 / w2v[i]) * (1.0 / w1v[j]))
+        + np.where(g2[i] == g2[j], proximity(t2[i], t2[j]), 0.0)
+        * np.sqrt((1.0 / w2v[i]) * (1.0 / w2v[j]))
+    )
+    var = 1.0 / w1v[idx] + 1.0 / w2v[idx]
+    out = num / np.sqrt(np.outer(var, var))
+    return np.tril(out) + np.tril(out, -1).T
+
+
+def _check_positive_definite(blocks, labels, V):
+    """Warn about a cluster whose covariance block cannot be inverted.
+
+    metafor does this by default (``checkpd = TRUE``) and it is the only
+    warning that catches a ``phi`` of 1, which makes every measurement in a
+    cluster perfectly correlated with every other.
+    """
+    for block, label in zip(blocks, labels, strict=True):
+        if len(block) < 2:
+            continue
+        idx = np.asarray(block, dtype=int)
+        sub = V[np.ix_(idx, idx)]
+        if not np.all(np.isfinite(sub)):
+            warnings.warn(
+                f"the sampling covariance of cluster {label!r} is not finite",
+                RuntimeWarning, stacklevel=3)
+            continue
+        ev = np.linalg.eigvalsh(sub)
+        if ev[0] <= 1e-10 * abs(ev[-1]):
+            warnings.warn(
+                "the var-cov matrix appears to be not positive definite in "
+                f"cluster {label!r}", RuntimeWarning, stacklevel=3)
+
+
 # --------------------------------------------------------------------------- #
 # vcalc
 # --------------------------------------------------------------------------- #
 
 def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
           time1=None, time2=None, grp1=None, grp2=None, w1=None, w2=None,
-          rho=None, phi=0.0, rho_names=None, r_compat=False):
+          rho=None, phi=None, rho_names=None, r_compat=False,
+          check_pd=True):
     """Build the ``k x k`` sampling covariance matrix ``V``.
 
     Args:
@@ -176,7 +302,13 @@ def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
             several measures of the same thing can be told apart.
         type: optional identifier of the *construct*, when several different
             outcomes were measured on the same subjects.
-        time1, time2: not supported; see the module docstring.
+        time1: the time point at which each effect size was measured.  With
+            ``phi`` this turns the shared-arm correlation into an
+            autocorrelation, and two estimates measured at the same time are
+            perfectly correlated.
+        time2: the time of the *second* condition a row compares, for a design
+            in which the two conditions were measured at different times.
+            Requires ``grp2``.
         grp1, grp2: the two conditions each effect size compares.  Rows that
             share one of them are correlated, with the correlation derived
             from the shared arm's weight.
@@ -187,23 +319,26 @@ def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
             among different constructs (with ``type``), or among all rows of a
             cluster (neither given).  A scalar, or a square matrix indexed by
             the factor's levels.
-        phi: accepted for signature compatibility; only meaningful with
-            ``time1`` / ``time2``, which are not implemented.  A nonzero value
-            without a time index is an error rather than a silent no-op.
+        phi: autocorrelation between two measurements one time unit apart,
+            in ``[-1, 1]``.  Required when ``time1`` is given; two estimates
+            at times $t_i$ and $t_j$ then correlate ``phi ** |t_i - t_j|``.
         rho_names: labels of the rows of a matrix ``rho``, in matrix order.
             Without it the matrix is indexed in first-appearance order of the
             factor, which is what R's ``unique()`` produces.
         r_compat: reproduce metafor exactly, including its silent discard of
             ``rho`` when neither ``obs`` nor ``type`` is given.  Default
             ``False``: the correlation that was asked for is the one used.
+        check_pd: warn when a cluster's covariance block is not positive
+            definite, as metafor's ``checkpd`` does.  ``phi = 1`` and
+            ``r_compat`` both produce such a block.
 
     Returns:
         ``(k, k)`` float array.
 
     Raises:
-        ValueError: inconsistent lengths, a forgotten correlation, or a
-            singular block that no argument explains.
-        NotImplementedError: ``time1`` / ``time2`` were supplied.
+        ValueError: inconsistent lengths, a forgotten correlation, a ``phi``
+            outside ``[-1, 1]``, a time argument without ``phi``, or a row
+            that compares a condition with itself.
     """
     vi = np.asarray(vi, dtype=float).ravel()
     k = vi.size
@@ -211,14 +346,17 @@ def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
         raise ValueError("'vi' must not be empty")
     if np.any(vi < 0):
         raise ValueError("'vi' must be non-negative")
-    if time1 is not None or time2 is not None:
-        raise NotImplementedError(
-            "within-subject designs (time1/time2 with phi) are not "
-            "implemented; build the correlation matrix explicitly instead")
-    if phi not in (0, 0.0, None):
+    if time2 is not None and time1 is None:
         raise ValueError(
-            "'phi' is the autocorrelation argument of a within-subject design "
-            "and needs 'time1'/'time2', which are not implemented")
+            "either give only 'time1', both 'time1' and 'time2', or neither")
+    if time2 is not None and grp2 is None:
+        raise ValueError("'grp2' is required when 'time2' is given")
+    if time1 is not None and phi is None:
+        raise ValueError(
+            "'phi' is required when 'time1' is given: it is the "
+            "autocorrelation between two measurements one unit apart")
+    if phi is not None and abs(float(phi)) > 1.0:
+        raise ValueError("'phi' must lie in [-1, 1]")
 
     cl = _as_vector(cluster, k, "cluster")
     if cl is None:
@@ -237,44 +375,51 @@ def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
         raise ValueError("'grp1' and 'grp2' must be given together")
 
     sd = np.sqrt(vi)
-    V = np.diag(vi)
 
-    if grp1 is not None:
-        g1 = _as_vector(grp1, k, "grp1")
-        g2 = _as_vector(grp2, k, "grp2")
-        wa = _as_vector(w1, k, "w1")
-        wb = _as_vector(w2, k, "w2")
-        if wa is None:
-            wa = np.ones(k)
-        if wb is None:
-            wb = np.ones(k)
-        for i in range(k):
-            for j in range(i + 1, k):
-                if keys[i] != keys[j]:
-                    continue
-                if g1[i] == g1[j] and g2[i] == g2[j]:
-                    corr = 1.0
-                elif g1[i] == g1[j]:
-                    corr = shared_control_corr(wa[i], wb[i], wb[j])
-                elif g2[i] == g2[j]:
-                    corr = shared_control_corr(wb[i], wa[i], wa[j])
-                else:
-                    corr = 0.0
-                if corr != 0.0:
-                    V[i, j] = V[j, i] = corr * sd[i] * sd[j]
-        return V
+    # ---- the arm / time factor -------------------------------------------
+    if grp1 is None:
+        g1 = np.ones(k)
+        g2 = np.full(k, 2.0)
+    else:
+        g1 = np.asarray(_as_vector(grp1, k, "grp1"))
+        g2 = np.asarray(_as_vector(grp2, k, "grp2"))
+    wa = _as_vector(w1, k, "w1")
+    wb = _as_vector(w2, k, "w2")
+    wa = np.ones(k) if wa is None else np.asarray(wa, dtype=float)
+    wb = np.ones(k) if wb is None else np.asarray(wb, dtype=float)
+    if np.any(wa <= 0.0) or np.any(wb <= 0.0):
+        raise ValueError("'w1' and 'w2' must be positive")
+    if np.any(g1 == g2):
+        raise ValueError(
+            "'grp1' and 'grp2' name the two conditions a row compares; a row "
+            "that compares a condition with itself is not an effect size and "
+            "has no sampling variance")
+    t1 = _as_vector(time1, k, "time1")
+    t2 = _as_vector(time2, k, "time2")
+    t1 = np.ones(k) if t1 is None else np.asarray(t1, dtype=float)
+    t2 = t1 if t2 is None else np.asarray(t2, dtype=float)
+    phi_val = 1.0 if phi is None else float(phi)
+    arms_given = any(x is not None for x in (grp1, time1, w1, w2))
 
-    # ---- construct / observation correlations -----------------------------
+    # ---- the construct / observation factor ------------------------------
+    const: float = 1.0
+    pair_obs: Callable[[int, int], float] | None = None
+    pair_typ: Callable[[int, int], float] | None = None
+
     if obs_codes is None and typ_codes is None:
         if r_compat:
             # metafor: 'rho' is dropped and every pair is perfectly
             # correlated, which makes the block singular.
-            for i in range(k):
-                for j in range(i + 1, k):
-                    if keys[i] == keys[j]:
-                        V[i, j] = V[j, i] = sd[i] * sd[j]
-            return V
-        if rho is None:
+            const = 1.0
+        elif rho is not None:
+            const = float(np.asarray(rho).ravel()[0])
+            if not -1.0 <= const <= 1.0:
+                raise ValueError("correlations must lie in [-1, 1]")
+        elif arms_given:
+            # the dependence is already carried by the shared arms and their
+            # time points, so there is nothing to invent
+            const = 1.0
+        else:
             raise ValueError(
                 "'rho' is required when neither 'obs' nor 'type' is given: "
                 "two different effect sizes from one cluster are not "
@@ -282,65 +427,54 @@ def vcalc(vi, cluster=None, subgroup=None, obs=None, type=None,
                 "Pass 'rho=' for a constant within-cluster correlation, or "
                 "'obs=' so that the estimates can be told apart. "
                 "r_compat=True reproduces metafor's silent correlation of 1.")
-        val = float(np.asarray(rho).ravel()[0])
-        if not -1.0 <= val <= 1.0:
-            raise ValueError("correlations must lie in [-1, 1]")
-        for i in range(k):
-            for j in range(i + 1, k):
-                if keys[i] == keys[j]:
-                    V[i, j] = V[j, i] = val * sd[i] * sd[j]
-        return V
 
-    if obs_codes is not None and typ_codes is None:
-        pair = _pair_corr(rho, obs_levels, "obs", rho_names)
-        if pair is None:
+    elif obs_codes is not None and typ_codes is None:
+        pair_obs = _pair_corr(rho, obs_levels, "obs", rho_names)
+        if pair_obs is None:
             raise ValueError("'rho' is required when 'obs' is given")
-        for i in range(k):
-            for j in range(i + 1, k):
-                if keys[i] != keys[j]:
-                    continue
-                corr = (1.0 if obs_codes[i] == obs_codes[j]
-                        else pair(obs_codes[i], obs_codes[j]))
-                V[i, j] = V[j, i] = corr * sd[i] * sd[j]
-        return V
 
-    if typ_codes is not None and obs_codes is None:
-        pair = _pair_corr(rho, typ_levels, "type", rho_names)
-        if pair is None:
+    elif typ_codes is not None and obs_codes is None:
+        pair_typ = _pair_corr(rho, typ_levels, "type", rho_names)
+        if pair_typ is None:
             raise ValueError("'rho' is required when 'type' is given")
-        for i in range(k):
-            for j in range(i + 1, k):
-                if keys[i] != keys[j]:
-                    continue
-                corr = (1.0 if typ_codes[i] == typ_codes[j]
-                        else pair(typ_codes[i], typ_codes[j]))
-                V[i, j] = V[j, i] = corr * sd[i] * sd[j]
-        return V
 
-    # ---- both 'type' and 'obs' -------------------------------------------
-    if rho is None:
-        raise ValueError("'rho' is required when 'type' and 'obs' are given")
-    if isinstance(rho, (list, tuple)) and len(rho) == 2:
-        within_spec, between_spec = rho
     else:
-        seq = np.asarray(rho, dtype=float).ravel() if np.ndim(rho) else None
-        if seq is None or seq.size != 2:
+        # ---- both 'type' and 'obs' ---------------------------------------
+        if rho is None:
             raise ValueError(
-                "when 'type' and 'obs' are both given, 'rho' must supply the "
-                "within-construct and between-construct correlations, e.g. "
-                "rho=(0.6, 0.4)")
-        within_spec, between_spec = float(seq[0]), float(seq[1])
-    within = _pair_corr(within_spec, obs_levels, "obs", rho_names)
-    between = _pair_corr(between_spec, typ_levels, "type", rho_names)
+                "'rho' is required when 'type' and 'obs' are given")
+        if isinstance(rho, (list, tuple)) and len(rho) == 2:
+            within_spec, between_spec = rho
+        else:
+            seq = (np.asarray(rho, dtype=float).ravel()
+                   if np.ndim(rho) else None)
+            if seq is None or seq.size != 2:
+                raise ValueError(
+                    "when 'type' and 'obs' are both given, 'rho' must supply "
+                    "the within-construct and between-construct correlations, "
+                    "e.g. rho=(0.6, 0.4)")
+            within_spec, between_spec = float(seq[0]), float(seq[1])
+        pair_obs = _pair_corr(within_spec, obs_levels, "obs", rho_names)
+        pair_typ = _pair_corr(between_spec, typ_levels, "type", rho_names)
+
+    # ---- assemble --------------------------------------------------------
+    blocks: list[list[int]] = []
+    index: dict = {}
     for i in range(k):
-        for j in range(i + 1, k):
-            if keys[i] != keys[j]:
-                continue
-            if typ_codes[i] != typ_codes[j]:
-                corr = between(typ_codes[i], typ_codes[j])
-            elif obs_codes[i] == obs_codes[j]:
-                corr = 1.0
-            else:
-                corr = within(obs_codes[i], obs_codes[j])
-            V[i, j] = V[j, i] = corr * sd[i] * sd[j]
+        if keys[i] not in index:
+            index[keys[i]] = len(blocks)
+            blocks.append([])
+        blocks[index[keys[i]]].append(i)
+    labels = list(index.keys())
+
+    V = np.zeros((k, k))
+    for block in blocks:
+        idx = np.asarray(block, dtype=int)
+        Rb = (_construct_block(idx, obs_codes, typ_codes, pair_obs, pair_typ,
+                               const)
+              * _arms_block(idx, g1, g2, t1, t2, wa, wb, phi_val))
+        np.fill_diagonal(Rb, 1.0)
+        V[np.ix_(idx, idx)] = Rb * np.outer(sd[idx], sd[idx])
+    if check_pd:
+        _check_positive_definite(blocks, labels, V)
     return V

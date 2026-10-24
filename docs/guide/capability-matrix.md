@@ -258,9 +258,22 @@ One behaviour is corrected rather than copied: metafor silently discards `rho`
 when neither `obs` nor `type` is given, returning a correlation of 1. See
 [the differences page](../reference/differences.md) §4.
 
+The fifth structure is a within-subject design: `time1` (and optionally
+`time2`) with `phi` replaces the fixed correlation by an autocorrelation,
+$\rho_{ij} = \phi^{|t_i - t_j|}$, so two measurements one unit apart correlate
+`phi` and two at the same time are the same estimate. `vcalc` warns when a
+cluster's block stops being positive definite, which is what happens at
+`phi = 1`; metafor's `checkpd` does the same. Pinned against metafor on the
+Ishak et al. (2007) dataset its own example uses, and on a design with every
+argument at once.
+
+metafor builds the correlation as a *product* of two factors — the outcome
+correlation (`obs` / `type`) and the arm-and-time correlation (`grp1` /
+`grp2` / `time1` / `time2` / `w1` / `w2`) — and so does `pimeta`. Either
+factor is 1 when its arguments are absent.
+
 Not a gap: grouped correlation structures beyond `obs` / `type` / `grp1` /
-`grp2`, and within-subject designs (`time1` / `time2` with `phi`). The latter
-raises rather than being approximated.
+`grp2` / `time1` / `time2`.
 
 ### 10. Component network meta-analysis — **yes**
 

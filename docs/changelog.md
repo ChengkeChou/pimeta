@@ -8,6 +8,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Fixed
 
+- **Copas validation against `metasens`, separated into its two halves.** The
+  selection model's pipeline was audited stage by stage by feeding pimeta's
+  sensitivity surface to metasens' own downstream code (`contourLines`, the
+  per-contour least squares, the `nobs`-weighted slope, the orthogonal line):
+  it returns `slope = 0.14937955364276298`, the value pimeta computes to the
+  last digit, with identical per-contour piece sizes. So every stage after the
+  surface is the reference's algorithm exactly, and the whole residual
+  disagreement is the surface — 1.4e-5 at the worst grid point, from two
+  optimisers stopping in different places, giving 2e-8 on the adjusted effect
+  and 4e-5 relative on its standard error. The same audit found that
+  `metasens`' contour tracer emits duplicated polylines (one level three
+  times) and 2–5 point boundary fragments with adjusted R² down to −0.33 on
+  the synthetic fixture, and those are fitted as contour lines and weighted by
+  `nobs`; that fixture therefore cannot be a parity target, and
+  `docs/reference/differences.md` now says so with the measured numbers.
 - **One confidence-level convention, everywhere.** `pimeta` had three
   spellings of the same argument: `0.95` (a confidence level), `95` (percent)
   and `0.05` (the alpha). The defaults were internally consistent, so nothing
@@ -21,6 +36,25 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **Within-subject covariance in `ma.vcalc`.** `time1` and `time2` with `phi`
+  are now implemented rather than refused, so a design in which the same
+  subjects are measured at several time points no longer has to be approximated
+  by a constant correlation. The correlation of two estimates one unit apart in
+  time is `phi`, two units apart `phi²`, and two estimates at the same time are
+  the same estimate. This is metafor's AR(1) structure.
+
+  The change also reorganised the function around the construction metafor
+  actually uses: the correlation entry is the product of an *outcome* factor
+  (`obs` / `type`) and an *arm-and-time* factor
+  (`grp1` / `grp2` / `time1` / `time2` / `w1` / `w2`), either of which is 1
+  when its arguments are absent. Previously the two were alternative branches,
+  so a design that needed both could not be expressed. Pinned against metafor
+  5.2.1 on the Ishak et al. (2007) dataset its own `vcalc` example uses
+  (agreement 1e-16) and on a design using every argument at once. `vcalc`
+  gained metafor's positive-definiteness warning as `check_pd`, which is what
+  catches a `phi` of 1; a row whose two conditions are the same is now
+  rejected instead of producing a variance of zero.
 
 - **Copas selection model.** `ma.copas` implements the selection model of
   Copas and Shi (2000, 2001): a study is published when

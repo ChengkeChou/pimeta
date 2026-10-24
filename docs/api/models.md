@@ -1424,7 +1424,7 @@ metafor additionally supports profile-likelihood intervals here; use
 ## `vcalc`
 
 ```python
-vcalc(vi, cluster=None, subgroup=None, obs=None, type=None, time1=None, time2=None, grp1=None, grp2=None, w1=None, w2=None, rho=None, phi=0.0, rho_names=None, r_compat=False)
+vcalc(vi, cluster=None, subgroup=None, obs=None, type=None, time1=None, time2=None, grp1=None, grp2=None, w1=None, w2=None, rho=None, phi=None, rho_names=None, r_compat=False, check_pd=True)
 ```
 
 Build the ``k x k`` sampling covariance matrix ``V``.
@@ -1436,13 +1436,15 @@ Build the ``k x k`` sampling covariance matrix ``V``.
 - `subgroup` — optional independent subgroups within a cluster; rows in different subgroups are independent even inside one cluster.
 - `obs` — optional identifier of the *observation* of one construct, so several measures of the same thing can be told apart.
 - `type` — optional identifier of the *construct*, when several different outcomes were measured on the same subjects.
-- `time1, time2` — not supported; see the module docstring.
+- `time1` — the time point at which each effect size was measured.  With ``phi`` this turns the shared-arm correlation into an autocorrelation, and two estimates measured at the same time are perfectly correlated.
+- `time2` — the time of the *second* condition a row compares, for a design in which the two conditions were measured at different times. Requires ``grp2``.
 - `grp1, grp2` — the two conditions each effect size compares.  Rows that share one of them are correlated, with the correlation derived from the shared arm's weight.
 - `w1, w2` — weights (group sizes, or inverse sampling variances) of the two conditions; default 1 each, which makes the correlation exactly 0.5.
 - `rho` — correlation among estimates of the same construct (with ``obs``), among different constructs (with ``type``), or among all rows of a cluster (neither given).  A scalar, or a square matrix indexed by the factor's levels.
-- `phi` — accepted for signature compatibility; only meaningful with ``time1`` / ``time2``, which are not implemented.  A nonzero value without a time index is an error rather than a silent no-op.
+- `phi` — autocorrelation between two measurements one time unit apart, in ``[-1, 1]``.  Required when ``time1`` is given; two estimates at times $t_i$ and $t_j$ then correlate ``phi ** |t_i - t_j|``.
 - `rho_names` — labels of the rows of a matrix ``rho``, in matrix order. Without it the matrix is indexed in first-appearance order of the factor, which is what R's ``unique()`` produces.
 - `r_compat` — reproduce metafor exactly, including its silent discard of ``rho`` when neither ``obs`` nor ``type`` is given.  Default ``False``: the correlation that was asked for is the one used.
+- `check_pd` — warn when a cluster's covariance block is not positive definite, as metafor's ``checkpd`` does.  ``phi = 1`` and ``r_compat`` both produce such a block.
 
 **Returns**
 
@@ -1450,8 +1452,7 @@ Build the ``k x k`` sampling covariance matrix ``V``.
 
 **Raises**
 
-- `ValueError` — inconsistent lengths, a forgotten correlation, or a singular block that no argument explains.
-- `NotImplementedError` — ``time1`` / ``time2`` were supplied.
+- `ValueError` — inconsistent lengths, a forgotten correlation, a ``phi`` outside ``[-1, 1]``, a time argument without ``phi``, or a row that compares a condition with itself.
 
 ## `shared_control_corr`
 
