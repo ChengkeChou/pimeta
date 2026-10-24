@@ -337,9 +337,32 @@ Pinned by `tests/test_prediction.py`, which checks the transforms exactly,
 checks that the pooling *is* `rma`, and checks the Hanley–McNeil variance
 against a simulation rather than against the same formula written twice.
 
-Missing: the within-study covariance between an AUC and a calibration slope
-reported by the same study, which a joint model would need. Pooling them
-separately avoids the problem rather than solving it.
+**Joint inference.** `ma.prediction_joint` pools the C-statistic and the
+calibration slope as a pair, because two separate intervals cannot answer
+either question that matters: "is this model both discriminative and
+calibrated" is a joint hypothesis, and "where would a new study land" is an
+ellipse. It returns the pooled metrics on their own scales,
+`test_discrimination()` (AUC = 0.5), `test_calibration()` (slope = 1),
+`test_both()` (the 2-df joint test), a confidence region for the pooled pair,
+and — through `ma.predict_region` — a prediction region for a new study.
+
+The within-study covariance between the two metrics is the obstacle, and it is
+not recoverable from published summaries. `rho` is therefore an explicit
+argument, defaulting to 0 only so that it cannot be silently invented, and
+`sensitivity()` refits along a grid and reports what the assumption is worth:
+on the pinned fixture the pooled AUC moves by less than 0.01 across
+$\rho \in [0, 0.75]$ while the calibration slope moves monotonically, so a
+conclusion that rests on the AUC survives and one that rests on the slope's
+third decimal does not.
+
+Pinned by `tests/test_prediction_joint.py` against `metafor::rma.mv` on the
+constructed blocks: coefficients and standard errors to 1e-6, variance
+components to 1e-5, the joint statistic to 1e-5. One check is internal rather
+than external and worth more than the pin: with `struct="DIAG"` and `rho = 0`
+the joint fit must collapse to the two marginal pools, and it does — but
+`struct="UN"` does *not*, because it estimates the between-study correlation
+too (here −0.12 with the within-study one set to zero). That distinction is
+the module's point in miniature.
 
 ### 9. Multivariate meta-analysis — **yes**
 

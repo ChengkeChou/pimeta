@@ -1,6 +1,6 @@
 # Models
 
-*90 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*92 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -32,6 +32,8 @@
 | [`auc_logit`](#auc_logit) | — |
 | [`oe_ratio`](#oe_ratio) | — |
 | [`prediction_meta`](#prediction_meta) | — |
+| [`prediction_joint`](#prediction_joint) | — |
+| [`PredictionJointResult`](#predictionjointresult) | — |
 | [`KmResult`](#kmresult) | — |
 | [`ReconstructedIpD`](#reconstructedipd) | — |
 | [`RmstResult`](#rmstresult) | — |
@@ -677,6 +679,63 @@ Pool a prediction-model performance metric on its own scale.
 >>> yi, vi = ma.auc_logit([0.75, 0.80, 0.72], n_event=[100, 60, 140],
 ...                       n_nonevent=[400, 300, 500])
 - `>>> ma.prediction_meta(yi, vi, metric="auc").pooled     # doctest` — +SKIP
+
+## `prediction_joint`
+
+```python
+prediction_joint(*, auc, slope, n_event=None, n_nonevent=None, auc_se=None, slope_se=None, rho=0.0, method='REML', level=0.95, struct='UN', studies=None) -> 'PredictionJointResult'
+```
+
+Pool a C-statistic and a calibration slope *jointly*.
+
+**Args**
+
+- `auc` — per-study C-statistics, or ``NaN`` where a study reports none.
+- `slope` — per-study calibration slopes, or ``NaN``.
+- `n_event, n_nonevent` — group sizes for the Hanley–McNeil variance of the AUC.  Needed unless ``auc_se`` is given.
+- `auc_se` — standard errors of the AUC **on the AUC scale**, for studies that report them instead of the group sizes.
+- `slope_se` — standard errors of the calibration slope.
+- `rho` — within-study correlation between the logit AUC and the slope. Defaults to 0, which is an assumption and not a measurement — use `PredictionJointResult.sensitivity` to see what it costs.
+- `method` — ``"REML"`` or ``"ML"``.
+- `level` — confidence level.
+- `struct` — between-study covariance structure for the two metrics.
+- `studies` — study labels, for reporting.
+
+**Returns**
+
+`PredictionJointResult`.
+
+**Raises**
+
+- `ValueError` — mismatched lengths, a study with a metric but no variance, a ``rho`` outside ``[-1, 1]``, or fewer than two usable studies.
+
+**Example**
+
+>>> fit = ma.prediction_joint(auc=a, slope=s, n_event=n1,
+...                           n_nonevent=n0, slope_se=se_s,
+- `...                           rho=0.4)          # doctest` — +SKIP
+- `>>> fit.test_both()                            # doctest` — +SKIP
+
+## `PredictionJointResult`
+
+```python
+PredictionJointResult(auc: 'float', slope: 'float', auc_lb: 'float', auc_ub: 'float', slope_lb: 'float', slope_ub: 'float', beta: 'np.ndarray', vcov: 'np.ndarray', Sigma: 'np.ndarray', rho: 'float', k: 'int', studies: 'list', model: 'object' = None, method: 'str' = 'REML', level: 'float' = 95.0, struct: 'str' = 'UN', _auc_input: 'np.ndarray' = <factory>, _n_event: 'np.ndarray | None' = None, _n_nonevent: 'np.ndarray | None' = None, _auc_se: 'np.ndarray | None' = None, _slope_input: 'np.ndarray' = <factory>, _slope_se: 'np.ndarray' = <factory>) -> None
+```
+
+A bivariate pool of a C-statistic and a calibration slope.
+
+**Attributes**
+
+- `auc, slope` — the pooled values on their own scales.
+- `auc_lb, auc_ub` — the interval for the AUC, back-transformed.
+- `slope_lb, slope_ub` — the interval for the calibration slope.
+- `beta` — the pooled parameters on the analysis scale ``(logit AUC, calibration slope)``.
+- `vcov` — their joint covariance.
+- `Sigma` — the between-study covariance of the two metrics.
+- `rho` — the within-study correlation that was assumed.
+- `k, studies` — studies contributing.
+- `model` — the underlying `RmaMvResult`.
+- `method, level, struct` — settings.
 
 ## `KmResult`
 

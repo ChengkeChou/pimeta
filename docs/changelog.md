@@ -37,6 +37,31 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Joint inference on discrimination and calibration.**
+  `ma.prediction_joint` pools a C-statistic and a calibration slope as a pair.
+  Two separate intervals cannot answer either question that matters: "is this
+  model both discriminative and calibrated" is a joint hypothesis, and "where
+  would a new study's pair fall" is an ellipse. It returns the pooled metrics
+  on their own scales, `test_discrimination()` (AUC = 0.5),
+  `test_calibration()` (slope = 1), `test_both()` (the 2-df joint test), a
+  confidence region for the pooled pair and — through `predict_region` — a
+  prediction region for a new study.
+
+  The within-study covariance between the two metrics is the obstacle and is
+  not recoverable from published summaries, so `rho` is an explicit argument
+  and `sensitivity()` refits along a grid: on the pinned fixture the pooled AUC
+  moves by less than 0.01 across `rho` in [0, 0.75] while the calibration slope
+  moves monotonically, so a conclusion about discrimination survives the
+  assumption and one about the slope's third decimal does not.
+
+  Pinned against `metafor::rma.mv` on constructed blocks: coefficients and
+  standard errors to 1e-6, variance components to 1e-5, the joint statistic to
+  1e-5. The check worth more than the pin is internal: with `struct="DIAG"` and
+  `rho = 0` the joint fit collapses to the two marginal pools, and it does —
+  but `struct="UN"` does not, because it also estimates the *between*-study
+  correlation, which is -0.12 here with the within-study one set to zero.
+  Wrongly assuming the two agree would have made the joint model pointless.
+
 - **Joint pooling of interval-specific hazard ratios, with trend tests.**
   `ma.piecewise_joint` stacks a study's interval-specific log hazard ratios
   into a vector, gives each study its own sampling covariance and a

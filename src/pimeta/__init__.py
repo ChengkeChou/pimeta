@@ -257,6 +257,7 @@ from .pooling import (
     run_meta,
 )
 from .prediction import PredictionResult, auc_logit, oe_ratio, prediction_meta
+from .prediction_joint import PredictionJointResult, prediction_joint
 from .publication_bias import (
     BeggResult,
     EggerResult,
@@ -651,6 +652,8 @@ __all__ = [
     "auc_logit",
     "oe_ratio",
     "prediction_meta",
+    "prediction_joint",
+    "PredictionJointResult",
     "KmResult",
     "ReconstructedIpD",
     "RmstResult",

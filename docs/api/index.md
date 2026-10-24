@@ -1,6 +1,6 @@
 # API reference
 
-All 482 public names in `pimeta.__all__`, generated from the source docstrings.
+All 484 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -125,6 +125,8 @@ All 482 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`auc_logit`](models.md#auc_logit) | Models | — |
 | [`oe_ratio`](models.md#oe_ratio) | Models | — |
 | [`prediction_meta`](models.md#prediction_meta) | Models | — |
+| [`prediction_joint`](models.md#prediction_joint) | Models | — |
+| [`PredictionJointResult`](models.md#predictionjointresult) | Models | — |
 | [`KmResult`](models.md#kmresult) | Models | — |
 | [`ReconstructedIpD`](models.md#reconstructedipd) | Models | — |
 | [`RmstResult`](models.md#rmstresult) | Models | — |
