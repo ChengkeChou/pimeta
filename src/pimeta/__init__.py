@@ -31,6 +31,7 @@ from .basis import (
     rcs,
     wald_test,
 )
+from .bayes import Posterior, ess_bulk, ess_tail, rhat, sample_log_posterior
 from .conv import (
     Conv2x2Result,
     ConvDeltaResult,
@@ -747,6 +748,11 @@ __all__ = [
     "nma_timecourse",
     "TimeCourseNmaResult",
     "TimeCourseNmaCurve",
+    "sample_log_posterior",
+    "Posterior",
+    "rhat",
+    "ess_bulk",
+    "ess_tail",
     "netconnection",
     "NetconnectionResult",
     "netdistance",

@@ -37,6 +37,45 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- **Markov chain Monte Carlo, as an optional engine that adds no dependency.**
+  `pimeta.bayes` is a complete sampler written against numpy: adaptive
+  random-walk Metropolis with a multivariate normal proposal built by the
+  Haario rule (`2.38**2 / d` times the covariance of the states visited, with a
+  bounded correction from a 64-step acceptance window), optional per-block
+  updates for hierarchical models, and the diagnostics that say whether the
+  draws can be believed — rank-normalised split `R-hat` and bulk and tail
+  effective sample size, following Vehtari et al. (2021) rather than the older
+  versions of those numbers, which are quietly too optimistic on exactly the
+  models this is for.
+
+  `pip install pimeta[bayes]` installs exactly what `pip install pimeta`
+  installs. The extra is declared so that a deliberately optional feature is
+  *stated* rather than implied — and so an accelerator has somewhere to go
+  later without changing anyone's install command. What the feature costs is
+  time, not dependencies, which is why it is opt-in per call.
+
+  The engine is checked three ways, because a sampler has no reference
+  implementation to be compared with. Against **exact posteriors**: a Gaussian
+  with a known covariance, and a beta-binomial whose posterior is a Beta, both
+  reproduced within Monte Carlo error including the interval. Against its own
+  **failure modes**, in both directions: chains started twelve standard
+  deviations apart must raise, and on a heavy-tailed target the statistic must
+  be invariant to a monotone transformation of the draws — which is exactly what
+  the raw variance-ratio version is not. Against **refusals**: one chain cannot
+  report convergence, four draws cannot be split, a log density that returns a
+  list is a bug in the caller, and a starting point outside the support is
+  reported rather than sampled from.
+
+  Two things the implementation had to get right that are easy to get wrong.
+  The acceptance rate that drives the tuning is a **window**, not the running
+  average: a cumulative rate lags so far behind a proposal that has become too
+  wide that the scale runs away, and the chain then rejects everything for the
+  remainder of the run — measured, before the fix, as a final acceptance of
+  0.027 on a target it had earlier sampled correctly. And adaptation has to be
+  per **block**: on a 14-parameter hierarchical model a single global proposal
+  reached `R-hat = 1.23` where per-group blocks reached `1.014`, on the same
+  800 draws and the same seed.
+
 - **Time-course network meta-analysis.** `pimeta.nma.timecourse` fits
   `y = g_b(t) - g_a(t) + e` across a network, with the same parameter vector
   used wherever a treatment appears — so consistency cancels at **every** time,

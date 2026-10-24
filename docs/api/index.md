@@ -1,6 +1,6 @@
 # API reference
 
-All 499 public names in `pimeta.__all__`, generated from the source docstrings.
+All 504 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -150,6 +150,11 @@ All 499 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`hc_rma`](models.md#hc_rma) | Models | hc.rma.uni |
 | [`HcResult`](models.md#hcresult) | Models | hc.rma.uni |
 | [`estimate_tau2`](models.md#estimate_tau2) | Models | — |
+| [`sample_log_posterior`](models.md#sample_log_posterior) | Models | — |
+| [`Posterior`](models.md#posterior) | Models | — |
+| [`rhat`](models.md#rhat) | Models | — |
+| [`ess_bulk`](models.md#ess_bulk) | Models | — |
+| [`ess_tail`](models.md#ess_tail) | Models | — |
 | [`rma_glmm`](models.md#rma_glmm) | Models | — |
 | [`RmaGlmmResult`](models.md#rmaglmmresult) | Models | rma.glmm |
 | [`rma_mv`](models.md#rma_mv) | Models | rma.mv |

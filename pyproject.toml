@@ -49,6 +49,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Bayesian inference.  pimeta.bayes is a complete sampler written against numpy,
+# so `pimeta[bayes]` installs exactly what `pimeta` installs.  The extra is
+# declared anyway: it is how a feature that is deliberately optional gets stated
+# rather than implied, and it is where an accelerator would go if one is ever
+# wanted, without changing anybody's install command.
+bayes = []
 # DataFrame-shaped return values (as_data_frame_*, read_rm5 tables, ...) and
 # the pandas backend of pimeta.interop.to_frame / tidy / glance / augment.
 pandas = ["pandas>=2.0"]

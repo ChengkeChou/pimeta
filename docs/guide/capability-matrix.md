@@ -736,6 +736,19 @@ layer, and item 9 was missing only its reporting layer. All of items 1, 5 and 6
 were completed in the current development cycle, which is why the planning
 documents written before it overstate the work remaining.
 
+Items 13–15 are the opposite case and are worth separating from the rest: they
+are **new models**, not reporting layers, and each one needed its own
+likelihood, its own parameterisation argument and its own reference. What made
+them tractable is the shared parameterisation layer (`pimeta.nma.design`) and
+the observation that all three are the same generalised least squares problem —
+a per-treatment basis over a continuous index, a known within-study covariance
+and a between-study covariance to profile out. The dose and time-course models
+differ in their basis functions and their correlation assumptions, not in their
+estimator; IPD-NMA differs only in taking individual rows instead of contrasts.
+A fourth member of that family, a model with a random effect on a **non-linear**
+basis parameter, is not available, and the reason is structural rather than a
+missing feature: the marginal likelihood stops being closed-form.
+
 ## Dependency policy
 
 `pimeta` depends on `numpy`, `scipy` and `matplotlib`, and nothing else. That
@@ -747,6 +760,19 @@ is a hard constraint, and it decides which items above are worth attempting:
 - **Allowed but expensive** — a new likelihood for a named model family, as in
   items 4 and 5. Each one is written for its own family and validated against
   its own R implementation.
+- **Allowed, and now present, as an opt-in** — Bayesian inference, which needs a
+  sampler rather than a dependency. `pimeta.bayes` is written against numpy and
+  adds nothing to the install; it is opt-in per call because it is slow, not
+  because it is absent. That reverses the earlier position on this page, which
+  treated a general MCMC sampler as out of scope; the reversal is deliberate and
+  the engine is tested against exact posteriors and against its own failure
+  modes before being used for anything.
+- **Still not allowed** — a general-purpose mixed-model solver (the models here
+  have known within-study covariances and a handful of variance parameters, so a
+  general solver would be a dependency bought for nothing) and a Bayesian
+  model-averaging engine as a black box: the model set has to be written out and
+  checked, which is what the changelog calls RoBMA-not-yet rather than
+  RoBMA-someday.
 - **Not allowed** — a general-purpose mixed-model solver, a general MCMC
   sampler, or a Bayesian model-averaging engine. Those are the parts of items 4
   and 11 that a dependency-free package cannot do well, and a half-validated

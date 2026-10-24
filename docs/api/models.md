@@ -1,6 +1,6 @@
 # Models
 
-*95 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*100 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -57,6 +57,11 @@
 | [`hc_rma`](#hc_rma) | hc.rma.uni |
 | [`HcResult`](#hcresult) | hc.rma.uni |
 | [`estimate_tau2`](#estimate_tau2) | — |
+| [`sample_log_posterior`](#sample_log_posterior) | — |
+| [`Posterior`](#posterior) | — |
+| [`rhat`](#rhat) | — |
+| [`ess_bulk`](#ess_bulk) | — |
+| [`ess_tail`](#ess_tail) | — |
 | [`rma_glmm`](#rma_glmm) | — |
 | [`RmaGlmmResult`](#rmaglmmresult) | rma.glmm |
 | [`rma_mv`](#rma_mv) | rma.mv |
@@ -1303,6 +1308,98 @@ Return tau-squared for a moment/iterative estimator.
 likelihood-based ML/REML are handled by metafor's Fisher-scoring loop in
 ``pooling``). ``n`` is the per-study total sample size, required only for
 ``HS``.
+
+## `sample_log_posterior`
+
+```python
+sample_log_posterior(log_target: 'Callable[[np.ndarray], float]', init, *, names=None, n_draws: 'int' = 4000, warmup: 'int' = 2000, chains: 'int' = 4, target_accept: 'float' = 0.234, init_sd: 'float | np.ndarray' = 0.1, seed=None, adapt: 'bool' = True, blocks=None, max_attempts: 'int' = 1) -> 'Posterior'
+```
+
+Sample a log-density with adaptive random-walk Metropolis.
+
+One chain at a time, each with its own adaptive proposal. During warmup the
+proposal covariance is re-estimated from the states visited so far and scaled
+by the Haario factor ``2.38**2 / n_par``, with a bounded correction from the
+acceptance rate; after warmup everything is frozen, so the draws that are
+kept come from a genuine Markov chain with no adaptation left in it.
+
+**Args**
+
+- `log_target` — ``f(theta) -> float``, the log posterior up to an additive constant. It may return ``-inf`` (a rejected region) but must not raise for finite inputs.
+- `init` — starting values, shape ``(n_par,)``; one row per chain; or a callable ``(rng) -> array``.
+- `names` — parameter names, for the summary.
+- `n_draws` — draws kept per chain, after warmup.
+- `warmup` — adaptation draws per chain, discarded.
+- `chains` — number of chains. Fewer than two cannot produce ``R-hat``.
+- `target_accept` — the acceptance rate the correction aims for. 0.234 is the random-walk optimum for a Gaussian target in high dimensions.
+- `init_sd` — initial proposal scale — a scalar, or one per parameter.
+- `seed` — seeds the generator, so a fit is reproducible.
+- `adapt` — ``False`` freezes the proposal at ``init_sd`` from the start, which is useful for showing that adaptation is what does the work.
+- `blocks` — an optional update schedule: a list of index arrays, disjoint and covering every parameter, each updated in its own Metropolis step. A hierarchical model mixes far better this way, because a global random walk in a hundred dimensions crosses a narrow ridge that a per-group walk along it does not. ``None`` updates all parameters in one block.
+- `max_attempts` — retry the whole run with a quarter of the proposal scale if a chain cannot move at all. ``1`` disables the retry.
+
+**Returns**
+
+`Posterior`.
+
+**Raises**
+
+- `ValueError` — for a bad ``init``, fewer than four draws, fewer than two chains, or a starting point with non-finite log density.
+- `TypeError` — when ``log_target`` does not return a number.
+
+**Example**
+
+>>> draws = sample_log_posterior(
+- `...     lambda t` — -0.5 * float(t @ t), [0.0, 0.0],
+...     names=["a", "b"], n_draws=1000, warmup=500, chains=2, seed=1)
+- `>>> print(draws)                       # doctest` — +SKIP
+
+## `Posterior`
+
+```python
+Posterior(chains: 'np.ndarray', names: 'list[str]', logpost: 'np.ndarray', accept: 'np.ndarray', settings: 'dict' = <factory>) -> None
+```
+
+Draws from a posterior, with the diagnostics that judge them.
+
+**Attributes**
+
+- `chains` — ``(n_chains, n_draws, n_par)`` draws after warmup.
+- `names` — one name per parameter.
+- `logpost` — ``(n_chains, n_draws)`` log-posterior at each draw.
+- `accept` — acceptance rate per chain from the sampling phase.
+- `settings` — what was run, for the record.
+
+## `rhat`
+
+```python
+rhat(draws) -> 'np.ndarray'
+```
+
+Rank-normalised split :math:`\hat{R}`, per parameter.
+
+Values near 1.00 mean the chains are indistinguishable; above 1.01 they are
+not, and the draws should not be summarised. Both the location and the
+spread version are computed and the larger is reported, because a chain can
+agree on the centre and disagree in the tail.
+
+## `ess_bulk`
+
+```python
+ess_bulk(draws) -> 'np.ndarray'
+```
+
+Bulk effective sample size per parameter, over all chains pooled.
+
+Computed on the rank-normalised draws, so a heavy tail does not flatter it.
+
+## `ess_tail`
+
+```python
+ess_tail(draws) -> 'np.ndarray'
+```
+
+Effective sample size of the 5% and 95% quantiles, whichever is worse.
 
 ## `rma_glmm`
 
