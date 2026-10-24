@@ -556,9 +556,13 @@ scenario agrees on the sign. Projecting a joint confidence set is conservative
 by construction, and it is documented that way; the coverage was not
 simulated, and the tests do not claim it was.
 
-Not offered: Bayesian model averaging (RoBMA). It needs an MCMC sampler, which
-the dependency policy rules out; a half-validated one would be worse than the
-gap.
+Not offered: Bayesian model averaging (RoBMA). The reason is no longer the
+inference — `pimeta.bayes` provides a sampler — but that the reference
+implementation, the `RoBMA` R package, needs JAGS, and JAGS cannot be installed
+in this environment (no win-64 conda-forge build; the SourceForge installer host
+is unreachable). A model no reference can check is the one thing this package
+does not ship, so the gap is recorded rather than filled. The continuous part of
+it — a Bayesian selection model — is checkable and is the next step.
 
 ### 12. Time-varying effects — **no**
 
@@ -774,12 +778,9 @@ is a hard constraint, and it decides which items above are worth attempting:
   have known within-study covariances and a handful of variance parameters, so a
   general solver would be a dependency bought for nothing) and a Bayesian
   model-averaging engine as a black box: the model set has to be written out and
-  checked, which is what the changelog calls RoBMA-not-yet rather than
-  RoBMA-someday.
-- **Not allowed** — a general-purpose mixed-model solver, a general MCMC
-  sampler, or a Bayesian model-averaging engine. Those are the parts of items 4
-  and 11 that a dependency-free package cannot do well, and a half-validated
-  numerical solver is worse than an honest gap.
+  checked. RoBMA is the case in point — the sampler is no longer the obstacle,
+  the missing reference implementation is — which is why the changelog lists it
+  under *known limitations* rather than under *allowed but not done*.
 
 Where a new method cannot be validated against an R implementation, it is not
 added. The reference implementations are listed on
@@ -801,6 +802,6 @@ numerics*, not by topic:
 | 4 | one-stage IPD, continuous then binary | **done** — the only item that needed a genuinely new likelihood; random slopes added on top of it |
 | 5 | KM reconstruction and RMST | **done** — data layer, strictly verifiable, feeds item 3 |
 | 6 | prediction-model performance | **done** — four metrics, each on its own scale and variance, pooled by the existing engine |
-| — | RoBMA, time-varying effects | declined, see the dependency policy |
+| — | RoBMA, dynamic heterogeneity | declined — no reference implementation can be run here; see the changelog's *known limitations* |
 
-> **中文**　本页是能力矩阵：逐项核对「已有 / 部分 / 无」，并写明证明它的测试。结论是原路线图高估了工作量 —— 公式解析、设计矩阵、带置信区间与预测区间的 `predict`、混合模型内核**都已经在库里**，非线性回归只差基函数与非线性检验；DTA 与稳健方差已经完成；`netcomb` 就是成分 NMA。真正的缺口是剂量–反应的协方差构造、IPD 数据层、单阶段 IPD 的逐个体似然、KM 重建、预测模型性能。依赖政策写死：不引入通用混合模型求解器、不引入 MCMC。
+> **中文**　本页是能力矩阵：逐项核对「已有 / 部分 / 无」，并写明证明它的测试。结论是原路线图高估了工作量 —— 公式解析、设计矩阵、带置信区间与预测区间的 `predict`、混合模型内核**都已经在库里**，非线性回归只差基函数与非线性检验；DTA 与稳健方差已经完成；`netcomb` 就是成分 NMA。真正的缺口是剂量–反应的协方差构造、IPD 数据层、单阶段 IPD 的逐个体似然、KM 重建、预测模型性能。依赖政策：不引入通用混合模型求解器；MCMC 已改为**自带、零新增依赖、按调用可选**的 `pimeta.bayes`，仍在拒绝的只有「找不到参考实现可对拍」的模型（RoBMA、动态异质性）—— 局限清单见 changelog 的「Known limitations」一节。

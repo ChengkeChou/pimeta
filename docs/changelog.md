@@ -6,6 +6,68 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Known limitations
+
+Everything this package currently cannot do, in one place, with the reason. Each
+one is the outcome of a decision rather than an oversight, and the detail is in
+the entry or the page named.
+
+- **RoBMA (Bayesian model averaging over selection models) is not
+  implemented.** The sampler now exists (`pimeta.bayes`, see below), so the
+  blocker is no longer the inference — it is that the reference implementation,
+  the `RoBMA` R package, needs JAGS, and JAGS cannot be installed in this
+  environment: conda-forge has no win-64 build and the SourceForge installer
+  host is unreachable (twenty attempts, connection refused). Shipping a model no
+  reference can check is the one thing this package does not do, so it is
+  recorded as a gap rather than attempted. The continuous part — a Bayesian
+  selection model — is the natural next step and *is* checkable.
+- **Dynamic heterogeneity is not implemented**: a pooled effect and `tau2` that
+  are functions of a continuous time index (Gaussian process or state space).
+  There is no R implementation to check one against.
+- **`MBNMAdose` and `MBNMAtime` were not used as references**, for the same JAGS
+  reason. The dose-response and time-course models were validated against
+  `metafor::rma.mv`, `nls` and `netmeta` instead, which are deterministic; the
+  Bayesian dose fit is validated against the flat-prior limit of the
+  deterministic fit plus exact-posterior checks of the engine.
+- **`rstan` 2.32.7 cannot compile a new model under R 4.6 here** — its
+  `cxxfunction` fails on an invalid connection, with or without Rtools45 — so no
+  Stan-based reference could be run. `multinma` works only because it ships
+  precompiled models. `tests/reference/dose_mcmc.stan` is committed so a working
+  toolchain can run the comparison.
+- **The joint prediction region under-covers at small `k`.** Measured on 300
+  replications with two correlated outcomes: 0.767 at `k = 10`, 0.917 at
+  `k = 20`, 0.940 at `k = 80` against a nominal 0.95. `test="t"` (Hotelling) is
+  better at every `k`; per-outcome intervals never reach 0.95 at any `k`. A fit
+  with `k - p <= 20` and the default `test="z"` warns and quotes those numbers.
+- **The IPD curve's confidence band is not calibrated at small `k`**: 0.74–0.87
+  at 12 studies against a nominal 0.95, and 0.86–0.98 with the CR1 sandwich and
+  a `t` reference, which fixes the middle of the covariate range and not the
+  ends.
+- **IPD-NMA refuses non-Gaussian families**, disconnected networks, an unknown
+  reference and rank-deficient designs. `multinma` is *not* the same model there
+  (one shared heterogeneity SD, a residual SD per study-arm), so it corroborates
+  the mean structure and cannot be a tolerance target.
+- **Dose-response**: a random effect on the curve's parameters is available for
+  any dose function, but only through `inference="mcmc"`; `coef_struct="UN"` is
+  refused under the sampler; and an Emax/ED50 ridge needs long runs — on the
+  full fixture one curve needed 16000 draws to reach `R-hat = 1.05` where an
+  easier subset reached 1.005 with 8000.
+- **Time-course**: a random effect on a non-linear time parameter is not
+  available (every basis is linear in its parameters); and a study contributing
+  contrasts for more than one *treatment pair* is refused when `rho`/`phi` is
+  given, because no single number describes a correlation that depends on the
+  arm sizes — that case needs an explicit `vcov`.
+- **Survival**: `piecewise_exp` handles the data it documents — no
+  left-truncated entries and the Cox/Breslow tie handling it implements. The
+  joint fit's `struct="UN"` sits on the `rho = 1` boundary with 16 studies, so
+  only the first correlation is pinned in the tests and the other two to 0.12.
+- **The sampler is a random walk**, not NUTS: no gradients, no automatic
+  parameterisation, adaptation confined to warmup. A hierarchical model with
+  many parameters needs long runs, and the diagnostics say so instead of the
+  summary hiding it.
+- **`copas_region` is a likelihood-ratio projection, not a posterior.** Its
+  coverage was not simulated and the tests do not claim it was.
+
 ### Fixed
 
 - **Copas validation against `metasens`, separated into its two halves.** The
