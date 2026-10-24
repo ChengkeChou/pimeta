@@ -453,7 +453,13 @@ def rma(
         coefnames = (["intrcpt"] if add_intercept else []) + list(mods.names)
     elif (data is not None and isinstance(mods, (str, FormulaSpec))
           and mods_arr is not None):
-        _, _term_names = design_matrix(mods, data, intercept=False)
+        # Ask for the names with the *same* contrast coding the matrix used:
+        # with an intercept a factor contributes L-1 dummies, without one it
+        # contributes L.  Requesting the no-intercept coding regardless of the
+        # model renamed the columns wrongly and turned a fine fit into a
+        # spurious "design matrix is not of full rank".
+        _, _term_names = design_matrix(mods, data, intercept=False,
+                                       drop_first=add_intercept)
         coefnames = ((["intrcpt"] if add_intercept else []) + list(_term_names))
 
     # Drop incomplete cases the way R's na.action does, but say so.

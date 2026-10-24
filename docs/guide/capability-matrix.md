@@ -272,8 +272,8 @@ correlation (`obs` / `type`) and the arm-and-time correlation (`grp1` /
 `grp2` / `time1` / `time2` / `w1` / `w2`) — and so does `pimeta`. Either
 factor is 1 when its arguments are absent.
 
-Not a gap: grouped correlation structures beyond `obs` / `type` / `grp1` /
-`grp2` / `time1` / `time2`.
+Not a gap: correlation structures beyond the five listed at the top of this
+section.  Anything else has to be given as an explicit matrix in `rho`.
 
 ### 10. Component network meta-analysis — **yes**
 

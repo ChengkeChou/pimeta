@@ -523,7 +523,7 @@ def _design_block(name: str, values, drop_first: bool = True) -> list:
             for lv in chosen]
 
 
-def design_matrix(formula, data, intercept=None):
+def design_matrix(formula, data, intercept=None, drop_first=None):
     """Build a design matrix from a formula and a frame.
 
     Args:
@@ -531,6 +531,11 @@ def design_matrix(formula, data, intercept=None):
         data: any frame accepted by :func:`as_columns`.
         intercept: force the intercept on/off; ``None`` uses the formula's own
             ``0`` / ``1`` marker.
+        drop_first: whether a factor drops its reference level.  ``None``
+            follows the intercept, which is R's rule (L-1 dummies with an
+            intercept, all L without one).  Callers that materialise the
+            intercept themselves ask for the matrix *without* it but still
+            need the L-1 coding, and that is what this argument is for.
 
     Returns:
         ``(X, names)`` — the ``k x p`` design matrix (``p == 0`` when the model
@@ -544,6 +549,8 @@ def design_matrix(formula, data, intercept=None):
     cols = as_columns(data)
     if intercept is None:
         intercept = spec.intercept
+    if drop_first is None:
+        drop_first = intercept
 
     terms = list(spec.terms)
     if "." in terms:
@@ -555,7 +562,7 @@ def design_matrix(formula, data, intercept=None):
         factors = term.split(":")
         parts: list[list] = []
         for factor in factors:
-            parts.append(_factor_parts(factor, cols, drop_first=intercept))
+            parts.append(_factor_parts(factor, cols, drop_first=drop_first))
 
         # Cartesian product of the factor blocks, row-wise.
         acc = list(parts[0])
@@ -635,14 +642,16 @@ def resolve_mods(mods, data=None, k=None):
             raise ValueError(
                 "'mods' must be one-sided (e.g. '~ dose + year'); the response "
                 "is passed separately as 'yi'")
-        X, _names = design_matrix(spec, data, intercept=False)
+        X, _names = design_matrix(spec, data, intercept=False,
+                                  drop_first=spec.intercept)
         return (X if X.size else None), spec.intercept
 
     if isinstance(mods, FormulaSpec):
         if data is None:
             raise ValueError(
                 "a FormulaSpec for 'mods' needs a 'data' frame")
-        X, _names = design_matrix(mods, data, intercept=False)
+        X, _names = design_matrix(mods, data, intercept=False,
+                                  drop_first=mods.intercept)
         return (X if X.size else None), mods.intercept
 
     if (isinstance(mods, (list, tuple)) and mods

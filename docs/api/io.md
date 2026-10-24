@@ -553,7 +553,7 @@ The parsed `FormulaSpec`.
 ## `design_matrix`
 
 ```python
-design_matrix(formula, data, intercept=None)
+design_matrix(formula, data, intercept=None, drop_first=None)
 ```
 
 Build a design matrix from a formula and a frame.
@@ -563,6 +563,7 @@ Build a design matrix from a formula and a frame.
 - `formula` — formula string or `FormulaSpec`.
 - `data` — any frame accepted by `as_columns`.
 - `intercept` — force the intercept on/off; ``None`` uses the formula's own ``0`` / ``1`` marker.
+- `drop_first` — whether a factor drops its reference level.  ``None`` follows the intercept, which is R's rule (L-1 dummies with an intercept, all L without one).  Callers that materialise the intercept themselves ask for the matrix *without* it but still need the L-1 coding, and that is what this argument is for.
 
 **Returns**
 

@@ -108,7 +108,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
     `betalim` (radial-plot slope of the shrunken estimates) and `mulim`
     (common-effect estimate of the shrunken estimates);
   - heterogeneity is decomposed into `Q.small` and `Q.resid`, plus $G^2$;
-  - `ma.radial_regression` is exposed on its own for checking a radial plot.
+  - `pimeta.limitmeta.radial_regression` is exposed on its own for checking a
+    radial plot.
   - Pinned by `tests/test_limitmeta.py` against `metasens` 1.5.3 on Moore 1998
     and on a synthetic dataset; all three adjustments agree to 1e-15.
 

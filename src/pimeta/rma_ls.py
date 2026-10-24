@@ -695,7 +695,8 @@ def _formula_terms(spec, data, intercept):
     if parsed.response is not None:
         raise ValueError(
             "'mods' / 'scale' formulas must be one-sided (e.g. '~ dose')")
-    X, _names = design_matrix(parsed, data, intercept=False)
+    X, _names = design_matrix(parsed, data, intercept=False,
+                              drop_first=parsed.intercept)
     return (X if X.size else None), parsed.intercept
 
 
