@@ -32,6 +32,7 @@ from .basis import (
     wald_test,
 )
 from .bayes import Posterior, ess_bulk, ess_tail, rhat, sample_log_posterior
+from .checks import Diagnostic, diagnose
 from .conv import (
     Conv2x2Result,
     ConvDeltaResult,
@@ -794,6 +795,8 @@ __all__ = [
     "CopasRegion",
     "bayes_copas",
     "CopasBayesResult",
+    "diagnose",
+    "Diagnostic",
     "robma",
     "RobmaResult",
     "step_weight_function",
