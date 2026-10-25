@@ -163,18 +163,20 @@ the entry or the page named.
   3/5.
 
   Not yet implemented: the six Vevea–Hedges step selection functions. Their
-  kernel is now written — the bin edges sit on the study's own standard error
-  while the bin probabilities use the marginal one, and they are separate
-  arguments because using one for both produces plausible numbers — but the
-  **prior on the weights is not matched**, so they raise. Measured against the
-  reference's own single-model fit (`bselmodel`, one-sided, steps 0.05, free
-  weights, ESS 33673): pimeta gives :math:`\mu` 0.314 (SD 0.065) against 0.276
-  (0.069) and :math:`\tau` 0.287 against 0.077. The cause is identifiable — the
-  reference's posterior for the second weight stops at 0.423, while a uniform
-  stick-breaking prior admits weights near zero, and a weight near zero lets the
-  model explain the non-significant studies with a large :math:`\tau`. Writing
-  the kernel is not the same as writing the model, and only the second one is
-  checkable by agreeing with a reference.
+  kernel is written — the bin edges sit on the study's own standard error while
+  the bin probabilities use the marginal one, and they are separate arguments
+  because using one for both produces plausible numbers — but the model does not
+  reproduce the reference, so they raise. Measured against `bselmodel`
+  (one-sided, steps 0.05, free weights, ESS 33673): :math:`\mu` 0.314 (SD 0.065)
+  against 0.276 (0.069) and :math:`\tau` 0.287 against 0.077.
+
+  The first explanation tried was wrong and is recorded as wrong: the weight
+  prior was blamed, and the reference's JAGS model text falsified that — it
+  draws :math:`\eta \sim \text{Gamma}(1,1)` and sets
+  :math:`\omega_2 = \eta_2/\sum\eta`, which is uniform on :math:`(0,1)`, the same
+  prior used here. The gap is in the selection kernel or its normalisation, and
+  the next step is to check the kernel against a *fixed* weight function, where
+  no prior is involved at all.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to

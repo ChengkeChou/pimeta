@@ -962,14 +962,17 @@ def _normalise_bias_models(bias_models) -> tuple:
             continue
         if isinstance(item, WeightFunction):
             raise NotImplementedError(
-                "the step selection functions are not verified: the kernel is, "
-                "but the prior on omega is not. Against the reference's own "
-                "single-model fit (one-sided, steps 0.05, free weights) pimeta "
-                "gives mu 0.314 (SD 0.065) against 0.276 (0.069) and tau 0.287 "
-                "against 0.077, because a uniform stick-breaking prior on omega "
-                "admits weights near zero while the reference's posterior for "
-                "the second bin stops at 0.423. Use 'none', 'PET' or 'PEESE' "
-                "until the reference's cumulative Dirichlet is matched.")
+                "the step selection functions are not verified, and not for the "
+                "reason that was first suspected. Against the reference's own "
+                "single-model fit (bselmodel, one-sided, steps 0.05, free "
+                "weights) pimeta gives mu 0.314 (SD 0.065) against 0.276 "
+                "(0.069) and tau 0.287 against 0.077. The weight prior was the "
+                "first suspect and is not the cause: the reference's JAGS model "
+                "text draws eta ~ Gamma(1, 1) and sets omega[2] = "
+                "eta[2]/sum(eta), which is uniform on (0, 1) -- the same prior "
+                "used here. The gap is in the selection kernel or its "
+                "normalisation. Use 'none', 'PET' or 'PEESE' until it is "
+                "closed.")
         if not isinstance(item, str):
             raise ValueError(
                 f"a bias model must be a name or a WeightFunction, not "
