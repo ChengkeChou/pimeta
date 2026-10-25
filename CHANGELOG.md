@@ -192,8 +192,24 @@ the entry or the page named.
   -0.049, far past the reference in the opposite direction. With two bins there
   are only two configurations, so reproducing one of them is not evidence about
   orientation — that inference was too quick, and it is recorded here so it is
-  not made again. The step functions keep raising until the free-weight prior
-  is pinned.
+  not made again.
+
+  A three-bin probe then settled what that reversal actually was: `wf_fixed`
+  rejects :math:`(0.5, 1, 1)` with "the reference-bin fixed weight must be
+  exactly 1", so its vector is given in **kernel order** with index one pinned,
+  while `prior_weightfunction`'s `reference = "most_significant"` is stated in
+  p-value order. The fixed-weight comparison therefore needs a reversal and the
+  free-weight prior does not — that result was a statement about the API's
+  indexing, not about the model.
+
+  That leaves the shape of the weight prior, and it now has a mechanism. The
+  reference builds :math:`\omega_j = \sum_{i \ge j}\text{std-}\eta_i` with
+  :math:`\eta \sim \text{Gamma}(1,1)`, a Dirichlet(1,1,1) tail sum, while this
+  implementation uses a stick-breaking product. For two bins the two coincide
+  (:math:`\omega_2 = u` under either), which is why the two-bin comparison
+  differed only slightly and only in :math:`\mu`; from three bins upwards the
+  joint distributions differ. The step functions keep raising until the
+  free-weight prior is matched.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to
