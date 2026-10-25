@@ -204,6 +204,65 @@ def _check_boundary_correlation(fit) -> Diagnostic | None:
                "report the profile or a likelihood-ratio interval instead")
 
 
+def _check_non_finite_estimate(fit) -> Diagnostic | None:
+    """A coefficient or standard error that is not a number."""
+    b = getattr(fit, "b", None)
+    se = getattr(fit, "se", None)
+    if b is None or se is None:
+        return None
+    parts = [np.atleast_1d(np.asarray(b, dtype=float)).ravel(),
+             np.atleast_1d(np.asarray(se, dtype=float)).ravel()]
+    values = np.concatenate([p for p in parts if p.size])
+    if values.size == 0 or np.all(np.isfinite(values)):
+        return None
+    bad = int(np.sum(~np.isfinite(values)))
+    return Diagnostic(
+        code="non_finite_estimate", category="optimisation", severity="error",
+        message=f"{bad} of {values.size} estimates are not finite",
+        action="do not report these numbers. A non-finite coefficient or "
+               "standard error means the fit failed, not that the effect is "
+               "large; inspect the design matrix and the study-level variances")
+
+
+def _check_zero_weight_study(fit) -> Diagnostic | None:
+    """A study that received no weight at all."""
+    weights = getattr(fit, "weights", None)
+    if weights is None:
+        return None
+    values = np.atleast_1d(np.asarray(weights, dtype=float)).ravel()
+    values = values[np.isfinite(values)]
+    if values.size < 2 or float(np.min(values)) > 0.0:
+        return None
+    zero = int(np.sum(values <= 0.0))
+    return Diagnostic(
+        code="zero_weight_study", category="data", severity="warning",
+        message=f"{zero} of {values.size} studies carry zero weight",
+        action="those studies contribute nothing to the estimate, which "
+               "usually means an infinite or missing variance; report them "
+               "rather than implying the whole sample was used")
+
+
+def _check_studies_dropped(fit) -> Diagnostic | None:
+    """Studies removed before fitting, which changes what the estimate covers.
+
+    ``rma`` already emits a ``MissingDataWarning``; this is the same condition as
+    a record, so an exported result says how many studies it actually used
+    instead of leaving that to whoever read the console.
+    """
+    k_all = getattr(fit, "k_all", None)
+    k = getattr(fit, "k", None)
+    if k_all is None or k is None or int(k_all) <= int(k):
+        return None
+    dropped = int(k_all) - int(k)
+    return Diagnostic(
+        code="studies_dropped", category="data", severity="warning",
+        message=f"{dropped} of {int(k_all)} studies were dropped before "
+                "fitting",
+        action="the estimate covers the remaining studies only; report which "
+               "were dropped and why, because a result that silently covers "
+               "fewer studies than the review contains is not the same result")
+
+
 def _check_few_studies(fit) -> Diagnostic | None:
     k = getattr(fit, "k", None)
     if k is None or int(k) >= 5:
@@ -257,8 +316,10 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
                "somewhere it should not be")
 
 
-_CHECKS = (_check_tau2_zero, _check_variance_component, _check_ill_conditioned,
-           _check_boundary_correlation, _check_few_studies,
+_CHECKS = (_check_non_finite_estimate, _check_tau2_zero,
+           _check_variance_component, _check_ill_conditioned,
+           _check_boundary_correlation, _check_studies_dropped,
+           _check_zero_weight_study, _check_few_studies,
            _check_posterior_equals_prior)
 
 

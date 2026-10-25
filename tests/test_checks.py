@@ -9,12 +9,22 @@ useless as one that never does.
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import pimeta as ma
+
+
+def _stub(**kw):
+    """A fitted-result stand-in carrying only the fields a check reads."""
+    base = {"tau2": None, "sigma2": None, "vb": None, "rho": None,
+            "b": None, "se": None, "weights": None,
+            "k": 10, "k_all": 10, "priors": {}, "tau": {}}
+    base.update(kw)
+    return SimpleNamespace(**base)
 
 
 def _fixture():
@@ -112,3 +122,42 @@ def test_the_worst_severity_comes_first():
     if "posterior_equals_prior" in codes and "few_studies" in codes:
         order = [d.code for d in ma.diagnose(fit)]
         assert order.index("posterior_equals_prior") < order.index("few_studies")
+
+
+# --------------------------------------------------------------------------- #
+# conditions read off the fitted arrays
+# --------------------------------------------------------------------------- #
+def test_non_finite_estimate_fires_and_is_an_error():
+    """Tested on a stub: ``rma`` drops non-finite rows before it fits.
+
+    The guard exists for paths that do not pre-clean, and pretending a
+    ``rma`` fit can reach it would be testing nothing.
+    """
+    diagnosis = ma.diagnose(_stub(b=[0.2, float("nan")], se=[0.1, 0.1]))
+    assert "non_finite_estimate" in diagnosis.codes()
+    assert diagnosis.worst == "error"
+
+
+def test_non_finite_estimate_stays_silent_on_a_finite_fit():
+    assert "non_finite_estimate" not in ma.diagnose(
+        _stub(b=[0.2, 0.3], se=[0.1, 0.1])).codes()
+
+
+def test_zero_weight_study_fires_for_a_study_with_no_weight():
+    assert "zero_weight_study" in ma.diagnose(
+        _stub(weights=[0.4, 0.0, 0.6])).codes()
+
+
+def test_zero_weight_study_stays_silent_when_every_study_counts():
+    assert "zero_weight_study" not in ma.diagnose(
+        _stub(weights=[0.4, 0.2, 0.6])).codes()
+
+
+def test_studies_dropped_fires_when_the_fit_covers_less_than_the_review():
+    diagnosis = ma.diagnose(_stub(k=5, k_all=6))
+    assert "studies_dropped" in diagnosis.codes()
+    assert diagnosis.items[0].severity == "warning"
+
+
+def test_studies_dropped_is_silent_when_nothing_was_dropped():
+    assert "studies_dropped" not in ma.diagnose(_stub(k=6, k_all=6)).codes()
