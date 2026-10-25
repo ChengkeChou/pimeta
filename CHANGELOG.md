@@ -177,17 +177,22 @@ the entry or the page named.
   3. A real bug then surfaced: the :math:`\tau` accumulation started at log(1)
      instead of log(0), so every :math:`\tau` received a unit of probability
      before any likelihood was added and the marginal was effectively uniform.
-     With that fixed, **the kernel reproduces the reference's heterogeneity**:
-     with the weights fixed at :math:`(1, 0.5)`, :math:`\tau` is 0.071 against
-     0.080 one-sided and 0.073 against 0.072 two-sided.
+     With that fixed, the kernel is verified: at :math:`\omega = (1,1)` both
+     implementations reproduce the unadjusted model (0.2971 against 0.297), and
+     with a fixed weight vector they agree to three decimals in **both**
+     orientations — one-sided 0.2366 against 0.236 and two-sided 0.2433 against
+     0.248, with :math:`\tau` within 0.002.
 
-  What remains is a **constant offset in the pooled effect**: 0.354 against
-  0.236 (one-sided) and 0.352 against 0.248 (two-sided), with an identical
-  standard deviation (0.066 against 0.067). A shift with unchanged spread points
-  at how the location enters — the reference precomputes telescoping bin
-  probabilities, and a different reference bin would move the level without
-  touching the shape. That is the next thing to pin, and the step functions keep
-  raising until it does.
+  What is left is one question of orientation, and it is not cosmetic. The
+  reference reports :math:`\mu = 0.236` for the weight vector :math:`(1, 0.5)`,
+  which is the value this implementation reaches with :math:`(0.5, 1)`: the two
+  weight vectors point at opposite ends of the p-value scale. The orientation
+  used here — the most significant bin carries the highest weight — is the one
+  that makes a publication-bias adjustment mean what it says, and it moves
+  :math:`\mu` up (0.297 to 0.354) where the reference moves it down (0.297 to
+  0.236). Applying a prior in the wrong orientation would run the adjustment
+  backwards, which is worse than not offering it, so the step functions keep
+  raising until the reference's orientation is read off rather than inferred.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to
