@@ -182,6 +182,12 @@ DEFAULTS: dict[str, float] = {
     "peese_scale": 5.0,               # half-Cauchy
 }
 
+#: Bumped whenever a field is renamed or removed from ``to_dict``. Adding a
+#: field does not bump it; a reader can then tell a missing key from a changed
+#: one.
+SCHEMA_VERSION = 1
+
+
 #: Grid resolution. The defaults hold four significant digits against a doubled
 #: grid on the Gaussian models; the ``omega`` axis is the coarsest because it is
 #: the one that multiplies, and a selection model with four bins is a
@@ -718,12 +724,26 @@ class RobmaResult:
     bias_models: tuple[str, ...] = ()
 
     # -- reporting --------------------------------------------------------- #
+    @property
+    def diagnostics(self):
+        """The structured diagnostics for this fit.
+
+        A property rather than a stored field, so that a check can be added or
+        removed without changing what a fit computes.
+        """
+        from .checks import diagnose
+
+        return diagnose(self)
+
     def summary(self) -> list[dict]:
         """The model table, most probable first."""
         return [dict(m) for m in self.models]
 
     def to_dict(self) -> dict:
         return {
+            "schema_version": SCHEMA_VERSION,
+            "software": _software(),
+            "diagnostics": self.diagnostics.to_dict(),
             "k": self.k,
             "level": self.level,
             "bias_models": list(self.bias_models),
@@ -971,6 +991,18 @@ def _grid_summary(nodes, terms: list[np.ndarray], point_mass: float,
             "q_high": float(np.interp(1.0 - tail, cdf, xs)),
             "point_mass": float(point_mass),
             "prob_positive": float(np.sum(mass[nodes > 0.0]))}
+
+
+def _software() -> dict:
+    """The versions a saved result needs to be reproducible later."""
+    import platform
+
+    import scipy
+
+    from . import __version__ as pimeta_version
+
+    return {"pimeta": pimeta_version, "python": platform.python_version(),
+            "numpy": np.__version__, "scipy": scipy.__version__}
 
 
 def _bias_label(spec) -> str:

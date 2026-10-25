@@ -240,6 +240,32 @@ def test_to_dict_round_trips_the_headline_numbers(fit):
     assert all(isinstance(v, float) for v in out["priors"].values())
 
 
+def test_the_export_carries_a_version_a_provenance_and_its_diagnostics(fit):
+    """A saved result has to be readable later and judgeable on its own."""
+    from pimeta.robma import SCHEMA_VERSION
+
+    out = fit.to_dict()
+    assert out["schema_version"] == SCHEMA_VERSION
+    assert isinstance(out["schema_version"], int)
+    assert set(out["software"]) == {"pimeta", "python", "numpy", "scipy"}
+    assert all(isinstance(v, str) and v for v in out["software"].values())
+    # the diagnostics block is present even when nothing fired, so that a reader
+    # can tell "clean" from "not recorded"
+    assert out["diagnostics"]["worst"] is None
+    assert out["diagnostics"]["items"] == []
+
+
+def test_the_diagnostics_property_reports_a_boundary_fit():
+    """Three studies leaves tau barely identified, and the export should say so."""
+    yi = np.array([0.10, 0.35, 0.20])
+    sei = np.array([0.05, 0.06, 0.04])
+    fit = ma.robma(yi, sei)
+    codes = fit.diagnostics.codes()
+    assert "few_studies" in codes
+    assert fit.diagnostics.worst == "warning"
+    assert fit.to_dict()["diagnostics"]["worst"] == "warning"
+
+
 def test_str_reports_the_governing_model(fit):
     text = str(fit)
     assert "P(mu = 0 | data)" in text
