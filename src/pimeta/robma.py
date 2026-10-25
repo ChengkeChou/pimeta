@@ -972,17 +972,17 @@ def _normalise_bias_models(bias_models) -> tuple:
             continue
         if isinstance(item, WeightFunction):
             raise NotImplementedError(
-                "the step selection functions are not verified, and the reason "
-                "is now narrow. The kernel is: with a fixed weight vector the "
-                "two implementations agree to three decimals in *both* "
-                "orientations (one-sided mu 0.2366 against 0.236, two-sided "
-                "0.2433 against 0.248, tau within 0.002), and at omega = (1, 1) "
-                "both reproduce the unadjusted model. What is not settled is "
-                "which end of the p-value scale the reference's weight vector "
-                "starts at: it reports mu 0.236 for (1, 0.5), which this "
-                "implementation reaches with (0.5, 1). Applying the prior in "
-                "the wrong orientation would run the bias adjustment backwards, "
-                "so 'none', 'PET' and 'PEESE' remain the verified options.")
+                "the step selection functions are not verified. The kernel is: "
+                "at omega = (1, 1) both implementations reproduce the "
+                "unadjusted model (0.2971 against 0.297), and with a fixed "
+                "weight vector they agree to three decimals (one-sided 0.2366 "
+                "against 0.236, two-sided 0.2433 against 0.248, tau within "
+                "0.002). What is open is the free-weight model, where tau "
+                "agrees (0.0740 against 0.077, SD 0.058 both) and mu does not "
+                "(0.3076 against 0.276). An orientation reversal was tried and "
+                "is wrong: reversing sends mu to -0.049, far past the reference "
+                "in the opposite direction. Use 'none', 'PET' or 'PEESE' until "
+                "the free-weight prior is pinned.")
         if not isinstance(item, str):
             raise ValueError(
                 f"a bias model must be a name or a WeightFunction, not "

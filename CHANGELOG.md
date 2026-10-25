@@ -183,16 +183,17 @@ the entry or the page named.
      orientations — one-sided 0.2366 against 0.236 and two-sided 0.2433 against
      0.248, with :math:`\tau` within 0.002.
 
-  What is left is one question of orientation, and it is not cosmetic. The
-  reference reports :math:`\mu = 0.236` for the weight vector :math:`(1, 0.5)`,
-  which is the value this implementation reaches with :math:`(0.5, 1)`: the two
-  weight vectors point at opposite ends of the p-value scale. The orientation
-  used here — the most significant bin carries the highest weight — is the one
-  that makes a publication-bias adjustment mean what it says, and it moves
-  :math:`\mu` up (0.297 to 0.354) where the reference moves it down (0.297 to
-  0.236). Applying a prior in the wrong orientation would run the adjustment
-  backwards, which is worse than not offering it, so the step functions keep
-  raising until the reference's orientation is read off rather than inferred.
+  What is left is the free-weight model: :math:`\tau` agrees (0.0740 against
+  0.077, SD 0.058 both), :math:`\mu` does not (0.3076 against 0.276). One
+  hypothesis has already been tried and falsified. The reference reports
+  :math:`\mu = 0.236` for the fixed vector :math:`(1, 0.5)` where this
+  implementation needs :math:`(0.5, 1)`, which reads like an orientation
+  reversal; applying that reversal to the free model sends :math:`\mu` to
+  -0.049, far past the reference in the opposite direction. With two bins there
+  are only two configurations, so reproducing one of them is not evidence about
+  orientation — that inference was too quick, and it is recorded here so it is
+  not made again. The step functions keep raising until the free-weight prior
+  is pinned.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to
