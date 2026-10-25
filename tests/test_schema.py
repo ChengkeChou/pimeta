@@ -9,6 +9,7 @@ have nothing to report, so the clean case is checked explicitly.
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 import pimeta as ma
@@ -60,3 +61,22 @@ def test_the_schema_version_is_shared_by_both_result_types(univariate):
     robma_fit = ma.robma(yi, sei)
     assert (univariate.to_dict()["schema_version"]
             == robma_fit.to_dict()["schema_version"] == SCHEMA_VERSION)
+
+
+def test_the_multilevel_result_carries_diagnostics_even_without_an_export():
+    """``rma_mv`` has no ``to_dict`` yet; the diagnostics half is still useful.
+
+    Saying so in a test is deliberate: the missing export is a known gap, not an
+    oversight, and this asserts the half that does exist rather than implying the
+    other half does.
+    """
+    rng = np.random.default_rng(3)
+    cluster = np.repeat(np.arange(6), 4)
+    vi = rng.uniform(0.02, 0.06, cluster.size)
+    yi = 0.3 + rng.normal(0.0, 0.25, 6)[cluster] + rng.normal(0.0, 0.05,
+                                                              cluster.size)
+    d = pd.DataFrame({"yi": yi, "vi": vi, "cluster": cluster})
+    fit = ma.rma_mv(d["yi"].to_numpy(float), vi=d["vi"].to_numpy(float),
+                    data=d, random="~ 1 | cluster")
+    assert fit.diagnostics.worst is None
+    assert not hasattr(fit, "to_dict")

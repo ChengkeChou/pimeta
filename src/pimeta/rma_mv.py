@@ -38,6 +38,17 @@ Z_975 = stats.norm.ppf(0.975)
 class RmaMvResult:
     """Multi-level model fit, mirroring the fields of ``rma.mv`` objects."""
 
+    @property
+    def diagnostics(self):
+        """The structured diagnostics for this fit.
+
+        A property rather than a stored field, so that a check can be added or
+        removed without changing what a fit computes.
+        """
+        from .checks import diagnose
+
+        return diagnose(self)
+
     method: str                     # "REML" | "ML"
     k: int
     p: int
