@@ -162,7 +162,38 @@ the entry or the page named.
   `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
   3/5.
 
-  **The six Vevea–Hedges step selection functions are implemented.** Three
+  **The six Vevea–Hedges step selection functions are implemented and
+  verified.** The narrative below is kept because it records how the cause was
+  found, but two of its steps were wrong and are marked as such: the reference's
+  weight prior and its orientation were both innocent. The defect was in
+  `_bin_probabilities`, which differenced `(1, q, 0)` backwards instead of
+  `(0, q, 1)` forwards — swapping the two bins and, with three cuts, producing a
+  **negative** bin probability. A negative bin probability makes the likelihood
+  wrong rather than infinite, so nothing complained, and the twelve-model
+  Gaussian ensemble still matched the reference exactly because it never touches
+  the selection kernel.
+
+  With the bins fixed, and the two-sided critical value corrected from
+  `isf(p)` to `isf(p/2)`, no reversal or prior adjustment is needed and the
+  agreement is direct:
+
+  | model | `pimeta` | `bselmodel` |
+  |---|---|---|
+  | 2 bins, fixed (1, 0.5), one-sided | 0.2366 | 0.236 |
+  | 2 bins, fixed (1, 0.5), two-sided | 0.2473 | 0.248 |
+  | 2 bins, free weights | 0.2757 | 0.276 |
+  | 3 bins, fixed (1, 1, 0.5) | 0.2366 | 0.2370 |
+  | 3 bins, fixed (1, 0.5, 1) | 0.3021 | 0.3022 |
+  | 3 bins, free weights | 0.2571 | 0.2560 |
+
+  Ninety-seven tests now pin the bins — exact values for one- and two-sided with
+  two and three cuts, non-negativity and unit sum across means, spreads and cut
+  sets, and that a study's observed bin agrees with the probability scale. Their
+  absence is what let the defect survive; the twelve-model agreement covered the
+  ensemble and the ensemble does not use this code.
+
+  What follows is the earlier account, retained as a record of the search.
+  Three
   rounds of measurement narrowed this down, and the record matters more than the
   conclusion:
 
