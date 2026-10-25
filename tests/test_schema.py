@@ -63,13 +63,7 @@ def test_the_schema_version_is_shared_by_both_result_types(univariate):
             == robma_fit.to_dict()["schema_version"] == SCHEMA_VERSION)
 
 
-def test_the_multilevel_result_carries_diagnostics_even_without_an_export():
-    """``rma_mv`` has no ``to_dict`` yet; the diagnostics half is still useful.
-
-    Saying so in a test is deliberate: the missing export is a known gap, not an
-    oversight, and this asserts the half that does exist rather than implying the
-    other half does.
-    """
+def test_the_multilevel_result_carries_the_same_three_blocks():
     rng = np.random.default_rng(3)
     cluster = np.repeat(np.arange(6), 4)
     vi = rng.uniform(0.02, 0.06, cluster.size)
@@ -78,5 +72,9 @@ def test_the_multilevel_result_carries_diagnostics_even_without_an_export():
     d = pd.DataFrame({"yi": yi, "vi": vi, "cluster": cluster})
     fit = ma.rma_mv(d["yi"].to_numpy(float), vi=d["vi"].to_numpy(float),
                     data=d, random="~ 1 | cluster")
-    assert fit.diagnostics.worst is None
-    assert not hasattr(fit, "to_dict")
+    out = fit.to_dict()
+    assert out["schema_version"] == SCHEMA_VERSION
+    assert set(out["software"]) == {"pimeta", "python", "numpy", "scipy"}
+    assert set(out["diagnostics"]) == {"worst", "items"}
+    assert {"sigma2", "beta", "se", "k", "method"} <= set(out)
+    assert isinstance(out["sigma2"], list)

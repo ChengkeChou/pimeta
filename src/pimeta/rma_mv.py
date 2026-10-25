@@ -49,6 +49,39 @@ class RmaMvResult:
 
         return diagnose(self)
 
+    def to_dict(self) -> dict:
+        """Flat export, mirroring :meth:`RmaResult.to_dict`.
+
+        The field set is the dataclass's own, not the ``s3`` tidy/glance shape:
+        the point of this method is to round-trip a fit exactly, and the tidy
+        frames are a reporting view that drops the internals.
+        """
+        from .checks import SCHEMA_VERSION, software_versions
+
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "software": software_versions(),
+            "diagnostics": self.diagnostics.to_dict(),
+            "method": self.method,
+            "k": self.k,
+            "p": self.p,
+            "sigma2": list(self.sigma2),
+            "beta": list(self.beta),
+            "se": list(self.se),
+            "zval": list(self.zval),
+            "pval": list(self.pval),
+            "ci_lb": list(self.ci_lb),
+            "ci_ub": list(self.ci_ub),
+            "qe": self.qe,
+            "qe_df": self.qe_df,
+            "qe_p": self.qe_p,
+            "tau2": None if self.tau2 is None else list(self.tau2),
+            "rho": None if self.rho is None else list(self.rho),
+            "ll": self.ll,
+            "random": self.random,
+            "level": self.level,
+        }
+
     method: str                     # "REML" | "ML"
     k: int
     p: int
