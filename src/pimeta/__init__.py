@@ -352,6 +352,12 @@ from .rma_ls import (
 from .rma_mv import RmaMvResult, anova_rma, ranef, rma_mv, robust
 from .rma_peto_mh import RmaMhResult, RmaPetoResult, rma_mh, rma_peto
 from .rma_uni import RmaResult, rma
+from .robma import (
+    RobmaResult,
+    WeightFunction,
+    robma,
+    step_weight_function,
+)
 from .s3 import (
     AIC,
     BIC,
@@ -788,7 +794,10 @@ __all__ = [
     "CopasRegion",
     "bayes_copas",
     "CopasBayesResult",
-    "level_to_alpha",
+    "robma",
+    "RobmaResult",
+    "step_weight_function",
+    "WeightFunction",    "level_to_alpha",
     "level_to_percent",
     "gosh",
     "GoshResult",

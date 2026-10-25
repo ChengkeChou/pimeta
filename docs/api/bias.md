@@ -1,6 +1,6 @@
 # Publication bias
 
-*40 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -31,6 +31,10 @@
 | [`CopasRegion`](#copasregion) | — |
 | [`bayes_copas`](#bayes_copas) | — |
 | [`CopasBayesResult`](#copasbayesresult) | — |
+| [`robma`](#robma) | — |
+| [`RobmaResult`](#robmaresult) | — |
+| [`step_weight_function`](#step_weight_function) | — |
+| [`WeightFunction`](#weightfunction) | — |
 | [`gosh`](#gosh) | — |
 | [`GoshResult`](#goshresult) | — |
 | [`metainf`](#metainf) | metainf |
@@ -540,6 +544,113 @@ Posterior of the Copas selection model.
 - `level` — credibility level in percent.
 - `fixed_gamma` — the ``(gamma0, gamma1)`` that were held fixed, or ``None`` when the selection parameters were estimated.
 - `priors` — what was put on the parameters, so the record is complete.
+
+## `robma`
+
+```python
+robma(yi, sei=None, *, bias_models=None, prior=None, level: 'float' = 95.0, grid=None) -> 'RobmaResult'
+```
+
+Bayesian model averaging over publication-bias models.
+
+Enumerates the model space, integrates the marginal likelihood of each
+model by Gauss–Legendre quadrature, and reports the posterior over models
+together with the model-averaged estimate. No sampling: the answer is exact
+up to quadrature error, which is checked in the test suite by refining the
+grid.
+
+The components are the ones the reference package uses. Each model combines
+
+* a **bias** model — no bias, PET (:math:`\mu + \beta \sigma_i`) or
+  PEESE (:math:`\mu + \beta \sigma_i^2`), with
+  :math:`\beta \sim \text{half-Cauchy}(0, c)` and :math:`c = 1` for PET
+  and :math:`5` for PEESE;
+* an **effect** indicator — :math:`\mu = 0` or
+  :math:`\mu \sim N(0, 1/2)`;
+* a **heterogeneity** indicator — :math:`\tau = 0` or
+  :math:`\tau \sim N(0, 1/8)` on :math:`[0, \infty)`.
+
+Prior weights over the bias models are :math:`1` for no bias and
+:math:`1/4` for PET and PEESE, normalising to :math:`1/2` and :math:`1/8`;
+the two indicators are uniform, so P(:math:`\mu = 0`) = 0.5 a priori. These
+are read off `RoBMA` 4.0.0 rather than from its papers, which differ.
+
+**Args**
+
+- `yi` — observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
+- `sei` — their standard errors.
+- `bias_models` — which bias models to include, by name or by `WeightFunction`. Defaults to the three that this module verifies, ``("none", "PET", "PEESE")``; the step selection functions raise until their kernel has been pinned against the reference.
+- `prior` — overrides for ``mu_sd``, ``tau_sd``, ``pet_scale``, ``peese_scale``.
+- `level` — credibility level in percent (``0.95`` and ``95`` both mean 95%).
+- `grid` — quadrature nodes per axis: ``tau`` and ``beta``. The effect is integrated analytically and has no grid.
+
+**Returns**
+
+`RobmaResult`.
+
+**Raises**
+
+- `ValueError` — fewer than three studies, mismatched lengths, non-positive standard errors, or an unknown key in ``prior``/``grid``.
+- `NotImplementedError` — when a step selection function is requested.
+
+**Example**
+
+>>> fit = ma.robma(yi, sei=sei)
+- `>>> print(fit)                          # doctest` — +SKIP
+
+## `RobmaResult`
+
+```python
+RobmaResult(models: 'list[dict]', inclusion: 'dict[str, dict]', mu: 'dict', tau: 'dict', k: 'int', level: 'float' = 95.0, priors: 'dict' = <factory>, grid: 'dict' = <factory>, bias_models: 'tuple[str, ...]' = ()) -> None
+```
+
+Model-averaged posterior over publication-bias models.
+
+**Attributes**
+
+- `models` — one dictionary per model, sorted by posterior probability, with ``bias``, ``effect``, ``heterogeneity``, ``log_marginal``, ``prior_prob`` and ``post_prob``.
+- `inclusion` — for each component, the prior and posterior probability that it is present and the resulting Bayes factor.
+- `mu` — model-averaged posterior of the pooled effect, with ``mean``, ``sd``, ``q_low``, ``q_high``, ``point_mass`` (the posterior probability that :math:`\mu = 0`) and ``prob_positive``.
+- `tau` — the same for the between-study standard deviation.
+- `k` — studies used.
+- `level` — credibility level in percent.
+- `priors` — the prior hyperparameters actually integrated.
+- `grid` — the quadrature resolution.
+- `bias_models` — which bias models entered the ensemble.
+
+## `step_weight_function`
+
+```python
+step_weight_function(side: 'str' = 'one-sided', steps=(0.025, 0.05)) -> 'WeightFunction'
+```
+
+Build a step selection function.
+
+**Args**
+
+- `side` — ``"one-sided"`` or ``"two-sided"``.
+- `steps` — p-value cut points, increasing, inside ``(0, 1)``.
+
+**Returns**
+
+`WeightFunction`.
+
+**Example**
+
+>>> wf = ma.step_weight_function("two-sided", [0.05]) >>> wf.n_bins 2
+
+## `WeightFunction`
+
+```python
+WeightFunction(side: 'str', steps: 'tuple[float, ...]') -> None
+```
+
+One Vevea–Hedges step selection function.
+
+**Attributes**
+
+- `side` — ``"one-sided"`` or ``"two-sided"`` p-values.
+- `steps` — the p-value cut points. They define ``len(steps) + 1`` bins and must increase inside ``(0, 1)``.
 
 ## `gosh`
 

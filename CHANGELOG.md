@@ -123,6 +123,50 @@ the entry or the page named.
 
 ### Added
 
+- **RoBMA: a posterior over publication-bias models, by exact quadrature.**
+  `robma` enumerates the model space — no bias, PET and PEESE, crossed with
+  :math:`\mu = 0` or :math:`\mu \sim N(0, 1/2)` and :math:`\tau = 0` or
+  :math:`\tau \sim N(0, 1/8)` on :math:`[0, \infty)` — and returns the posterior
+  probability of each model, the inclusion probabilities, and the model-averaged
+  effect and heterogeneity.
+
+  It does **not** sample. The effect is integrated out analytically (normal
+  times normal), and :math:`(\tau, \beta)` by Gauss–Legendre quadrature whose
+  limits are set from a first pass, because the prior is ten times wider than the
+  posterior and a grid spanning the prior has no resolution where the mass is.
+  The model posterior probabilities are therefore exact up to quadrature error,
+  which the tests check by refining the grid rather than by agreeing with itself.
+
+  Against `RoBMA` 4.0.0 on a fifteen-study fixture restricted to the same three
+  bias models, with the reference at ESS 7377 and :math:`\hat{R}` 1.001:
+
+  | quantity | `RoBMA` 4.0.0 | `pimeta` |
+  |---|---|---|
+  | :math:`\mu` mean | 0.299 | 0.298 |
+  | :math:`\mu` SD | 0.070 | 0.072 |
+  | :math:`\mu` 95% interval | [0.158, 0.422] | [0.150, 0.422] |
+  | P(:math:`\mu = 0`) | 0.010 | 0.013 |
+  | P(:math:`\tau = 0`) | 0.784 | 0.785 |
+  | P(publication bias) | 0.078 | 0.079 |
+
+  The upper tail of :math:`\tau` is the least accurate quantity (0.190 against
+  the reference's 0.153), because that posterior is three quarters point mass and
+  the tail is carried on a grid; it is recorded rather than hidden.
+
+  Two things were measured rather than assumed, and both contradict what the
+  reference's arguments suggest. Its priors are **not** rescaled by the
+  unit-information standard deviation: multiplying `ni` by 100 moves that
+  standard deviation from 2.0 to 20.0 and leaves the posterior identical to three
+  decimals. And the bias mixture **always carries its own null component** with
+  weight one, so `prior_bias` supplies the alternatives only — passing
+  `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
+  3/5.
+
+  Not yet implemented: the six Vevea–Hedges step selection functions. Their
+  kernel is evaluated on the study's own standard error while the bin
+  probabilities use the marginal one, and confusing that pair produces
+  plausible-looking numbers, so they raise until the kernel is pinned by a
+  single-model comparison against `bselmodel`.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to

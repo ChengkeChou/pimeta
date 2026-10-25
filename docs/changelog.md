@@ -17,12 +17,17 @@ the entry or the page named.
   of the Copas selection model, with an independent NUTS check — so what is
   missing is the model *set* (no bias / PET / PEESE / selection with each of
   several weight functions × fixed / random effects) and the discrete moves
-  between them. The reference implementation, the `RoBMA` R package, needs
-  JAGS, and JAGS cannot be installed in this environment: conda-forge has no
-  win-64 build and the SourceForge installer host is unreachable. Once a model
-  set can be averaged over, it would also have to be checked; shipping it on
-  the strength of "the sampler is fine" is the one thing this package does not
-  do.
+  between them. The reference implementation now runs — `RoBMA` 4.0.0 on JAGS
+  4.3.2 inside an Ubuntu 22.04 WSL2 distribution — but not on Windows, and the
+  reason is worth recording: no Windows JAGS can be linked. conda-forge's
+  `m2w64-jags` 4.3.0 depends on `m2w64-gcc-libs`, `m2w64-openblas` and
+  `msys2-conda-epoch` and was built in December 2020, so it is an **msvcrt**
+  build, while every R from 4.2 onwards is **UCRT**; `r-rjags` has no conda-forge
+  build at all. What remains is the implementation and its verification. Once a
+  model set can be averaged over it has to be checked, and shipping it on the
+  strength of "the sampler is fine" is the one thing this package does not do.
+  Exact quadrature can check the arithmetic of any model set it is given; only
+  the reference can say which set it used, which is what the environment is for.
 - **Dynamic heterogeneity is implemented for a parametric scale only.** The
   pooled effect and :math:`\tau^2` may each be constant, linear or quadratic in
   a continuous index, and both estimators are validated. A **non-parametric**
@@ -118,6 +123,62 @@ the entry or the page named.
 
 ### Added
 
+- **RoBMA: a posterior over publication-bias models, by exact quadrature.**
+  `robma` enumerates the model space — no bias, PET and PEESE, crossed with
+  :math:`\mu = 0` or :math:`\mu \sim N(0, 1/2)` and :math:`\tau = 0` or
+  :math:`\tau \sim N(0, 1/8)` on :math:`[0, \infty)` — and returns the posterior
+  probability of each model, the inclusion probabilities, and the model-averaged
+  effect and heterogeneity.
+
+  It does **not** sample. The effect is integrated out analytically (normal
+  times normal), and :math:`(\tau, \beta)` by Gauss–Legendre quadrature whose
+  limits are set from a first pass, because the prior is ten times wider than the
+  posterior and a grid spanning the prior has no resolution where the mass is.
+  The model posterior probabilities are therefore exact up to quadrature error,
+  which the tests check by refining the grid rather than by agreeing with itself.
+
+  Against `RoBMA` 4.0.0 on a fifteen-study fixture restricted to the same three
+  bias models, with the reference at ESS 7377 and :math:`\hat{R}` 1.001:
+
+  | quantity | `RoBMA` 4.0.0 | `pimeta` |
+  |---|---|---|
+  | :math:`\mu` mean | 0.299 | 0.298 |
+  | :math:`\mu` SD | 0.070 | 0.072 |
+  | :math:`\mu` 95% interval | [0.158, 0.422] | [0.150, 0.422] |
+  | P(:math:`\mu = 0`) | 0.010 | 0.013 |
+  | P(:math:`\tau = 0`) | 0.784 | 0.785 |
+  | P(publication bias) | 0.078 | 0.079 |
+
+  The upper tail of :math:`\tau` is the least accurate quantity (0.190 against
+  the reference's 0.153), because that posterior is three quarters point mass and
+  the tail is carried on a grid; it is recorded rather than hidden.
+
+  Two things were measured rather than assumed, and both contradict what the
+  reference's arguments suggest. Its priors are **not** rescaled by the
+  unit-information standard deviation: multiplying `ni` by 100 moves that
+  standard deviation from 2.0 to 20.0 and leaves the posterior identical to three
+  decimals. And the bias mixture **always carries its own null component** with
+  weight one, so `prior_bias` supplies the alternatives only — passing
+  `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
+  3/5.
+
+  Not yet implemented: the six Vevea–Hedges step selection functions. Their
+  kernel is evaluated on the study's own standard error while the bin
+  probabilities use the marginal one, and confusing that pair produces
+  plausible-looking numbers, so they raise until the kernel is pinned by a
+  single-model comparison against `bselmodel`.
+- **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
+  that is left, what each stage must show before it counts as finished, and the
+  three measured defects that the validation harness in stage 3 exists to
+  repay. It also records the decision on the reference environment, and why a
+  *reference* environment is a development-time oracle rather than a runtime
+  dependency.
+
+  The ordering differs from the intuitive one in a single place, and the reason
+  is a dependency: the simulation harness has to report convergence failures,
+  boundary estimates and condition numbers, and those are aggregates of the
+  diagnostics layer, so the diagnostics layer goes first. Two definitions of
+  "converged" in one package is a bug that takes a year to notice.
 - **Dynamic heterogeneity: a pooled effect and a :math:`\\tau^2` that both move
   with time.** `tau_trend` fits the location-scale model
   :math:`y_i \\sim N(x_i'\\beta,\\ v_i + \\exp(z_i'\\alpha))` — the model
