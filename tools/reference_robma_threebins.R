@@ -27,9 +27,11 @@ steps <- c(0.025, 0.05)
 show("fixed (1,1,0.5)",
      fit(prior_weightfunction("one-sided", steps = steps,
                               weights = wf_fixed(c(1, 1, 0.5))), 401))
-show("fixed (0.5,1,1)",
+## the palindrome: identical to its own reverse, so comparing against pimeta at
+## the same vector separates a reversal from anything else
+show("fixed (1,0.5,1)",
      fit(prior_weightfunction("one-sided", steps = steps,
-                              weights = wf_fixed(c(0.5, 1, 1))), 402))
+                              weights = wf_fixed(c(1, 0.5, 1))), 402))
 
 free <- fit(prior_weightfunction("one-sided", steps = steps), 403)
 show("free (cumulative)", free)
