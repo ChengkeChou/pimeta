@@ -127,14 +127,76 @@ def _check_tau2_zero(fit) -> Diagnostic | None:
     tau2 = getattr(fit, "tau2", None)
     if tau2 is None:
         return None
-    if float(tau2) > 1e-10:
+    # rma.mv exposes tau2 as a list or a matrix, so a bare float() here would
+    # make diagnose() raise on a whole model family - worse than not diagnosing
+    values = np.atleast_1d(np.asarray(tau2, dtype=float)).ravel()
+    values = values[np.isfinite(values)]
+    if values.size == 0 or float(np.max(values)) > 1e-10:
         return None
     return Diagnostic(
         code="tau2_zero", category="boundary", severity="warning",
-        message=f"the between-study variance is estimated at {float(tau2):.3g}",
+        message="every between-study variance is estimated at "
+                f"{float(np.max(values)):.3g}",
         action="the random-effects model has collapsed to a fixed-effect model; "
                "report this rather than the random-effects interval, and note "
                "that the between-study variance is not identified from these data")
+
+
+def _check_variance_component(fit) -> Diagnostic | None:
+    """A variance component pinned at zero in a model that has several."""
+    sigma2 = getattr(fit, "sigma2", None)
+    if sigma2 is None:
+        return None
+    values = np.atleast_1d(np.asarray(sigma2, dtype=float)).ravel()
+    if values.size < 2:
+        return None                      # a single component is tau2_zero
+    zero = int(np.sum(values <= 1e-10))
+    if zero == 0:
+        return None
+    return Diagnostic(
+        code="variance_component_zero", category="boundary", severity="warning",
+        message=f"{zero} of {values.size} variance components are estimated at "
+                "zero",
+        action="the corresponding random term is not needed by these data; "
+               "report the model without it rather than the boundary estimate, "
+               "and do not compare information criteria across the boundary")
+
+
+def _check_ill_conditioned(fit) -> Diagnostic | None:
+    """A fixed-effect covariance that is close to singular."""
+    vb = getattr(fit, "vb", None)
+    if vb is None or np.size(vb) == 0:
+        return None
+    matrix = np.asarray(vb, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[0] < 2:
+        return None
+    cond = float(np.linalg.cond(matrix))
+    if not np.isfinite(cond) or cond < 1e10:
+        return None
+    return Diagnostic(
+        code="ill_conditioned", category="identifiability", severity="warning",
+        message=f"the coefficient covariance has condition number {cond:.3g}",
+        action="some coefficients are nearly linear combinations of the others; "
+               "their standard errors are large for a structural reason, not "
+               "because the data are uninformative, and the point estimates "
+               "should not be interpreted separately")
+
+
+def _check_boundary_correlation(fit) -> Diagnostic | None:
+    """A correlation estimated at +/-1, where the likelihood is not regular."""
+    rho = getattr(fit, "rho", None)
+    if rho is None:
+        return None
+    values = np.atleast_1d(np.asarray(rho, dtype=float)).ravel()
+    values = values[np.isfinite(values)]
+    if values.size == 0 or float(np.min(1.0 - np.abs(values))) > 1e-6:
+        return None
+    return Diagnostic(
+        code="boundary_correlation", category="boundary", severity="warning",
+        message="a correlation is estimated at the edge of its range "
+                f"(rho = {float(values[np.argmax(np.abs(values))]):+.6f})",
+        action="the usual interval and test are not valid at the boundary; "
+               "report the profile or a likelihood-ratio interval instead")
 
 
 def _check_few_studies(fit) -> Diagnostic | None:
@@ -190,7 +252,9 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
                "somewhere it should not be")
 
 
-_CHECKS = (_check_tau2_zero, _check_few_studies, _check_posterior_equals_prior)
+_CHECKS = (_check_tau2_zero, _check_variance_component, _check_ill_conditioned,
+           _check_boundary_correlation, _check_few_studies,
+           _check_posterior_equals_prior)
 
 
 def diagnose(fit) -> Diagnosis:
