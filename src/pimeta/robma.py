@@ -86,7 +86,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from scipy import stats
-from scipy.special import logsumexp
+from scipy.special import gammaln, logsumexp
 
 __all__ = [
     "RobmaResult",
@@ -270,15 +270,33 @@ def _observed_bin(yi: np.ndarray, sei: np.ndarray,
 
 
 def _omega_from_cube(u: np.ndarray, n_bins: int) -> np.ndarray:
-    """Monotone decreasing weights from free coordinates in ``(0, 1)``.
+    """Tail sums of a uniform Dirichlet draw, from a unit-cube node.
 
-    ``u`` has shape ``(..., n_bins - 1)``. The first bin is the reference and has
-    weight one; each later weight is the previous one times a fraction in
-    ``(0, 1)``, so the sequence decreases and the prior on ``u`` is uniform on
-    the unit cube.
+    The reference builds the weights as
+    :math:`\\omega_j = \\sum_{i \\ge j} \\text{std-}\\eta_i` with
+    :math:`\\eta \\sim \\text{Gamma}(1,1)`, so :math:`(\\omega_2, \\dots,
+    \\omega_k)` is the vector of tail sums of a uniform draw on the simplex.
+    Written in those coordinates the map from :math:`\\eta` is linear with unit
+    determinant, so the prior is **uniform on the ordered simplex**
+    :math:`1 \\ge \\omega_2 \\ge \\dots \\ge \\omega_k \\ge 0`.
+
+    Uniform points on that simplex are the descending order statistics of
+    ``n_bins - 1`` uniform draws, which is what this returns; the constant
+    Jacobian ``(n_bins - 1)!`` is added by the caller.
+
+    A stick-breaking product (each weight the previous times a uniform
+    fraction) is a *different* distribution from three bins upwards, and that
+    difference is what made the two-bin comparison agree and the free-weight
+    one disagree.
     """
-    ones = np.ones(u.shape[:-1] + (1,))
-    return np.concatenate([ones, np.cumprod(u, axis=-1)], axis=-1)
+    u = np.asarray(u, dtype=float)
+    dim = max(int(n_bins) - 1, 0)
+    if dim == 0:
+        return np.ones(u.shape[:-1] + (1,)) if u.ndim else np.ones(1)
+    u = u.reshape(-1, dim)
+    ordered = -np.sort(-u, axis=-1)          # descending order statistics
+    return np.concatenate([np.ones(ordered.shape[:-1] + (1,)), ordered],
+                          axis=-1)
 
 
 # --------------------------------------------------------------------------- #
@@ -530,6 +548,8 @@ def _fit_selection(yi, sei, *, wf: WeightFunction, effect_free: bool,
     if omega_fixed is None:
         u_nodes, logw_u = _cube_grid(grid["omega"], n_omega)
         omegas = _omega_from_cube(u_nodes, wf.n_bins)
+        # uniform density on the ordered simplex is (n_bins - 1)! , not 1
+        logw_u = logw_u + gammaln(n_omega + 1.0)
     else:
         # a fixed weight vector removes omega from the model entirely, which is
         # how the kernel can be checked without a prior in the way

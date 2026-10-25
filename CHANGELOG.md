@@ -208,8 +208,19 @@ the entry or the page named.
   implementation uses a stick-breaking product. For two bins the two coincide
   (:math:`\omega_2 = u` under either), which is why the two-bin comparison
   differed only slightly and only in :math:`\mu`; from three bins upwards the
-  joint distributions differ. The step functions keep raising until the
-  free-weight prior is matched.
+  joint distributions differ. The Dirichlet tail sum has now been implemented
+  exactly (descending order statistics of :math:`k-1` uniforms, with the
+  constant Jacobian :math:`(k-1)!`), and the two-bin gap **did not move**
+  (0.3076 either way) — as it must, since for one free weight the two priors are
+  the same distribution. So the shape is not the explanation for the two-bin
+  difference either, and that is recorded as the third eliminated candidate.
+
+  What is left is a disagreement about which end of the p-value scale the
+  reference bin sits at, and the reference's documentation and its numbers point
+  opposite ways: `prior_weightfunction` documents `reference =
+  "most_significant"`, while `wf_fixed` pins index one at weight 1 and, judged
+  numerically, that slot behaves as the *least* significant bin. The step
+  functions keep raising until that is decided rather than guessed.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to
