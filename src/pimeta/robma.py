@@ -510,7 +510,8 @@ def _fit_model(yi, sei, *, bias, effect_free: bool, hetero_free: bool,
 
 
 def _fit_selection(yi, sei, *, wf: WeightFunction, effect_free: bool,
-                   hetero_free: bool, prior: dict, grid: dict) -> _Fit:
+                   hetero_free: bool, prior: dict, grid: dict,
+                   omega_fixed=None) -> _Fit:
     """Integrate a step selection model over ``(mu, tau, omega)``.
 
     ``mu`` cannot be integrated out here the way it can when the model is
@@ -526,19 +527,28 @@ def _fit_selection(yi, sei, *, wf: WeightFunction, effect_free: bool,
                                         0.0, tau_hi)
     else:
         tau_nodes, logw_tau = np.zeros(1), np.zeros(1)
-    u_nodes, logw_u = _cube_grid(grid["omega"], n_omega)
-    omegas = _omega_from_cube(u_nodes, wf.n_bins)
+    if omega_fixed is None:
+        u_nodes, logw_u = _cube_grid(grid["omega"], n_omega)
+        omegas = _omega_from_cube(u_nodes, wf.n_bins)
+    else:
+        # a fixed weight vector removes omega from the model entirely, which is
+        # how the kernel can be checked without a prior in the way
+        omegas = np.atleast_2d(np.asarray(omega_fixed, dtype=float))
+        logw_u = np.zeros(omegas.shape[0])
 
     lo, hi = _mu_box(yi, sei, float(prior["mu_sd"]))
     n_mu = int(grid["mu"]) if effect_free else 1
     mu_nodes, logw_mu = _mu_grid(float(prior["mu_sd"]), n_mu, lo, hi)
 
     total = np.zeros(1)
-    tau_mass = np.zeros(1)
+    tau_mass = np.full(1, -np.inf)
     passes = 3
     for it in range(passes):
         parts = []
-        tau_mass = np.zeros(tau_nodes.size)
+        # log(0), not log(1): accumulating from a vector of zeros gives every tau
+        # a unit of probability before any likelihood is added, and a log
+        # likelihood of -100 is invisible next to it
+        tau_mass = np.full(tau_nodes.size, -np.inf)
         for m, lwm in zip(mu_nodes, logw_mu):
             ll = _loglik_selection(yi, sei, float(m), tau_nodes ** 2,
                                    omegas, wf, obs_bin)
@@ -962,17 +972,15 @@ def _normalise_bias_models(bias_models) -> tuple:
             continue
         if isinstance(item, WeightFunction):
             raise NotImplementedError(
-                "the step selection functions are not verified, and not for the "
-                "reason that was first suspected. Against the reference's own "
-                "single-model fit (bselmodel, one-sided, steps 0.05, free "
-                "weights) pimeta gives mu 0.314 (SD 0.065) against 0.276 "
-                "(0.069) and tau 0.287 against 0.077. The weight prior was the "
-                "first suspect and is not the cause: the reference's JAGS model "
-                "text draws eta ~ Gamma(1, 1) and sets omega[2] = "
-                "eta[2]/sum(eta), which is uniform on (0, 1) -- the same prior "
-                "used here. The gap is in the selection kernel or its "
-                "normalisation. Use 'none', 'PET' or 'PEESE' until it is "
-                "closed.")
+                "the step selection functions are not verified. With the "
+                "weights fixed at (1, 0.5) the kernel reproduces the reference's "
+                "heterogeneity - tau 0.071 against 0.080 one-sided and 0.073 "
+                "against 0.072 two-sided - but the pooled effect is offset by "
+                "about 0.11 with an identical standard deviation (mu 0.354 "
+                "against 0.236). A constant offset with matching spread points "
+                "at how the location enters, not at the kernel, so that is what "
+                "is being pinned next. Use 'none', 'PET' or 'PEESE' until it "
+                "agrees.")
         if not isinstance(item, str):
             raise ValueError(
                 f"a bias model must be a name or a WeightFunction, not "

@@ -162,21 +162,32 @@ the entry or the page named.
   `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
   3/5.
 
-  Not yet implemented: the six Vevea–Hedges step selection functions. Their
-  kernel is written — the bin edges sit on the study's own standard error while
-  the bin probabilities use the marginal one, and they are separate arguments
-  because using one for both produces plausible numbers — but the model does not
-  reproduce the reference, so they raise. Measured against `bselmodel`
-  (one-sided, steps 0.05, free weights, ESS 33673): :math:`\mu` 0.314 (SD 0.065)
-  against 0.276 (0.069) and :math:`\tau` 0.287 against 0.077.
+  Not yet implemented: the six Vevea–Hedges step selection functions. Three
+  rounds of measurement narrowed this down, and the record matters more than the
+  conclusion:
 
-  The first explanation tried was wrong and is recorded as wrong: the weight
-  prior was blamed, and the reference's JAGS model text falsified that — it
-  draws :math:`\eta \sim \text{Gamma}(1,1)` and sets
-  :math:`\omega_2 = \eta_2/\sum\eta`, which is uniform on :math:`(0,1)`, the same
-  prior used here. The gap is in the selection kernel or its normalisation, and
-  the next step is to check the kernel against a *fixed* weight function, where
-  no prior is involved at all.
+  1. The kernel is written: bin edges on the study's own standard error, bin
+     probabilities from the marginal one, :math:`\mu` on an adaptive grid
+     because the selection normalisation depends on it.
+  2. The **weight prior was blamed and that was wrong**. The reference's JAGS
+     model text shows :math:`\eta \sim \text{Gamma}(1,1)` and
+     :math:`\omega_2 = \eta_2/\sum\eta`, which is uniform on :math:`(0,1)` —
+     exactly the prior implemented here. Reading the model beat reasoning about
+     the posterior.
+  3. A real bug then surfaced: the :math:`\tau` accumulation started at log(1)
+     instead of log(0), so every :math:`\tau` received a unit of probability
+     before any likelihood was added and the marginal was effectively uniform.
+     With that fixed, **the kernel reproduces the reference's heterogeneity**:
+     with the weights fixed at :math:`(1, 0.5)`, :math:`\tau` is 0.071 against
+     0.080 one-sided and 0.073 against 0.072 two-sided.
+
+  What remains is a **constant offset in the pooled effect**: 0.354 against
+  0.236 (one-sided) and 0.352 against 0.248 (two-sided), with an identical
+  standard deviation (0.066 against 0.067). A shift with unchanged spread points
+  at how the location enters — the reference precomputes telescoping bin
+  probabilities, and a different reference bin would move the level without
+  touching the shape. That is the next thing to pin, and the step functions keep
+  raising until it does.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to
