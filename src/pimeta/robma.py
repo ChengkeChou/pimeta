@@ -182,11 +182,15 @@ DEFAULTS: dict[str, float] = {
     "peese_scale": 5.0,               # half-Cauchy
 }
 
-#: Grid resolution. The defaults are the smallest that hold four significant
-#: digits against a doubled grid on the fixtures in the test suite.
+#: Grid resolution. The defaults hold four significant digits against a doubled
+#: grid on the Gaussian models; the ``omega`` axis is the coarsest because it is
+#: the one that multiplies, and a selection model with four bins is a
+#: five-dimensional integral.
 DEFAULT_GRID: dict[str, int] = {
-    "tau": 161,
+    "tau": 121,
     "beta": 81,
+    "mu": 61,
+    "omega": 7,
 }
 
 
@@ -244,13 +248,15 @@ def _bin_probabilities(mu, sei, s, wf: WeightFunction) -> np.ndarray:
         upper = stats.norm.sf(edges, mu[..., None], s[..., None])
         lower = stats.norm.cdf(-edges, mu[..., None], s[..., None])
         inside = upper + lower
-        cumulative = np.concatenate(
-            [np.ones(mu.shape + (1,)), inside], axis=-1)
     else:
         inside = stats.norm.sf(edges, mu[..., None], s[..., None])
-        cumulative = np.concatenate(
-            [np.ones(mu.shape + (1,)), inside], axis=-1)
-    return cumulative[..., :-1] - cumulative[..., 1:]
+    # cum[j] = P(p-value above cut j), so the bins are the differences of
+    # (1, cum..., 0); dropping the trailing zero would silently lose the last
+    # bin and leave the likelihood with the wrong number of columns
+    cumulative = np.concatenate(
+        [np.ones(mu.shape + (1,)), inside, np.zeros(mu.shape + (1,))],
+        axis=-1)
+    return -np.diff(cumulative, axis=-1)
 
 
 def _observed_bin(yi: np.ndarray, sei: np.ndarray,
@@ -278,20 +284,55 @@ def _omega_from_cube(u: np.ndarray, n_bins: int) -> np.ndarray:
 # --------------------------------------------------------------------------- #
 # per-model marginal likelihoods
 # --------------------------------------------------------------------------- #
-def _loglik_selection(yi, sei, mu, tau2, u, wf, obs_bin) -> np.ndarray:
-    """Sum of log selection-adjusted densities.
+def _loglik_selection(yi, sei, mu, tau2, omega, wf, obs_bin) -> np.ndarray:
+    """Log likelihood of a step selection model, shape ``(n_tau, n_omega)``.
 
-    ``mu`` and ``tau2`` are scalars; ``u`` has shape ``(..., n_bins - 1)``.
+    ``mu`` is a scalar, ``tau2`` a vector of length ``n_tau`` and ``omega`` a
+    matrix ``(n_omega, n_bins)`` of weight vectors. The bin edges sit on the
+    study's own standard error while the distribution they are integrated
+    against is the marginal ``N(mu, sqrt(sei^2 + tau2))``; the two scales are
+    separate arguments because using one for both produces plausible numbers.
     """
-    s = np.sqrt(sei ** 2 + tau2)
-    omega = _omega_from_cube(np.asarray(u, dtype=float), wf.n_bins)
-    probs = _bin_probabilities(mu, sei, s, wf)              # (..., K, n_bins)
-    denom = np.sum(omega[..., None, :] * probs, axis=-1)    # (..., K)
-    picked = np.take(omega, obs_bin, axis=-1)               # (..., K)
+    tau2 = np.atleast_1d(np.asarray(tau2, dtype=float))
+    omega = np.atleast_2d(np.asarray(omega, dtype=float))
+    s = np.sqrt(np.asarray(sei, dtype=float) ** 2 + tau2[:, None])   # (T, K)
+    probs = _bin_probabilities(mu, sei, s, wf)                       # (T, K, B)
+    denom = np.sum(omega[None, :, None, :] * probs[:, None, :, :],
+                   axis=-1)                                          # (T, U, K)
+    picked = omega[None, :, obs_bin]                                 # (1, U, K)
     with np.errstate(divide="ignore", invalid="ignore"):
         log_ratio = np.log(picked) - np.log(denom)
-    base = _log_normal(yi, s * 0.0 + np.asarray(mu, dtype=float), s)
-    return np.sum(log_ratio + base, axis=-1)
+    base = _log_normal(yi, np.full_like(s, float(mu)), s)[:, None, :]  # (T,1,K)
+    return np.sum(log_ratio + base, axis=-1)                         # (T, U)
+
+
+def _mu_box(yi, sei, mu_sd: float) -> tuple[float, float]:
+    """A start box wide enough that the prior and the data are both inside."""
+    lo = min(-6.0 * mu_sd, float(np.min(yi)) - 6.0 * float(np.max(sei)))
+    hi = max(6.0 * mu_sd, float(np.max(yi)) + 6.0 * float(np.max(sei)))
+    return lo, hi
+
+
+def _mu_grid(mu_sd: float, n: int, lo: float,
+             hi: float) -> tuple[np.ndarray, np.ndarray]:
+    """Nodes and log prior weights for ``mu`` on ``[lo, hi]``."""
+    nodes, weights = _legendre(float(lo), float(hi), n)
+    return nodes, _log_normal(nodes, np.zeros_like(nodes),
+                              np.full_like(nodes, mu_sd)) + np.log(weights)
+
+
+def _cube_grid(n: int, dim: int) -> tuple[np.ndarray, np.ndarray]:
+    """Nodes and log weights on the unit cube, one axis per free weight."""
+    if dim <= 0:
+        return np.zeros((1, 0)), np.zeros(1)
+    nodes, weights = _legendre(0.0, 1.0, int(n))
+    grids = np.meshgrid(*([nodes] * dim), indexing="ij")
+    wgrid = np.meshgrid(*([weights] * dim), indexing="ij")
+    u = np.stack([g.reshape(-1) for g in grids], axis=-1)
+    w = np.ones(u.shape[0])
+    for g in wgrid:
+        w = w * g.reshape(-1)
+    return u, np.log(w)
 
 
 def _tau_grid(tau_sd: float, n: int, lo: float,
@@ -335,6 +376,8 @@ class _Fit:
     mu_mean: np.ndarray | None = None
     mu_sd: np.ndarray | None = None
     mu_logw: np.ndarray | None = None
+    mu_grid_nodes: np.ndarray | None = None
+    mu_grid_logw: np.ndarray | None = None
     tau_nodes: np.ndarray | None = None
     tau_logw: np.ndarray | None = None
 
@@ -421,13 +464,16 @@ def _fit_gaussian(yi, sei, *, kind: str, effect_free: bool,
     # Two passes: the second places both grids on the region that carries the
     # mass, which the prior alone does not identify.
     total = log_int = m_hat = s_hat = np.zeros(1)
-    for _ in range(3):
+    passes = 3
+    for it in range(passes):
         log_int, m_hat, s_hat = _gauss_conditional(
             yi, sei, tau_nodes, x, beta_nodes, float(prior["mu_sd"]),
             effect_free)
         total = log_int + logw_tau[:, None] + logw_beta[None, :]
         if not hetero_free and len(beta_nodes) == 1:
             break
+        if it == passes - 1:
+            break          # the last pass is the answer; do not move the grid
         if hetero_free:
             lo, hi = _trim(tau_nodes, logsumexp(total, axis=1), lower_zero=True)
             tau_nodes, logw_tau = _tau_grid(prior["tau_sd"], grid["tau"],
@@ -452,17 +498,72 @@ def _fit_gaussian(yi, sei, *, kind: str, effect_free: bool,
     )
 
 
-def _fit_model(yi, sei, *, bias: str, effect_free: bool, hetero_free: bool,
+def _fit_model(yi, sei, *, bias, effect_free: bool, hetero_free: bool,
                prior: dict, grid: dict) -> _Fit:
+    if isinstance(bias, WeightFunction):
+        return _fit_selection(yi, sei, wf=bias, effect_free=effect_free,
+                              hetero_free=hetero_free, prior=prior, grid=grid)
     if bias in ("none", "PET", "PEESE"):
         return _fit_gaussian(yi, sei, kind=bias, effect_free=effect_free,
                              hetero_free=hetero_free, prior=prior, grid=grid)
-    raise NotImplementedError(
-        "the step selection functions are not verified against the reference "
-        "yet: their kernel is evaluated on the study's own standard error while "
-        "the bin probabilities use the marginal one, and getting that pair "
-        "wrong is silent. Use bias_models=('none', 'PET', 'PEESE') until the "
-        "kernel has been pinned by a single-model comparison.")
+    raise ValueError(f"unknown bias model {bias!r}")
+
+
+def _fit_selection(yi, sei, *, wf: WeightFunction, effect_free: bool,
+                   hetero_free: bool, prior: dict, grid: dict) -> _Fit:
+    """Integrate a step selection model over ``(mu, tau, omega)``.
+
+    ``mu`` cannot be integrated out here the way it can when the model is
+    Gaussian: the selection normalisation depends on it, so the marginal of
+    ``mu`` is carried on a grid and combined later with the normal components
+    that the bias-free models produce.
+    """
+    obs_bin = _observed_bin(yi, sei, wf)
+    n_omega = wf.n_bins - 1
+    tau_hi = max(6.0 * prior["tau_sd"], 2.0 * float(np.max(sei)))
+    if hetero_free:
+        tau_nodes, logw_tau = _tau_grid(prior["tau_sd"], grid["tau"],
+                                        0.0, tau_hi)
+    else:
+        tau_nodes, logw_tau = np.zeros(1), np.zeros(1)
+    u_nodes, logw_u = _cube_grid(grid["omega"], n_omega)
+    omegas = _omega_from_cube(u_nodes, wf.n_bins)
+
+    lo, hi = _mu_box(yi, sei, float(prior["mu_sd"]))
+    n_mu = int(grid["mu"]) if effect_free else 1
+    mu_nodes, logw_mu = _mu_grid(float(prior["mu_sd"]), n_mu, lo, hi)
+
+    total = np.zeros(1)
+    tau_mass = np.zeros(1)
+    passes = 3
+    for it in range(passes):
+        parts = []
+        tau_mass = np.zeros(tau_nodes.size)
+        for m, lwm in zip(mu_nodes, logw_mu):
+            ll = _loglik_selection(yi, sei, float(m), tau_nodes ** 2,
+                                   omegas, wf, obs_bin)
+            joint = ll + logw_tau[:, None] + logw_u[None, :]
+            parts.append(logsumexp(joint) + lwm)
+            tau_mass = np.logaddexp(tau_mass, logsumexp(joint, axis=1))
+        total = np.asarray(parts)
+        if it == passes - 1:
+            break          # the last pass is the answer; do not move the grid
+        if effect_free:
+            lo, hi = _trim(mu_nodes, total, lower_zero=False)
+            mu_nodes, logw_mu = _mu_grid(float(prior["mu_sd"]), n_mu, lo, hi)
+        if hetero_free:
+            tlo, thi = _trim(tau_nodes, tau_mass, lower_zero=True)
+            tau_nodes, logw_tau = _tau_grid(prior["tau_sd"], grid["tau"],
+                                            tlo, thi)
+
+    log_marginal = float(logsumexp(total))
+    return _Fit(
+        log_marginal=log_marginal,
+        mu_grid_nodes=mu_nodes if effect_free else None,
+        mu_grid_logw=(total - log_marginal if effect_free else None),
+        tau_nodes=tau_nodes if hetero_free else None,
+        tau_logw=(tau_mass if hetero_free else None),
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -470,44 +571,74 @@ def _fit_model(yi, sei, *, bias: str, effect_free: bool, hetero_free: bool,
 # --------------------------------------------------------------------------- #
 def _mixture_summary(means: list[np.ndarray], sds: list[np.ndarray],
                      weights: list[np.ndarray], point_mass: float,
-                     point_value: float, level: float) -> dict:
-    """Mean, SD and equal-tailed interval of a Gaussian mixture plus a spike.
+                     point_value: float, level: float,
+                     grid_terms=None) -> dict:
+    """Mean, SD and equal-tailed interval of a mixed posterior plus a spike.
 
-    The continuous part is a weighted sum of normal densities, so its cumulative
-    distribution has a closed form and the quantiles are found by bisection
-    instead of being read off a grid. That matters here: the mixture is far
-    narrower than any grid that would also cover the prior. ``level`` is a
-    fraction — 0.95, not 95.
+    Two kinds of continuous component arrive here. When the model is Gaussian
+    the effect was integrated out analytically and each ``(tau, beta)`` node
+    leaves a normal density behind; when the model selects on the p-value the
+    normalisation depends on :math:`\\mu`, so its marginal is a grid. Both are
+    handled. ``level`` is a fraction — 0.95, not 95.
     """
     tail = (1.0 - level) / 2.0
-    if not means:
+    grid_terms = list(grid_terms or [])
+    if not means and not grid_terms:
         return {"mean": float(point_value), "sd": 0.0,
                 "q_low": float(point_value), "q_high": float(point_value),
-                "point_mass": float(point_mass)}
-    mu = np.concatenate(means)
-    sd = np.concatenate(sds)
-    # models have different numbers of components (a PET grid is two
-    # dimensional and a no-bias grid is not), so this is a concatenation
-    logw = np.concatenate(weights)
-    w = np.exp(logw - logw.max())
-    w = w / w.sum() * (1.0 - point_mass)
-    mean = float(np.sum(w * mu))
-    sd_total = float(np.sqrt(np.sum(w * (sd ** 2 + (mu - mean) ** 2))
-                             + point_mass * (point_value - mean) ** 2))
+                "point_mass": float(point_mass), "prob_positive": 0.0}
+
+    if means:
+        comp_mu = np.concatenate(means)
+        comp_sd = np.concatenate(sds)
+        comp_w = np.exp(np.concatenate(weights))
+    else:
+        comp_mu = np.zeros(0)
+        comp_sd = np.ones(0)
+        comp_w = np.zeros(0)
+    g_nodes = [np.asarray(t[0], dtype=float) for t in grid_terms]
+    g_w = [np.exp(np.asarray(t[1], dtype=float)) for t in grid_terms]
+
+    # the weights already carry each model's posterior probability, so the whole
+    # continuous part is rescaled at once rather than per family
+    continuous = float(np.sum(comp_w)) + sum(float(np.sum(w)) for w in g_w)
+    scale = (1.0 - point_mass) / continuous
+    comp_w = comp_w * scale
+    g_w = [w * scale for w in g_w]
+
+    mean = float(np.sum(comp_w * comp_mu)
+                 + sum(float(np.sum(w * n)) for n, w in zip(g_nodes, g_w))
+                 + point_mass * point_value)
+    second = float(np.sum(comp_w * (comp_sd ** 2 + comp_mu ** 2))
+                   + sum(float(np.sum(w * n ** 2))
+                         for n, w in zip(g_nodes, g_w))
+                   + point_mass * point_value ** 2)
+    sd_total = float(np.sqrt(max(second - mean ** 2, 0.0)))
 
     def cdf(x: float) -> float:
-        value = float(np.sum(w * stats.norm.cdf((x - mu) / sd)))
+        value = 0.0
+        if comp_mu.size:
+            value += float(np.sum(comp_w * stats.norm.cdf((x - comp_mu)
+                                                          / comp_sd)))
+        for n, w in zip(g_nodes, g_w):
+            value += float(np.sum(w[n <= x]))
         if point_value <= x:
             value += point_mass
         return value
 
-    lo = float(np.min(mu - 10.0 * sd))
-    hi = float(np.max(mu + 10.0 * sd))
+    if comp_mu.size:
+        lo = float(np.min(comp_mu - 10.0 * comp_sd))
+        hi = float(np.max(comp_mu + 10.0 * comp_sd))
+    else:
+        lo, hi = float("inf"), float("-inf")
+    for n in g_nodes:
+        lo = min(lo, float(np.min(n)))
+        hi = max(hi, float(np.max(n)))
     q_low = _invert_cdf(cdf, tail, lo, hi)
     q_high = _invert_cdf(cdf, 1.0 - tail, lo, hi)
-    prob_pos = float(np.sum(w * stats.norm.sf((0.0 - mu) / sd)))
     return {"mean": mean, "sd": sd_total, "q_low": q_low, "q_high": q_high,
-            "point_mass": float(point_mass), "prob_positive": prob_pos}
+            "point_mass": float(point_mass),
+            "prob_positive": 1.0 - cdf(0.0)}
 
 
 def _invert_cdf(cdf, target: float, lo: float, hi: float, n: int = 200) -> float:
@@ -690,24 +821,26 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
     alpha = level_to_alpha(level)
     level_pct = 100.0 * (1.0 - alpha)
 
-    names = _normalise_bias_models(bias_models)
-    weights = {n: BIAS_PRIOR_WEIGHTS[n] for n in names}
+    specs = _normalise_bias_models(bias_models)
+    labels = tuple(_bias_label(s) for s in specs)
+    weights = {lab: _bias_weight(lab) for lab in labels}
     total_w = float(sum(weights.values()))
 
     models: list[dict] = []
-    for name in names:
+    for spec in specs:
+        label = _bias_label(spec)
         for effect_free in (True, False):
             for hetero_free in (True, False):
-                fit = _fit_model(yi_arr, sei_arr, bias=name,
+                fit = _fit_model(yi_arr, sei_arr, bias=spec,
                                  effect_free=effect_free,
                                  hetero_free=hetero_free, prior=priors,
                                  grid=resolution)
                 models.append({
-                    "bias": name,
+                    "bias": label,
                     "effect": bool(effect_free),
                     "heterogeneity": bool(hetero_free),
                     "log_marginal": fit.log_marginal,
-                    "prior_prob": weights[name] / total_w * 0.25,
+                    "prior_prob": weights[label] / total_w * 0.25,
                     "_fit": fit,
                 })
 
@@ -721,6 +854,7 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
     mu_means: list[np.ndarray] = []
     mu_sds: list[np.ndarray] = []
     mu_ws: list[np.ndarray] = []
+    mu_grid_terms: list[tuple[np.ndarray, np.ndarray]] = []
     mu_spike = 0.0
     tau_terms: list[np.ndarray] = []
     tau_spike = 0.0
@@ -729,11 +863,17 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
         model_fit: _Fit = entry.pop("_fit")
         p = entry["post_prob"]
         if entry["effect"]:
-            if p > 0.0 and model_fit.mu_mean is not None \
-                    and model_fit.mu_sd is not None:
-                mu_means.append(model_fit.mu_mean)
-                mu_sds.append(model_fit.mu_sd)
-                mu_ws.append(np.log(p) + np.asarray(model_fit.mu_logw))
+            if p > 0.0:
+                if model_fit.mu_mean is not None \
+                        and model_fit.mu_sd is not None:
+                    mu_means.append(model_fit.mu_mean)
+                    mu_sds.append(model_fit.mu_sd)
+                    mu_ws.append(np.log(p) + np.asarray(model_fit.mu_logw))
+                elif model_fit.mu_grid_logw is not None:
+                    assert model_fit.mu_grid_nodes is not None
+                    mu_grid_terms.append(
+                        (model_fit.mu_grid_nodes,
+                         np.log(p) + model_fit.mu_grid_logw))
         else:
             mu_spike += p
         if entry["heterogeneity"]:
@@ -744,7 +884,8 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
         else:
             tau_spike += p
 
-    mu = _mixture_summary(mu_means, mu_sds, mu_ws, mu_spike, 0.0, 1.0 - alpha)
+    mu = _mixture_summary(mu_means, mu_sds, mu_ws, mu_spike, 0.0, 1.0 - alpha,
+                          grid_terms=mu_grid_terms)
     tau = _grid_summary(tau_nodes, tau_terms, tau_spike, 0.0, 1.0 - alpha)
 
     # -- inclusion probabilities ------------------------------------------- #
@@ -759,13 +900,13 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
         "Heterogeneity": _incl(lambda m: m["heterogeneity"]),
         "Publication bias": _incl(lambda m: m["bias"] != "none"),
     }
-    for name in names:
-        inclusion[f"bias:{name}"] = _incl(lambda m, n=name: m["bias"] == n)
+    for label in labels:
+        inclusion[f"bias:{label}"] = _incl(lambda m, n=label: m["bias"] == n)
 
     models.sort(key=lambda m: -m["post_prob"])
     return RobmaResult(models=models, inclusion=inclusion, mu=mu, tau=tau,
                        k=int(yi_arr.size), level=level_pct, priors=priors,
-                       grid=resolution, bias_models=names)
+                       grid=resolution, bias_models=labels)
 
 
 def _grid_summary(nodes, terms: list[np.ndarray], point_mass: float,
@@ -799,26 +940,48 @@ def _grid_summary(nodes, terms: list[np.ndarray], point_mass: float,
             "prob_positive": float(np.sum(mass[nodes > 0.0]))}
 
 
-def _normalise_bias_models(bias_models) -> tuple[str, ...]:
+def _bias_label(spec) -> str:
+    """Printable name of a bias model, whether it is a keyword or a function."""
+    return spec if isinstance(spec, str) else spec.name
+
+
+def _bias_weight(label: str) -> float:
+    """Prior model weight; an unlisted step function gets the reference's 1/12."""
+    return BIAS_PRIOR_WEIGHTS.get(label, 1.0 / 12.0)
+
+
+def _normalise_bias_models(bias_models) -> tuple:
     """Validate the requested bias models and return them in canonical order."""
     if bias_models is None:
         return ("none", "PET", "PEESE")
-    requested: list[str] = []
+    requested: list = []
+    seen: set[str] = set()
     for item in bias_models:
+        label = _bias_label(item)
+        if label in seen:
+            continue
         if isinstance(item, WeightFunction):
             raise NotImplementedError(
-                "step selection functions are not verified against the "
-                "reference yet; use 'none', 'PET' or 'PEESE'")
-        key = str(item)
-        if key not in BIAS_PRIOR_WEIGHTS:
+                "the step selection functions are not verified: the kernel is, "
+                "but the prior on omega is not. Against the reference's own "
+                "single-model fit (one-sided, steps 0.05, free weights) pimeta "
+                "gives mu 0.314 (SD 0.065) against 0.276 (0.069) and tau 0.287 "
+                "against 0.077, because a uniform stick-breaking prior on omega "
+                "admits weights near zero while the reference's posterior for "
+                "the second bin stops at 0.423. Use 'none', 'PET' or 'PEESE' "
+                "until the reference's cumulative Dirichlet is matched.")
+        if not isinstance(item, str):
             raise ValueError(
-                f"unknown bias model {key!r}; known are "
+                f"a bias model must be a name or a WeightFunction, not "
+                f"{type(item).__name__}")
+        if item not in BIAS_PRIOR_WEIGHTS:
+            raise ValueError(
+                f"unknown bias model {item!r}; known are "
                 f"{', '.join(sorted(BIAS_PRIOR_WEIGHTS))}")
-        if key not in requested:
-            requested.append(key)
+        seen.add(label)
+        requested.append(item)
     if not requested:
         raise ValueError("'bias_models' must name at least one model")
-    if len(requested) < len(BIAS_PRIOR_WEIGHTS):
-        # keep the relative prior weights of the requested subset, renormalised
-        return tuple(n for n in BIAS_PRIOR_WEIGHTS if n in requested)
-    return tuple(BIAS_PRIOR_WEIGHTS)
+    order = list(BIAS_PRIOR_WEIGHTS)
+    requested.sort(key=lambda s: order.index(str(s)))
+    return tuple(requested)
