@@ -88,6 +88,8 @@ import numpy as np
 from scipy import stats
 from scipy.special import gammaln, logsumexp
 
+from .checks import SCHEMA_VERSION, software_versions
+
 __all__ = [
     "RobmaResult",
     "WeightFunction",
@@ -181,12 +183,6 @@ DEFAULTS: dict[str, float] = {
     "pet_scale": 1.0,                 # half-Cauchy
     "peese_scale": 5.0,               # half-Cauchy
 }
-
-#: Bumped whenever a field is renamed or removed from ``to_dict``. Adding a
-#: field does not bump it; a reader can then tell a missing key from a changed
-#: one.
-SCHEMA_VERSION = 1
-
 
 #: Grid resolution. The defaults hold four significant digits against a doubled
 #: grid on the Gaussian models; the ``omega`` axis is the coarsest because it is
@@ -742,7 +738,7 @@ class RobmaResult:
     def to_dict(self) -> dict:
         return {
             "schema_version": SCHEMA_VERSION,
-            "software": _software(),
+            "software": software_versions(),
             "diagnostics": self.diagnostics.to_dict(),
             "k": self.k,
             "level": self.level,
@@ -991,18 +987,6 @@ def _grid_summary(nodes, terms: list[np.ndarray], point_mass: float,
             "q_high": float(np.interp(1.0 - tail, cdf, xs)),
             "point_mass": float(point_mass),
             "prob_positive": float(np.sum(mass[nodes > 0.0]))}
-
-
-def _software() -> dict:
-    """The versions a saved result needs to be reproducible later."""
-    import platform
-
-    import scipy
-
-    from . import __version__ as pimeta_version
-
-    return {"pimeta": pimeta_version, "python": platform.python_version(),
-            "numpy": np.__version__, "scipy": scipy.__version__}
 
 
 def _bias_label(spec) -> str:

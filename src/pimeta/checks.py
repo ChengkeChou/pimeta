@@ -42,7 +42,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-__all__ = ["Diagnostic", "diagnose"]
+__all__ = ["Diagnostic", "SCHEMA_VERSION", "diagnose", "software_versions"]
+
+#: Bumped whenever a field is renamed or removed from a result's ``to_dict``.
+#: Adding a field does not bump it, so a reader can tell a missing key from a
+#: changed one.
+SCHEMA_VERSION = 1
 
 #: Severities, worst first. ``error`` means the numbers are not reportable as if
 #: valid, ``warning`` means reportable with a caveat, ``info`` is worth knowing.
@@ -255,6 +260,18 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
 _CHECKS = (_check_tau2_zero, _check_variance_component, _check_ill_conditioned,
            _check_boundary_correlation, _check_few_studies,
            _check_posterior_equals_prior)
+
+
+def software_versions() -> dict:
+    """The versions a saved result needs in order to be reproducible later."""
+    import platform
+
+    import scipy
+
+    from . import __version__ as pimeta_version
+
+    return {"pimeta": pimeta_version, "python": platform.python_version(),
+            "numpy": np.__version__, "scipy": scipy.__version__}
 
 
 def diagnose(fit) -> Diagnosis:

@@ -232,8 +232,24 @@ class RmaResult:
     #: test on the cluster-robust covariance instead of guessing the default.
     btt: list[int] | None = None
 
+    @property
+    def diagnostics(self):
+        """The structured diagnostics for this fit.
+
+        A property rather than a stored field, so a check can be added or
+        removed without changing what a fit computes.
+        """
+        from .checks import diagnose
+
+        return diagnose(self)
+
     def to_dict(self) -> dict:
+        from .checks import SCHEMA_VERSION, software_versions
+
         return {
+            "schema_version": SCHEMA_VERSION,
+            "software": software_versions(),
+            "diagnostics": self.diagnostics.to_dict(),
             "b": self.b,
             "se": self.se,
             "zval": self.zval,
