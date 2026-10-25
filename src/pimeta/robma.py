@@ -230,21 +230,45 @@ def _z_from_p(p: float) -> float:
     return float(stats.norm.isf(p))
 
 
+def _critical_z(p: float, side: str) -> float:
+    """The critical value for a p-value cut, on the correct scale.
+
+    A one-sided p-value of 0.05 is 1.645 standard deviations; a two-sided one is
+    1.96, because the same 0.05 is split over both tails.
+    """
+    return float(stats.norm.isf(p / 2.0 if side == "two-sided" else p))
+
+
 def _bin_probabilities(mu, sei, s, wf: WeightFunction) -> np.ndarray:
     """Probability of each p-value bin, shape ``(..., n_bins)``.
 
-    The bin edges are placed on the study's **own** p-value scale, so they sit at
-    ``sei * z``, while the probability of falling between two of them is taken
-    from the marginal distribution ``N(mu, s)`` with
-    ``s**2 = sei**2 + tau**2``. The two scales are not interchangeable and
-    confusing them produces plausible-looking numbers, which is why they are
-    separate arguments.
+    The bins run from the most significant end, so bin 0 is ``p <= steps[0]``.
+    With :math:`q_j = P(p \\le a_j)` the vector is
+
+    .. math::
+
+        (q_1,\\ q_2 - q_1,\\ \\dots,\\ 1 - q_m),
+
+    which is the forward difference of ``(0, q_1, ..., q_m, 1)``. The previous
+    version differenced ``(1, q_1, ..., q_m, 0)`` backwards, which reversed the
+    two bins and, with three steps, produced a negative probability: for
+    :math:`\\mu = 0`, :math:`s = 1` and ``steps = (0.025, 0.05)`` the bins came
+    out as :math:`(0.975, -0.025, 0.05)` instead of
+    :math:`(0.025, 0.025, 0.95)`. Nothing in the fit complained, because a
+    negative bin probability only makes the likelihood wrong, not infinite.
+
+    The edges are placed on the study's **own** p-value scale, so they sit at
+    ``sei * z``, while the probabilities are taken from the marginal
+    distribution ``N(mu, s)`` with ``s**2 = sei**2 + tau**2``. Two-sided
+    p-values need the critical value :math:`\\Phi^{-1}(1 - p/2)`, not
+    :math:`\\Phi^{-1}(1 - p)`, or the bins do not sum to one.
     """
     arrays = np.broadcast_arrays(np.asarray(mu, dtype=float),
                                  np.asarray(sei, dtype=float),
                                  np.asarray(s, dtype=float))
     mu, sei, s = arrays
-    z = np.array([_z_from_p(step) for step in wf.steps], dtype=float)
+    z = np.array([_critical_z(step, wf.side) for step in wf.steps],
+                 dtype=float)
     edges = sei[..., None] * z.reshape((1,) * (sei.ndim) + (-1,))
     if wf.side == "two-sided":
         upper = stats.norm.sf(edges, mu[..., None], s[..., None])
@@ -252,13 +276,10 @@ def _bin_probabilities(mu, sei, s, wf: WeightFunction) -> np.ndarray:
         inside = upper + lower
     else:
         inside = stats.norm.sf(edges, mu[..., None], s[..., None])
-    # cum[j] = P(p-value above cut j), so the bins are the differences of
-    # (1, cum..., 0); dropping the trailing zero would silently lose the last
-    # bin and leave the likelihood with the wrong number of columns
     cumulative = np.concatenate(
-        [np.ones(mu.shape + (1,)), inside, np.zeros(mu.shape + (1,))],
+        [np.zeros(mu.shape + (1,)), inside, np.ones(mu.shape + (1,))],
         axis=-1)
-    return -np.diff(cumulative, axis=-1)
+    return np.diff(cumulative, axis=-1)
 
 
 def _observed_bin(yi: np.ndarray, sei: np.ndarray,

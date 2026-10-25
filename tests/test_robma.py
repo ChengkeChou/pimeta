@@ -192,26 +192,23 @@ def test_fixed_weights_agree_with_the_reference_under_its_indexing(fixture):
         wf = ma.step_weight_function(side, steps)
         fit = _fit_selection(yi, sei, wf=wf, effect_free=True,
                              hetero_free=True, prior=DEFAULTS,
-                             grid=DEFAULT_GRID, omega_fixed=(0.5, 1.0))
+                             grid=DEFAULT_GRID, omega_fixed=(1.0, 0.5))
         mass = np.exp(fit.mu_grid_logw - np.max(fit.mu_grid_logw))
         mass = mass / mass.sum()
         got = float(np.sum(mass * fit.mu_grid_nodes))
-        assert got == pytest.approx(want, abs=0.012), (side, steps)
+        assert got == pytest.approx(want, abs=0.005), (side, steps)
 
 
-def test_the_free_weight_posterior_stays_near_the_unadjusted_effect(fixture):
-    """A sanity bound where no reference comparison is possible.
+def test_the_free_weight_posterior_matches_the_reference(fixture):
+    """The free-weight model, which could not be pinned until the bins were fixed.
 
-    The reference's own fixed-weight and free-weight pathways disagree about
-    which end of the p-value scale the reference bin sits at, so the free model
-    cannot be pinned against it. What can be stated is that the weights are
-    estimated rather than extreme: the pooled effect stays between the
-    no-selection value and the fixed-weight values.
+    ``bselmodel`` (one-sided, steps 0.05, free weights, ESS 33673) gives
+    :math:`\\mu` 0.276; this gives 0.2757.
     """
     yi, sei = fixture
     wf = ma.step_weight_function("one-sided", [0.05])
     free = ma.robma(yi, sei, bias_models=(wf,), grid={"omega": 9})
-    assert 0.25 < free.mu["mean"] < 0.36
+    assert free.mu["mean"] == pytest.approx(0.276, abs=0.02)
     assert free.mu["sd"] > 0.0
 
 
