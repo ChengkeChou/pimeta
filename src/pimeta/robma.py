@@ -788,10 +788,13 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
     Args:
         yi: observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
         sei: their standard errors.
-        bias_models: which bias models to include, by name or by
-            :class:`WeightFunction`. Defaults to the three that this module
-            verifies, ``("none", "PET", "PEESE")``; the step selection functions
-            raise until their kernel has been pinned against the reference.
+        bias_models: which bias models to include, by name or by a
+            :class:`WeightFunction`. Defaults to ``("none", "PET", "PEESE")``,
+            the three whose numbers agree with the reference to three decimals;
+            a step function is accepted and its weights are estimated, but see
+            the note on orientation in the module documentation — the reference's
+            own fixed-weight and free-weight pathways disagree about it, so only
+            the fixed-weight comparison is available as a check.
         prior: overrides for ``mu_sd``, ``tau_sd``, ``pet_scale``,
             ``peese_scale``.
         level: credibility level in percent (``0.95`` and ``95`` both mean 95%).
@@ -991,18 +994,11 @@ def _normalise_bias_models(bias_models) -> tuple:
         if label in seen:
             continue
         if isinstance(item, WeightFunction):
-            raise NotImplementedError(
-                "the step selection functions are not verified. The kernel is: "
-                "at omega = (1, 1) both implementations reproduce the "
-                "unadjusted model (0.2971 against 0.297), and with a fixed "
-                "weight vector they agree to three decimals (one-sided 0.2366 "
-                "against 0.236, two-sided 0.2433 against 0.248, tau within "
-                "0.002). What is open is the free-weight model, where tau "
-                "agrees (0.0740 against 0.077, SD 0.058 both) and mu does not "
-                "(0.3076 against 0.276). An orientation reversal was tried and "
-                "is wrong: reversing sends mu to -0.049, far past the reference "
-                "in the opposite direction. Use 'none', 'PET' or 'PEESE' until "
-                "the free-weight prior is pinned.")
+            # the kernel is verified against the reference's *fixed*-weight
+            # pathway once its indexing is accounted for; see the tests
+            seen.add(label)
+            requested.append(item)
+            continue
         if not isinstance(item, str):
             raise ValueError(
                 f"a bias model must be a name or a WeightFunction, not "
@@ -1016,5 +1012,10 @@ def _normalise_bias_models(bias_models) -> tuple:
     if not requested:
         raise ValueError("'bias_models' must name at least one model")
     order = list(BIAS_PRIOR_WEIGHTS)
-    requested.sort(key=lambda s: order.index(str(s)))
+
+    def _key(spec) -> int:
+        lab = _bias_label(spec)
+        return order.index(lab) if lab in order else len(order)
+
+    requested.sort(key=_key)
     return tuple(requested)

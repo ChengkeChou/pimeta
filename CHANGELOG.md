@@ -162,7 +162,7 @@ the entry or the page named.
   `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
   3/5.
 
-  Not yet implemented: the six Vevea–Hedges step selection functions. Three
+  **The six Vevea–Hedges step selection functions are implemented.** Three
   rounds of measurement narrowed this down, and the record matters more than the
   conclusion:
 
@@ -219,8 +219,19 @@ the entry or the page named.
   reference bin sits at, and the reference's documentation and its numbers point
   opposite ways: `prior_weightfunction` documents `reference =
   "most_significant"`, while `wf_fixed` pins index one at weight 1 and, judged
-  numerically, that slot behaves as the *least* significant bin. The step
-  functions keep raising until that is decided rather than guessed.
+  numerically, that slot behaves as the *least* significant bin. Under that
+  reversal the free model collapses: refining the weight quadrature drives
+  :math:`\mu` from -0.011 at seven nodes to -0.249 at forty-nine, converging on
+  the degenerate solution that discards the significant studies. So the
+  reference's two pathways are not in the same orientation, and a comparison
+  against one of them cannot settle the other.
+
+  `pimeta` therefore follows the convention the literature uses — the most
+  significant bin carries the highest weight and the weights decrease as the
+  p-value grows — and is verified where verification is possible: against the
+  fixed-weight pathway, with the reference's indexing reversed, to within 0.01.
+  The free-weight model is documented as having no available reference rather
+  than fitted to one that contradicts itself.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to

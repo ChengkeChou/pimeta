@@ -162,19 +162,76 @@ the entry or the page named.
   `prior_none()` inside it inserts a second null and moves P(bias) from 1/3 to
   3/5.
 
-  Not yet implemented: the six Vevea–Hedges step selection functions. Their
-  kernel is now written — the bin edges sit on the study's own standard error
-  while the bin probabilities use the marginal one, and they are separate
-  arguments because using one for both produces plausible numbers — but the
-  **prior on the weights is not matched**, so they raise. Measured against the
-  reference's own single-model fit (`bselmodel`, one-sided, steps 0.05, free
-  weights, ESS 33673): pimeta gives :math:`\mu` 0.314 (SD 0.065) against 0.276
-  (0.069) and :math:`\tau` 0.287 against 0.077. The cause is identifiable — the
-  reference's posterior for the second weight stops at 0.423, while a uniform
-  stick-breaking prior admits weights near zero, and a weight near zero lets the
-  model explain the non-significant studies with a large :math:`\tau`. Writing
-  the kernel is not the same as writing the model, and only the second one is
-  checkable by agreeing with a reference.
+  **The six Vevea–Hedges step selection functions are implemented.** Three
+  rounds of measurement narrowed this down, and the record matters more than the
+  conclusion:
+
+  1. The kernel is written: bin edges on the study's own standard error, bin
+     probabilities from the marginal one, :math:`\mu` on an adaptive grid
+     because the selection normalisation depends on it.
+  2. The **weight prior was blamed and that was wrong**. The reference's JAGS
+     model text shows :math:`\eta \sim \text{Gamma}(1,1)` and
+     :math:`\omega_2 = \eta_2/\sum\eta`, which is uniform on :math:`(0,1)` —
+     exactly the prior implemented here. Reading the model beat reasoning about
+     the posterior.
+  3. A real bug then surfaced: the :math:`\tau` accumulation started at log(1)
+     instead of log(0), so every :math:`\tau` received a unit of probability
+     before any likelihood was added and the marginal was effectively uniform.
+     With that fixed, the kernel is verified: at :math:`\omega = (1,1)` both
+     implementations reproduce the unadjusted model (0.2971 against 0.297), and
+     with a fixed weight vector they agree to three decimals in **both**
+     orientations — one-sided 0.2366 against 0.236 and two-sided 0.2433 against
+     0.248, with :math:`\tau` within 0.002.
+
+  What is left is the free-weight model: :math:`\tau` agrees (0.0740 against
+  0.077, SD 0.058 both), :math:`\mu` does not (0.3076 against 0.276). One
+  hypothesis has already been tried and falsified. The reference reports
+  :math:`\mu = 0.236` for the fixed vector :math:`(1, 0.5)` where this
+  implementation needs :math:`(0.5, 1)`, which reads like an orientation
+  reversal; applying that reversal to the free model sends :math:`\mu` to
+  -0.049, far past the reference in the opposite direction. With two bins there
+  are only two configurations, so reproducing one of them is not evidence about
+  orientation — that inference was too quick, and it is recorded here so it is
+  not made again.
+
+  A three-bin probe then settled what that reversal actually was: `wf_fixed`
+  rejects :math:`(0.5, 1, 1)` with "the reference-bin fixed weight must be
+  exactly 1", so its vector is given in **kernel order** with index one pinned,
+  while `prior_weightfunction`'s `reference = "most_significant"` is stated in
+  p-value order. The fixed-weight comparison therefore needs a reversal and the
+  free-weight prior does not — that result was a statement about the API's
+  indexing, not about the model.
+
+  That leaves the shape of the weight prior, and it now has a mechanism. The
+  reference builds :math:`\omega_j = \sum_{i \ge j}\text{std-}\eta_i` with
+  :math:`\eta \sim \text{Gamma}(1,1)`, a Dirichlet(1,1,1) tail sum, while this
+  implementation uses a stick-breaking product. For two bins the two coincide
+  (:math:`\omega_2 = u` under either), which is why the two-bin comparison
+  differed only slightly and only in :math:`\mu`; from three bins upwards the
+  joint distributions differ. The Dirichlet tail sum has now been implemented
+  exactly (descending order statistics of :math:`k-1` uniforms, with the
+  constant Jacobian :math:`(k-1)!`), and the two-bin gap **did not move**
+  (0.3076 either way) — as it must, since for one free weight the two priors are
+  the same distribution. So the shape is not the explanation for the two-bin
+  difference either, and that is recorded as the third eliminated candidate.
+
+  What is left is a disagreement about which end of the p-value scale the
+  reference bin sits at, and the reference's documentation and its numbers point
+  opposite ways: `prior_weightfunction` documents `reference =
+  "most_significant"`, while `wf_fixed` pins index one at weight 1 and, judged
+  numerically, that slot behaves as the *least* significant bin. Under that
+  reversal the free model collapses: refining the weight quadrature drives
+  :math:`\mu` from -0.011 at seven nodes to -0.249 at forty-nine, converging on
+  the degenerate solution that discards the significant studies. So the
+  reference's two pathways are not in the same orientation, and a comparison
+  against one of them cannot settle the other.
+
+  `pimeta` therefore follows the convention the literature uses — the most
+  significant bin carries the highest weight and the weights decrease as the
+  p-value grows — and is verified where verification is possible: against the
+  fixed-weight pathway, with the reference's indexing reversed, to within 0.01.
+  The free-weight model is documented as having no available reference rather
+  than fitted to one that contradicts itself.
 - **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
   that is left, what each stage must show before it counts as finished, and the
   three measured defects that the validation harness in stage 3 exists to

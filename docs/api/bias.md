@@ -579,7 +579,7 @@ are read off `RoBMA` 4.0.0 rather than from its papers, which differ.
 
 - `yi` — observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
 - `sei` — their standard errors.
-- `bias_models` — which bias models to include, by name or by `WeightFunction`. Defaults to the three that this module verifies, ``("none", "PET", "PEESE")``; the step selection functions raise until their kernel has been pinned against the reference.
+- `bias_models` — which bias models to include, by name or by a `WeightFunction`. Defaults to ``("none", "PET", "PEESE")``, the three whose numbers agree with the reference to three decimals; a step function is accepted and its weights are estimated, but see the note on orientation in the module documentation — the reference's own fixed-weight and free-weight pathways disagree about it, so only the fixed-weight comparison is available as a check.
 - `prior` — overrides for ``mu_sd``, ``tau_sd``, ``pet_scale``, ``peese_scale``.
 - `level` — credibility level in percent (``0.95`` and ``95`` both mean 95%).
 - `grid` — quadrature nodes per axis: ``tau`` and ``beta``. The effect is integrated analytically and has no grid.

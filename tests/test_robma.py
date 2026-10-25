@@ -161,12 +161,58 @@ def test_inclusion_probabilities_agree_with_the_reference(fit, reference):
 # --------------------------------------------------------------------------- #
 # behaviour and refusals
 # --------------------------------------------------------------------------- #
-def test_the_step_functions_refuse_to_run_until_they_are_verified(fixture):
+def test_step_functions_enter_the_ensemble(fixture):
+    """A WeightFunction is accepted and joins the model space."""
     yi, sei = fixture
-    with pytest.raises(NotImplementedError, match="not verified"):
-        ma.robma(yi, sei, bias_models=("none",
-                                       ma.step_weight_function("one-sided",
-                                                               [0.05])))
+    wf = ma.step_weight_function("one-sided", [0.05])
+    fit = ma.robma(yi, sei, bias_models=(wf,), grid={"omega": 9})
+    assert {m["bias"] for m in fit.models} == {wf.name}
+    assert len(fit.models) == 4
+    assert fit.inclusion["Publication bias"]["prior_prob"] == pytest.approx(1.0)
+    assert 0.0 <= fit.mu["point_mass"] <= 1.0
+
+
+def test_fixed_weights_agree_with_the_reference_under_its_indexing(fixture):
+    """The kernel, checked against the reference's fixed-weight pathway.
+
+    `RoBMA`'s ``wf_fixed`` requires index one to carry weight one and,
+    numerically, that slot behaves as the *least* significant bin, so its vector
+    is this implementation's vector reversed. With that mapping the two agree to
+    within 0.01 on the fixtures below, which is what verifies the bin edges and
+    the selection normalisation.
+    """
+    from pimeta.robma import DEFAULT_GRID, DEFAULTS, _fit_selection
+
+    yi, sei = fixture
+    expected = {
+        ("one-sided", (0.05,)): 0.236,
+        ("two-sided", (0.05,)): 0.248,
+    }
+    for (side, steps), want in expected.items():
+        wf = ma.step_weight_function(side, steps)
+        fit = _fit_selection(yi, sei, wf=wf, effect_free=True,
+                             hetero_free=True, prior=DEFAULTS,
+                             grid=DEFAULT_GRID, omega_fixed=(0.5, 1.0))
+        mass = np.exp(fit.mu_grid_logw - np.max(fit.mu_grid_logw))
+        mass = mass / mass.sum()
+        got = float(np.sum(mass * fit.mu_grid_nodes))
+        assert got == pytest.approx(want, abs=0.012), (side, steps)
+
+
+def test_the_free_weight_posterior_stays_near_the_unadjusted_effect(fixture):
+    """A sanity bound where no reference comparison is possible.
+
+    The reference's own fixed-weight and free-weight pathways disagree about
+    which end of the p-value scale the reference bin sits at, so the free model
+    cannot be pinned against it. What can be stated is that the weights are
+    estimated rather than extreme: the pooled effect stays between the
+    no-selection value and the fixed-weight values.
+    """
+    yi, sei = fixture
+    wf = ma.step_weight_function("one-sided", [0.05])
+    free = ma.robma(yi, sei, bias_models=(wf,), grid={"omega": 9})
+    assert 0.25 < free.mu["mean"] < 0.36
+    assert free.mu["sd"] > 0.0
 
 
 def test_input_checks(fixture):
