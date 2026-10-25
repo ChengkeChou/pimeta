@@ -62,6 +62,7 @@ nav:
   - Coming from R: migration-from-r.md
   - Guides:
       - Capability matrix: guide/capability-matrix.md
+      - Roadmap: guide/roadmap.md
       - Effect sizes: guide/effect-sizes.md
       - Pooling: guide/pooling.md
       - Meta-regression: guide/meta-regression.md

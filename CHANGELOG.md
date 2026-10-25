@@ -18,11 +18,20 @@ the entry or the page named.
   missing is the model *set* (no bias / PET / PEESE / selection with each of
   several weight functions × fixed / random effects) and the discrete moves
   between them. The reference implementation, the `RoBMA` R package, needs
-  JAGS, and JAGS cannot be installed in this environment: conda-forge has no
-  win-64 build and the SourceForge installer host is unreachable. Once a model
-  set can be averaged over, it would also have to be checked; shipping it on
-  the strength of "the sampler is fine" is the one thing this package does not
-  do.
+  JAGS, and no JAGS can be linked here. The obstacle is narrower than "JAGS is
+  unavailable on Windows", which would be false: conda-forge does publish
+  `m2w64-jags` 4.3.0 for `win-64`. It depends on `m2w64-gcc-libs`,
+  `m2w64-openblas` and `msys2-conda-epoch` and was built in December 2020, so it
+  is an **msvcrt** build, while every R from 4.2 onwards — including the 4.6.1
+  here — is **UCRT**; a UCRT R cannot safely link an msvcrt static library.
+  `r-rjags` has no conda-forge build at all, and the SourceForge installer host
+  is unreachable from this machine. Building a second CRAN R 4.6 would not help,
+  because it is the same UCRT R with the same mismatch. Once a model set can be
+  averaged over, it would also have to be checked; shipping it on the strength
+  of "the sampler is fine" is the one thing this package does not do. What JAGS
+  is needed for is the *specification* — the model set, the weight functions and
+  the priors — since exact quadrature can check the arithmetic of any model set
+  it is given but cannot say which set the reference used.
 - **Dynamic heterogeneity is implemented for a parametric scale only.** The
   pooled effect and :math:`\tau^2` may each be constant, linear or quadratic in
   a continuous index, and both estimators are validated. A **non-parametric**
@@ -118,6 +127,18 @@ the entry or the page named.
 
 ### Added
 
+- **A roadmap page.** `docs/guide/roadmap.md` sets out the order of the work
+  that is left, what each stage must show before it counts as finished, and the
+  three measured defects that the validation harness in stage 3 exists to
+  repay. It also records the decision on the reference environment, and why a
+  *reference* environment is a development-time oracle rather than a runtime
+  dependency.
+
+  The ordering differs from the intuitive one in a single place, and the reason
+  is a dependency: the simulation harness has to report convergence failures,
+  boundary estimates and condition numbers, and those are aggregates of the
+  diagnostics layer, so the diagnostics layer goes first. Two definitions of
+  "converged" in one package is a bug that takes a year to notice.
 - **Dynamic heterogeneity: a pooled effect and a :math:`\\tau^2` that both move
   with time.** `tau_trend` fits the location-scale model
   :math:`y_i \\sim N(x_i'\\beta,\\ v_i + \\exp(z_i'\\alpha))` — the model
