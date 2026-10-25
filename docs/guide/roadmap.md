@@ -66,6 +66,19 @@ discovered a year later.
 
 ## Stage 0 — a reference environment
 
+**Status: done.** `RoBMA` 4.0.0 on JAGS 4.3.2, inside an Ubuntu 22.04 WSL2
+distribution whose disk is `D:\wsl\Ubuntu\ext4.vhdx` and whose R is 4.6.1 from
+the CRAN apt repository. A fifteen-study fit completes and returns posterior
+summaries with `ESS` and `R_hat`, which is the proof that the blocker below is
+gone.
+
+Two things were learned that the papers do not say, and they matter for stage 5:
+RoBMA 4.0.0 requires an explicit `measure`, and it requires `ni` or
+`unit_information_sd` before it will build its priors at all. So its
+specification is **not** the one written up in the 3.x papers — reading the model
+set off the paper would have produced the wrong one, which is exactly the failure
+mode this stage exists to prevent.
+
 **The failure is environmental, twice over.** On this machine, `rstan` 2.32.7
 fails with `sink(type = "output"): invalid connection`, and a real C++ error
 usually precedes it; JAGS has no `win-64` build on conda-forge and the

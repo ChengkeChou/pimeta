@@ -17,21 +17,17 @@ the entry or the page named.
   of the Copas selection model, with an independent NUTS check — so what is
   missing is the model *set* (no bias / PET / PEESE / selection with each of
   several weight functions × fixed / random effects) and the discrete moves
-  between them. The reference implementation, the `RoBMA` R package, needs
-  JAGS, and no JAGS can be linked here. The obstacle is narrower than "JAGS is
-  unavailable on Windows", which would be false: conda-forge does publish
-  `m2w64-jags` 4.3.0 for `win-64`. It depends on `m2w64-gcc-libs`,
-  `m2w64-openblas` and `msys2-conda-epoch` and was built in December 2020, so it
-  is an **msvcrt** build, while every R from 4.2 onwards — including the 4.6.1
-  here — is **UCRT**; a UCRT R cannot safely link an msvcrt static library.
-  `r-rjags` has no conda-forge build at all, and the SourceForge installer host
-  is unreachable from this machine. Building a second CRAN R 4.6 would not help,
-  because it is the same UCRT R with the same mismatch. Once a model set can be
-  averaged over, it would also have to be checked; shipping it on the strength
-  of "the sampler is fine" is the one thing this package does not do. What JAGS
-  is needed for is the *specification* — the model set, the weight functions and
-  the priors — since exact quadrature can check the arithmetic of any model set
-  it is given but cannot say which set the reference used.
+  between them. The reference implementation now runs — `RoBMA` 4.0.0 on JAGS
+  4.3.2 inside an Ubuntu 22.04 WSL2 distribution — but not on Windows, and the
+  reason is worth recording: no Windows JAGS can be linked. conda-forge's
+  `m2w64-jags` 4.3.0 depends on `m2w64-gcc-libs`, `m2w64-openblas` and
+  `msys2-conda-epoch` and was built in December 2020, so it is an **msvcrt**
+  build, while every R from 4.2 onwards is **UCRT**; `r-rjags` has no conda-forge
+  build at all. What remains is the implementation and its verification. Once a
+  model set can be averaged over it has to be checked, and shipping it on the
+  strength of "the sampler is fine" is the one thing this package does not do.
+  Exact quadrature can check the arithmetic of any model set it is given; only
+  the reference can say which set it used, which is what the environment is for.
 - **Dynamic heterogeneity is implemented for a parametric scale only.** The
   pooled effect and :math:`\tau^2` may each be constant, linear or quadratic in
   a continuous index, and both estimators are validated. A **non-parametric**
