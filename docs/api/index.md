@@ -1,6 +1,6 @@
 # API reference
 
-All 518 public names in `pimeta.__all__`, generated from the source docstrings.
+All 524 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -404,6 +404,12 @@ All 518 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`MissingDataWarning`](diagnostics.md#missingdatawarning) | Diagnostics and utilities | — |
 | [`complete_cases`](diagnostics.md#complete_cases) | Diagnostics and utilities | — |
 | [`is_missing`](diagnostics.md#is_missing) | Diagnostics and utilities | — |
+| [`SCENARIOS`](validation.md#scenarios) | Validation | — |
+| [`Scenario`](validation.md#scenario) | Validation | — |
+| [`Dataset`](validation.md#dataset) | Validation | — |
+| [`simulate_study`](validation.md#simulate_study) | Validation | — |
+| [`summarise_fits`](validation.md#summarise_fits) | Validation | — |
+| [`run_scenario`](validation.md#run_scenario) | Validation | — |
 | [`plot_mv_profile`](plotting.md#plot_mv_profile) | Figures | plot.profile.rma |
 | [`forest`](plotting.md#forest) | Figures | — |
 | [`funnel`](plotting.md#funnel) | Figures | — |

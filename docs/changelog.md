@@ -123,6 +123,42 @@ the entry or the page named.
 
 ### Added
 
+- **`pimeta.validation`: known-truth simulation with its calibration on the
+  record.** `Scenario`, `simulate_study`, `summarise_fits` and `run_scenario`
+  draw data from a stated generative model and report six blocks — bias, RMSE
+  and the empirical SD against the mean reported SE, CI and PI coverage, test
+  size or power, heterogeneity recovery, and reliability (finite-estimate rate,
+  `tau2` at the boundary). Every number carries its Monte Carlo standard error,
+  because without one a coverage of 0.947 cannot be told from 0.95.
+
+  Two choices are what make the reports mean anything. The prediction interval
+  is checked against the true effect of a **new** study drawn from
+  `N(mu, tau^2)`, not against `mu`; checking it against the mean asks the wrong
+  question and makes a bad interval look conservative. And a replication whose
+  estimate is not finite is counted and excluded, never averaged over.
+
+  Six baselines at 2000 replications are committed under
+  `tests/validation/baseline/`, and `tools/validate.py` compares a fresh run
+  against them with a tolerance derived from both runs' Monte Carlo errors.
+
+  The first thing it measured is a defect: the default prediction interval
+  covers 0.8815 ± 0.0072 at `k = 20` and 0.8040 ± 0.0140 at `k = 5` against a
+  nominal 0.95. The `t` reference recovers 1.8 and 8.7 points and still falls
+  short, which identifies the shortfall as the uncertainty in `tau2` that the
+  standard formula does not charge for. Recorded as a limitation rather than
+  silently corrected, since changing it is a change of method.
+
+  The module is called `validation` and not `simulate` because `pimeta.simulate`
+  is the R-compatible `simulate.rma.uni` generic, and a submodule of that name
+  would shadow it.
+
+- **`checks`: `not_converged`.** The one condition a dynamic-heterogeneity fit
+  can report about itself, because `TauTrendResult` carries `converged`. The
+  other two warnings in that module are raised from quantities computed inside
+  the fit and then discarded, so no check could ever fire on them; storing those
+  quantities is a change to what a fit computes and is left as an open item
+  rather than papered over with a check that cannot be triggered.
+
 - **RoBMA: a posterior over publication-bias models, by exact quadrature.**
   `robma` enumerates the model space — no bias, PET and PEESE, crossed with
   :math:`\mu = 0` or :math:`\mu \sim N(0, 1/2)` and :math:`\tau = 0` or

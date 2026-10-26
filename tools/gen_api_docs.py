@@ -129,6 +129,8 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "_firth": ("diagnostics", "Diagnostics and utilities"),
     "_numeric": ("diagnostics", "Diagnostics and utilities"),
     "levels": ("diagnostics", "Diagnostics and utilities"),
+    # validation
+    "validation": ("validation", "Validation"),
     # plotting
     "plotting": ("plotting", "Figures"),
     # IO and ecosystem
@@ -162,6 +164,7 @@ TOPIC_ORDER = (
     ("network", "Network meta-analysis"),
     ("bias", "Publication bias"),
     ("diagnostics", "Diagnostics and utilities"),
+    ("validation", "Validation"),
     ("plotting", "Figures"),
     ("io", "Input, output and interoperability"),
     ("s3", "S3-style generics and reporting"),
@@ -182,6 +185,7 @@ NAME_TOPICS: dict[str, str] = {
     "settings_netmeta": "s3",
     "META_DEFAULTS": "s3",
     "NETMETA_DEFAULTS": "s3",
+    "SCENARIOS": "validation",
 }
 
 _SECTION = re.compile(

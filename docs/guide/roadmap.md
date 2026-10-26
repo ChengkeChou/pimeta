@@ -185,23 +185,30 @@ version checked; renaming a field breaks a test rather than a user's script.
 
 ## Stage 3 — the validation harness and the corpus
 
-Three objects, no framework:
+Three objects, no framework. The first two exist; the third exists for six
+scenarios.
 
-- **`pimeta.simulate`** — data-generating processes that return data *and* an
-  explicit `truth` dictionary. The ad-hoc generators currently scattered in
-  `tools/` move here, so a scenario is one name and not one script.
+- **`pimeta.validation`** — data-generating processes that return data *and* an
+  explicit `truth` dictionary. The name is `validation` and not `simulate`
+  because `pimeta.simulate` is already taken: it is the R-compatible
+  `simulate.rma.uni` generic, and importing a submodule of that name would
+  shadow it in the package namespace. A scenario is one `Scenario` value, not
+  one script.
 - **`tools/validate.py --scenario NAME --reps N --seed S`** — runs one scenario
   and writes one JSON with six blocks: bias, RMSE, empirical standard deviation
   against the mean estimated standard error, coverage for confidence and
-  prediction intervals, test size and power, and reliability (convergence,
-  boundary, condition number, exception rates).
-- **`tests/validation/baseline/*.json`** — committed numbers with an allowed
-  band per quantity, compared on every run.
+  prediction intervals, test size and power, and reliability (finite-estimate
+  rate, `tau2` at the boundary, `I^2`). Every block carries its Monte Carlo
+  standard error, so a number can be read instead of interpreted.
+- **`tests/validation/baseline/*.json`** — committed numbers, compared on every
+  run. The tolerance is derived from the two runs' Monte Carlo errors rather
+  than chosen by hand, so a baseline taken at 2000 replications does not flag
+  noise as a regression.
 
 **Two tiers, deliberately.** `fast` scenarios run in the default test suite with
 a fixed seed and few replications; they are regression tests for the code.
-`full` scenarios take minutes to hours and are run as a task; their output is
-committed and reviewed, and they are regression tests for the *statistics*.
+`full` scenarios take minutes and are run as a task; their output is committed
+and reviewed, and they are regression tests for the *statistics*.
 
 **What the harness can and cannot see.** A coverage estimate at 400
 replications has a Monte Carlo standard error of 0.011 at a nominal 0.95. The
@@ -209,6 +216,30 @@ harness can therefore detect gross miscalibration and nothing finer, and each
 scenario states the departure it is designed to detect and the replications that
 departure needs. A validation framework that quietly reports 0.947 and calls it
 a pass is worse than no framework.
+
+**It already found something.** Six baselines at 2000 replications, REML:
+
+| scenario | k | bias | mean SE / empirical SD | CI coverage | PI coverage | PI (`predtype="t"`) | size or power |
+|---|---|---|---|---|---|---|---|
+| `null` | 20 | −0.001 | 0.985 | 0.9335 | 0.8815 | 0.8990 | size 0.067 |
+| `alt` | 20 | −0.001 | 0.985 | 0.9335 | 0.8815 | 0.8990 | power 0.998 |
+| `fixed` (`tau2=0`) | 20 | 0.000 | 1.057 | 0.9535 | 0.9685 | 0.9785 | power 0.989 |
+| `tiny` | 5 | 0.001 | 1.019 | 0.9230 | 0.8040 | 0.8935 | power 0.388 |
+| `unequal` | 20 | −0.001 | 0.964 | 0.9275 | 0.8825 | 0.9030 | power 0.865 |
+| `outlier` | 20 | 0.049 | 1.264 | 0.9430 | 0.9770 | 0.9840 | power 0.907 |
+
+The confidence interval at `k = 20` covers 0.9335 ± 0.0056 against a nominal
+0.95, and the test rejects 0.0665 ± 0.0056 against a nominal 0.05. Both are the
+known behaviour of the normal-reference interval, which charges nothing for the
+uncertainty in `tau2`; they are recorded rather than fixed, because changing
+the default would be a change of method and not a bug fix.
+
+The prediction interval is the one that does not hold up: 0.8815 at `k = 20`
+and 0.8040 at `k = 5`. Switching to the `t` reference recovers about 1.8 and 8.7
+points respectively and still leaves a shortfall of 5.1 and 5.7 points. That is
+the measured size of the defect the literature attributes to the standard
+prediction-interval formula, and it is now the first entry in the debt list
+below.
 
 Scenario axes, chosen because they are the ones that break estimators: `tau2` at
 zero, small and large; `k` at 5, 10, 40 and 80; balanced against unbalanced
@@ -224,6 +255,8 @@ shows it:
 - Joint prediction region: 0.767 at `k = 10`.
 - Time-varying hazard ratio: the estimate sits on `rho = 1`; the interval does
   not.
+- **New:** the standard prediction interval, 0.8815 at `k = 20` and 0.8040 at
+  `k = 5` — see the table above.
 
 **The corpus, and a licence constraint that is not negotiable.** Three tiers:
 textbook data small enough to check by hand, public datasets for comparison
@@ -410,6 +443,12 @@ in the default test suite.
   is the only place where the parametric-scale advice in
   [Dynamic heterogeneity](dynamic-heterogeneity.md) stops applying.
 - **State-space `tau2(t)`** — the same prerequisite as the non-parametric case.
+- **Prediction-interval coverage.** 0.8815 ± 0.0072 at `k = 20` and
+  0.8040 ± 0.0140 at `k = 5`, measured by the `null` and `tiny` baselines. The
+  `t` reference closes part of the gap; closing the rest needs a variance that
+  accounts for the uncertainty in `tau2`, which is a change of method rather
+  than a correction. Until then the default prediction interval is a lower
+  bound on the uncertainty and this page says so.
 
 ## What could reorder this
 

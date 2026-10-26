@@ -1,0 +1,91 @@
+{
+  "counts": {
+    "reps": 2000,
+    "reps_used": 2000,
+    "reps_non_finite": 0
+  },
+  "bias": {
+    "mean_estimate": 0.19933025628155346,
+    "truth": 0.2,
+    "estimate": -0.0006697437184465527,
+    "mcse": 0.0014457957870286893,
+    "relative": -0.0033487185922327634
+  },
+  "dispersion": {
+    "rmse": 0.06464525618148964,
+    "rmse_mcse": 0.0006202190917869691,
+    "empirical_sd": 0.06465795322757917,
+    "empirical_sd_mcse": 0.0010225876841038104,
+    "mean_reported_se": 0.06232410403292887,
+    "mean_reported_se_mcse": 0.00025230814424407634,
+    "se_ratio": 0.9639046849126858,
+    "se_ratio_mcse": 0.015735990842082978,
+    "se_ratio_note": "mean reported SE divided by the empirical SD of the estimates; 1.0 is calibrated"
+  },
+  "coverage": {
+    "ci": {
+      "estimate": 0.9275,
+      "mcse": 0.005798437289477226,
+      "hits": 1855,
+      "reps": 2000
+    },
+    "ci_target": 0.95,
+    "pi": {
+      "estimate": 0.8825,
+      "mcse": 0.0072004774147274445,
+      "hits": 1765,
+      "reps": 2000
+    },
+    "pi_t": {
+      "estimate": 0.903,
+      "mcse": 0.006617816860566631,
+      "hits": 1806,
+      "reps": 2000
+    },
+    "pi_target": 0.95,
+    "pi_defined_reps": 2000,
+    "pi_target_note": "prediction intervals are checked against the true effect of an unobserved new study, drawn from N(mu, tau^2)",
+    "pi_variants_note": "'pi' is the interval the default options give; 'pi_t' is the same fit with predtype='t', which charges the t distribution for the uncertainty in tau^2. They are reported side by side so the cost of the default is a measurement, not an opinion"
+  },
+  "tests": {
+    "rejection_rate": {
+      "estimate": 0.865,
+      "mcse": 0.007641171376170017,
+      "hits": 1730,
+      "reps": 2000
+    },
+    "alpha": 0.05,
+    "role": "power"
+  },
+  "heterogeneity": {
+    "tau2_mean": 0.041056629313845176,
+    "tau2_truth": 0.04,
+    "tau2_bias": 0.0010566293138451754,
+    "tau2_bias_mcse": 0.000559930676312682,
+    "tau2_rmse": 0.02505688862761209,
+    "tau2_at_boundary": 0.005,
+    "i2_mean": 52.481264821520135
+  },
+  "reliability": {
+    "fraction_finite": 1.0,
+    "fraction_tau2_at_boundary": 0.005,
+    "note": "fraction_finite below 1 means some replications failed; the summaries above describe only the rest"
+  },
+  "schema_version": 1,
+  "scenario": {
+    "name": "unequal",
+    "k": 20,
+    "mu": 0.2,
+    "tau2": 0.04,
+    "se": 0.2,
+    "se_kind": "wide",
+    "outlier": null,
+    "note": "precisions spread by a factor of four"
+  },
+  "settings": {
+    "reps": 2000,
+    "seed": 20240101,
+    "method": "REML",
+    "level": 0.95
+  }
+}

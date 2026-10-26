@@ -523,6 +523,14 @@ from .utils import (
     update_rma,
     vec2mat,
 )
+from .validation import (
+    SCENARIOS,
+    Dataset,
+    Scenario,
+    run_scenario,
+    simulate_study,
+    summarise_fits,
+)
 
 # metafor exposes ``dfbetas``/``rstandard`` as S3 generics that pick up a model
 # object; the same short names are handy here.
@@ -884,6 +892,9 @@ __all__ = [
     # extras
     "simulate_rma", "vcalc", "hettest", "HettestResult",
     "matreg", "MatregResult", "profile_rma", "ProfileResult",
+    # validation: known-truth simulation and its calibration summaries
+    "SCENARIOS", "Scenario", "Dataset", "simulate_study", "summarise_fits",
+    "run_scenario",
     # multivariate reporting layer
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",

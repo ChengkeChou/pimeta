@@ -89,6 +89,7 @@ nav:
       - Network meta-analysis: api/network.md
       - Publication bias: api/bias.md
       - Diagnostics and utilities: api/diagnostics.md
+      - Validation: api/validation.md
       - Figures: api/plotting.md
       - Input, output and interoperability: api/io.md
       - S3-style generics: api/s3.md
