@@ -31,12 +31,12 @@ What is genuinely open:
 
 | Item | State |
 |---|---|
-| RoBMA — Bayesian model averaging over selection models | not implemented; blocked on a JAGS reference |
-| Non-parametric scale for `tau_trend` (spline or Gaussian process) | not implemented; no reference, no measured shrinkage prior |
+| RoBMA — Bayesian model averaging over selection models | implemented (36-model space, exact quadrature); the **free-weight** pathway has no third-party check, because the R reference's two pathways disagree about the kernel orientation |
+| Non-parametric scale for `tau_trend` (spline or Gaussian process) | constant, linear and quadratic are implemented and validated; the spline is not. CmdStan now builds and samples here, so a Bayesian reference is available for it |
 | HTE — formal inference on treatment-effect modification | skeleton only |
-| IPD curve band | model-based 0.816–0.884; per-point Satterthwaite df gives 0.944–0.996 except at the edge of the covariate range (0.740 at `x = 65`) |
-| Joint prediction region | coverage 0.767 at `k = 10` |
-| Time-varying hazard ratio interval | `contrast_trend()` now avoids the `rho = 1` boundary entirely for a linear trend; the joint model still reports a range there |
+| IPD curve band | model-based 0.816–0.884; per-point Satterthwaite df gives 0.944–0.996 except at the edge of the covariate range (0.740 at `x = 65`, where the sandwich itself is wrong) |
+| Joint prediction region | 0.767 at `k = 10` under chi-square, 0.827 under Hotelling and **0.903** under Kenward–Roger degrees of freedom; 0.903 is not 0.95 because a prediction region also carries the uncertainty of `Sigma` inside the ellipse |
+| Time-varying hazard ratio interval | `contrast_trend()` avoids the `rho = 1` boundary entirely for a linear trend; the joint model reports the spread across structures instead of one number |
 
 The last three are the reason stage 3 is not optional infrastructure. They are
 defects that a user would meet, and they are already measured.
@@ -293,7 +293,11 @@ shows it:
   per-point Satterthwaite degrees of freedom lift it to 0.944–0.996 except at
   the edge of the covariate range, where the CR1 sandwich itself is wrong
   (0.740 at `x = 65`, with 34% of fits on a variance boundary).
-- Joint prediction region: 0.767 at `k = 10`.
+- Joint prediction region: 0.767 at `k = 10` under the chi-square reference,
+  0.827 under Hotelling, 0.903 under Kenward–Roger degrees of freedom. The
+  remaining gap is structural rather than a quantile that has not been found
+  yet: a prediction region also carries the uncertainty of `Sigma` inside the
+  ellipse, and a denominator degrees of freedom does not calibrate that.
 - Time-varying hazard ratio: `contrast_trend()` removes the `rho = 1` boundary
   for a linear trend by construction; the joint model reports the spread across
   structures instead of one number.
