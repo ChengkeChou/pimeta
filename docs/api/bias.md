@@ -1,6 +1,6 @@
 # Publication bias
 
-*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*47 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -48,6 +48,9 @@
 | [`peters_test`](#peters_test) | — |
 | [`baujat`](#baujat) | — |
 | [`BaujatResult`](#baujatresult) | — |
+| [`sensitivity_table`](#sensitivity_table) | — |
+| [`SensitivityResult`](#sensitivityresult) | — |
+| [`SensitivityRow`](#sensitivityrow) | — |
 
 ## `egger_test`
 
@@ -847,3 +850,62 @@ BaujatResult(x: 'list[float]', y: 'list[float]', k: 'int') -> None
 ```
 
 Baujat plot coordinates (metafor::baujat.rma).
+
+## `sensitivity_table`
+
+```python
+sensitivity_table(fit, *, over=('tau2', 'leave1out', 'bias'), methods=None, level=None) -> 'SensitivityResult'
+```
+
+The same estimand under each assumption that could have been different.
+
+**Args**
+
+- `fit` — an `RmaResult` from `rma`.
+- `over` — which families to compute; a subset of ``("tau2", "leave1out", "bias")``.  ``"rho"`` is accepted only to be refused with a reason, because a univariate fit has no within-study correlation.
+- `methods` — heterogeneity estimators for the ``tau2`` family; defaults to every entry of ``METHODS`` except the one the fit used.
+- `level` — confidence level; defaults to the fit's own.
+
+**Returns**
+
+`SensitivityResult` with a baseline row, one row per variant and
+a ``refused`` list naming each variant that was not attempted and why.
+Asking only for a family that is refused returns that refusal and an
+- `empty row list` — the reason the variant is invalid *is* the answer, so
+it is not turned into an exception the caller has to guess at.
+
+**Raises**
+
+- `TypeError` — when ``fit`` is not an ``RmaResult``.
+- `ValueError` — for an unknown family, for a fit that carries no data, or for a zero-information ``over``.
+
+**Example**
+
+- `>>> res = sensitivity_table(fit)                      # doctest` — +SKIP
+- `>>> res.range("tau2")                                 # doctest` — +SKIP
+- `>>> print(res)                                        # doctest` — +SKIP
+
+## `SensitivityResult`
+
+```python
+SensitivityResult(baseline: 'SensitivityRow', rows: 'list[SensitivityRow]', refused: 'list[dict[str, str]]', families: 'list[str]', level: 'float', k: 'int', p: 'int') -> None
+```
+
+A baseline estimate and the rows that perturb it.
+
+## `SensitivityRow`
+
+```python
+SensitivityRow(family: 'str', variant: 'str', estimate: 'float', se: 'float', ci_lb: 'float', ci_ub: 'float', tau2: 'float | None' = None, detail: 'dict[str, Any]' = <factory>, reason: 'str' = '') -> None
+```
+
+One variant of the same estimand.
+
+**Attributes**
+
+- `family` — ``"baseline"``, ``"tau2"``, ``"leave1out"`` or ``"bias"``.
+- `variant` — what changed, in words a reader can act on.
+- `estimate, se, ci_lb, ci_ub` — the estimand under this variant.
+- `tau2` — the heterogeneity estimate under this variant, when it has one.
+- `detail` — anything else worth keeping (Cook's distance, hat value, ...).
+- `reason` — why this variant is worth looking at.

@@ -297,6 +297,14 @@ Done means: `ma.sensitivity` covers the five variants above, each variant's
 assumptions are stated, and a variant that is statistically invalid for a given
 fit is refused with a reason rather than attempted.
 
+**Status.** Three of the five are in `ma.sensitivity_table` (`tau2`,
+`leave1out`, `bias`), each with a one-line reason per row and a `refused` list
+that is part of the result; see [Sensitivity analyses](sensitivity.md).
+`"rho"` is accepted only to be refused for a univariate fit, because the
+assumption does not exist there. Still open: varying the effect-size method,
+which is a property of the driver rather than of the fit, and the declared
+missing-data policy.
+
 ## Stage 5 — RoBMA
 
 **The structural point that de-risks this stage.** With independent model

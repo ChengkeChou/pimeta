@@ -114,6 +114,7 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "fsn": ("bias", "Publication bias"),
     "gosh": ("bias", "Publication bias"),
     "sensitivity": ("bias", "Publication bias"),
+    "sensitivity_table": ("bias", "Publication bias"),
     "limitmeta": ("bias", "Publication bias"),
     "copas": ("bias", "Publication bias"),
     "checks": ("misc", "Other"),

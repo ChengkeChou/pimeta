@@ -398,6 +398,11 @@ from .sensitivity import (
     leave1out,
     rstudent,
 )
+from .sensitivity_table import (
+    SensitivityResult,
+    SensitivityRow,
+    sensitivity_table,
+)
 from .settings import (
     META_DEFAULTS,
     NETMETA_DEFAULTS,
@@ -895,6 +900,8 @@ __all__ = [
     # validation: known-truth simulation and its calibration summaries
     "SCENARIOS", "Scenario", "Dataset", "simulate_study", "summarise_fits",
     "run_scenario",
+    # sensitivity: one estimand under each assumption that could differ
+    "sensitivity_table", "SensitivityResult", "SensitivityRow",
     # multivariate reporting layer
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",

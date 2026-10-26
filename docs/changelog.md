@@ -123,6 +123,23 @@ the entry or the page named.
 
 ### Added
 
+- **`sensitivity_table`: one estimand under every assumption that could have
+  been different.** Three families — the heterogeneity estimator (every method
+  in `METHODS`, including `FE`), leave-one-out with Cook's distance and hat
+  value attached to each row, and publication-bias adjustments that keep `mu` as
+  the estimand (limit meta-analysis at three extrapolation points, a step
+  selection model, the RoBMA posterior mean).
+
+  A variant that is statistically invalid for the fit is **refused with a
+  reason** in `result.refused` rather than attempted and dropped, because a
+  table that silently omits what it could not compute is indistinguishable from
+  one where those variants agreed. `"rho"` is accepted in `over` only to be
+  refused: a univariate fit has no within-study correlation to vary.
+
+  `MP` is not in `METHODS` — metafor treats it as an alias of `PM`, and a table
+  that lists one estimator twice looks more thorough than it is. The `EB` row
+  says in its own `reason` that it converges to `PM` by construction.
+
 - **`pimeta.validation`: known-truth simulation with its calibration on the
   record.** `Scenario`, `simulate_study`, `summarise_fits` and `run_scenario`
   draw data from a stated generative model and report six blocks — bias, RMSE

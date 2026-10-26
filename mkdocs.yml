@@ -68,6 +68,7 @@ nav:
       - Meta-regression: guide/meta-regression.md
       - Heterogeneity: guide/heterogeneity.md
       - Publication bias: guide/publication-bias.md
+      - Sensitivity analyses: guide/sensitivity.md
       - Network meta-analysis: guide/network-meta-analysis.md
       - Multilevel models: guide/multilevel.md
       - Selection and scale models: guide/selection-models.md

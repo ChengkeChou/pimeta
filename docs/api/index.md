@@ -1,6 +1,6 @@
 # API reference
 
-All 524 public names in `pimeta.__all__`, generated from the source docstrings.
+All 527 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -345,6 +345,9 @@ All 524 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`peters_test`](bias.md#peters_test) | Publication bias | — |
 | [`baujat`](bias.md#baujat) | Publication bias | — |
 | [`BaujatResult`](bias.md#baujatresult) | Publication bias | — |
+| [`sensitivity_table`](bias.md#sensitivity_table) | Publication bias | — |
+| [`SensitivityResult`](bias.md#sensitivityresult) | Publication bias | — |
+| [`SensitivityRow`](bias.md#sensitivityrow) | Publication bias | — |
 | [`level_to_alpha`](diagnostics.md#level_to_alpha) | Diagnostics and utilities | — |
 | [`level_to_percent`](diagnostics.md#level_to_percent) | Diagnostics and utilities | — |
 | [`MvProfileResult`](diagnostics.md#mvprofileresult) | Diagnostics and utilities | profile.rma |
