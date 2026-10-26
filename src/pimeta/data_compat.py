@@ -684,8 +684,23 @@ def _is_scalar(value) -> bool:
 
 
 def _flatten(obj, prefix=""):
-    """Yield ``(name, value)`` pairs; arrays are summarised, not expanded."""
-    data = obj.to_dict() if hasattr(obj, "to_dict") else dict(vars(obj))
+    """Yield ``(name, value)`` pairs; arrays are summarised, not expanded.
+
+    A ``to_dict()`` payload may itself contain mappings -- the ``diagnostics``
+    block added for the result schema is one -- so a plain ``dict`` has to be
+    accepted as an input here as well as an object. The earlier version assumed
+    every mapping had a ``__dict__`` and raised ``TypeError`` the moment a
+    result grew a nested block, which broke ``to_html`` for every fit.
+    """
+    if isinstance(obj, Mapping):
+        data = dict(obj)
+    elif hasattr(obj, "to_dict"):
+        data = obj.to_dict()
+    elif hasattr(obj, "__dict__"):
+        data = dict(vars(obj))
+    else:
+        yield prefix.rstrip("."), obj
+        return
     for key, value in data.items():
         name = f"{prefix}{key}"
         if isinstance(value, Mapping):

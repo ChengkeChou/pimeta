@@ -94,6 +94,16 @@ the entry or the page named.
 
 ### Fixed
 
+- **`to_html` crashed on every result whose `to_dict()` had a nested block.**
+  The table flattener recursed into a mapping and then called `vars()` on it, so
+  the moment `RmaResult.to_dict()` grew a `diagnostics` block — itself a dict —
+  rendering any table raised `TypeError: vars() argument must have no
+  `__dict__` attribute`. No test caught it because the diagnostics tests check
+  the payload and the table tests predate the payload; only running the whole
+  suite at once connected the two. The flattener now accepts a mapping as an
+  input as well as an object, nested rows keep their dotted names, and a test
+  asserts that a fit's `diagnostics` block reaches the table.
+
 - **Copas validation against `metasens`, separated into its two halves.** The
   selection model's pipeline was audited stage by stage by feeding pimeta's
   sensitivity surface to metasens' own downstream code (`contourLines`, the

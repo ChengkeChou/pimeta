@@ -311,6 +311,21 @@ def test_to_html_truncates():
     assert "more fields" in short
 
 
+def test_to_html_survives_a_nested_mapping_in_to_dict():
+    # `RmaResult.to_dict()` carries a `diagnostics` block, which is a dict. The
+    # flattener used to assume that every mapping it recursed into was an
+    # object with a __dict__, so adding that block broke `to_html` for every
+    # fit. Nothing in the diagnostics tests noticed, because they never render
+    # a table.
+    r = ma.rma(FRAME["yi"], FRAME["vi"])
+    assert isinstance(r.to_dict()["diagnostics"], dict)
+    html = to_html(r)
+    assert "diagnostics." in html, (
+        "nested mappings should reach the table with a dotted name")
+    table = to_dataframe(r)
+    assert table is not None
+
+
 def test_install_repr_html_is_idempotent():
     namespace = {"RmaResult": ma.RmaResult}
     assert install_repr_html(namespace) == 0
