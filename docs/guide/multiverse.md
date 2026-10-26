@@ -89,6 +89,29 @@ the answer sits, not in what order the loop visited the cells. Each row keeps th
 choices that produced it, so a cluster of similar estimates can be traced to the
 decision that defines it.
 
+### The figure
+
+```python
+fig = ma.plot_specification_curve(
+    mv, mark_default=mv.curve()[0]["id"], filename="curve.png")
+```
+
+The upper panel is the curve: one interval per usable specification, ordered by
+its estimate, with the median marked. The panels below are the decision margins —
+for each decision, which value each specification took. Reading down a column
+says "these analyses agreed on this decision"; reading across a row says "this
+decision changed here".
+
+The margins are the point of the figure. The curve alone invites the reader to
+attribute the movement to whichever decision they already suspected; the values
+underneath make a *cluster* visible instead, and a cluster is what an interaction
+looks like. The decomposition's blind spot and the figure's useful feature are
+the same thing seen from two sides.
+
+`mark_default` puts the primary analysis inside its own multiverse. A figure of
+this kind should always be able to say which of the specifications it draws was
+the one pre-specified.
+
 ## Choosing an estimand
 
 `multiverse` needs `(estimate, ci_lb, ci_ub)` per result. The default reads the

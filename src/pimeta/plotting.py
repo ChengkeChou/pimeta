@@ -1687,3 +1687,142 @@ def plot_permutest(x, btt=None, nbin=None, figsize=None, col="0.8",
     if filename:
         fig.savefig(filename)
     return PlotResult(ax=flat[0], figure=fig, filename=filename)
+
+
+def plot_specification_curve(
+    mv,
+    *,
+    filename=None,
+    figsize=None,
+    title=None,
+    mark_default=None,
+) -> PlotResult:
+    """The specification curve, with the decisions underneath it.
+
+    Both kinds of panel share one ordinal axis: the x position is the rank of a
+    specification in the estimate ordering, so a column can be read straight down
+    from an interval to every decision that produced it. The upper panel puts the
+    estimate on the y axis with its interval; the lower ones show, for each
+    decision, which value each specification took.
+
+    Why the margins and not a table: the curve alone invites the reader to
+    attribute the movement to whichever decision they already suspected. Putting
+    the values underneath makes a cluster visible instead, and clusters are what
+    interactions look like.
+
+    The first version of this figure plotted the estimate on the x axis with the
+    specifications stacked on y, and shared that axis with the margins -- so the
+    margins were drawn at positions 0..M-1 on an axis measured in effect sizes,
+    and all but the first marker fell outside the view. The tests passed; only
+    rendering it showed the bug. The markers are now on the ordinal axis they
+    belong to, and a test pins the shared x range to the number of
+    specifications.
+
+    Args:
+        mv: a :class:`~pimeta.multiverse.MultiverseResult`. Anything with
+            ``curve()``, ``decisions`` and ``counts()`` works.
+        filename: save the figure here (300 dpi); ``None`` leaves it in memory.
+        figsize: figure size in inches; the default grows with the number of
+            decisions, because a fixed height would crush them together.
+        title: figure title; defaults to the counts and the range.
+        mark_default: an optional specification id to highlight in the curve --
+            the primary analysis inside its own multiverse.
+
+    Returns:
+        :class:`PlotResult` whose ``ax`` is the upper (curve) panel.
+
+    Raises:
+        ValueError: when no specification produced a usable estimate, because a
+            specification curve of nothing is not a diagnostic.
+    """
+    rows = list(mv.curve())
+    if not rows:
+        raise ValueError(
+            "no specification produced a usable estimate; there is no curve to "
+            "draw (see MultiverseResult.failed for the reasons)")
+    decisions = list(mv.decisions)
+    counts = mv.counts()
+
+    estimates = np.array([row["estimate"] for row in rows], dtype=float)
+    ci_lb = np.array([row["ci_lb"] for row in rows], dtype=float)
+    ci_ub = np.array([row["ci_ub"] for row in rows], dtype=float)
+    positions = np.arange(estimates.size)
+
+    n_panels = 1 + len(decisions)
+    if figsize is None:
+        figsize = (7.4, 2.4 + 1.05 * n_panels)
+    # Constrained layout, not tight_layout: tight_layout warns (and lays out
+    # wrongly) for a figure built from add_gridspec with shared axes.
+    fig = plt.figure(figsize=figsize, layout="constrained")
+    grid = fig.add_gridspec(
+        n_panels, 1, height_ratios=[3.0] + [1.0] * len(decisions))
+    ax_curve = fig.add_subplot(grid[0])
+
+    ax_curve.errorbar(
+        positions, estimates,
+        yerr=[estimates - ci_lb, ci_ub - estimates],
+        fmt="o", markersize=3.4, color="C0", ecolor="0.55",
+        elinewidth=1.0, capsize=0, zorder=2)
+    ax_curve.axhline(0.0, color="0.3", linewidth=0.9, linestyle="--", zorder=0)
+    median = float(np.median(estimates))
+    ax_curve.axhline(median, color="C3", linewidth=0.9, linestyle=":", zorder=0,
+                     label=f"median {median:+.4f}")
+    ax_curve.set_ylabel("estimate (interval per specification)", fontsize=8)
+    ax_curve.tick_params(labelsize=7)
+    ax_curve.legend(fontsize=7, loc="lower right", frameon=True,
+                    framealpha=0.88, edgecolor="none")
+
+    if mark_default is not None:
+        hits = [i for i, row in enumerate(rows) if row["id"] == mark_default]
+        if hits:
+            i = hits[0]
+            ax_curve.plot([positions[i]], [estimates[i]], "o", markersize=9,
+                          markerfacecolor="none", markeredgecolor="C3",
+                          markeredgewidth=1.4, zorder=3,
+                          label="the primary analysis")
+            ax_curve.annotate(f"{estimates[i]:+.4f}", (positions[i], estimates[i]),
+                              textcoords="offset points", xytext=(8, 6),
+                              fontsize=7, color="C3")
+
+    markers = ("o", "s", "^", "D", "v", "P", "X", "*", "<", ">")
+    for j, name in enumerate(decisions):
+        ax = fig.add_subplot(grid[j + 1], sharex=ax_curve)
+        levels: list = []
+        for row in rows:
+            value = row.get(name)
+            if value not in levels:
+                levels.append(value)
+        for k, level in enumerate(levels):
+            where = [i for i, row in enumerate(rows) if row.get(name) == level]
+            ax.plot(where, np.full(len(where), k), markersize=3.4,
+                    linestyle="none", marker=markers[k % len(markers)],
+                    color=f"C{k % 10}")
+        ax.set_yticks(range(len(levels)))
+        ax.set_yticklabels([str(v) for v in levels], fontsize=7)
+        ax.set_ylabel(name, fontsize=8, rotation=0, ha="right", va="center")
+        ax.tick_params(labelsize=7)
+        ax.grid(axis="x", color="0.9", linewidth=0.6)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+
+    # The shared axis is ordinal: from the first specification to the last, with
+    # a little room either side. Anything else would draw the margins against a
+    # scale measured in effect sizes.
+    ax_curve.set_xlim(-0.6, max(0.6, estimates.size - 0.4))
+    low = min(float(ci_lb.min()), 0.0)
+    high = max(float(ci_ub.max()), 0.0)
+    pad = 0.06 * (high - low if high > low else 1.0)
+    ax_curve.set_ylim(low - pad, high + pad)
+    ax_curve.set_title(
+        title if title is not None
+        else (f"{counts['usable']} usable of {counts['considered']} "
+              f"specification(s); estimate {estimates.min():+.4f} to "
+              f"{estimates.max():+.4f}"
+              + (f"; {counts['failed']} failed" if counts["failed"] else "")),
+        fontsize=9, loc="left")
+    for ax in fig.axes[:-1]:
+        ax.tick_params(labelbottom=False)
+    fig.axes[-1].set_xlabel("specification, ordered by estimate", fontsize=8)
+    if filename:
+        fig.savefig(filename, dpi=300, bbox_inches="tight")
+    return PlotResult(ax=ax_curve, figure=fig, filename=filename)

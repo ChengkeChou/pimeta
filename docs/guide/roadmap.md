@@ -421,10 +421,12 @@ what the numbers do not mean.
 
 **Status.** `ma.multiverse` produces all five, with failures counted and named;
 see [Multiverse analysis](multiverse.md). The specification curve is ordered by
-estimate and each row keeps the choices that produced it. Still open: nothing in
-stage 7's list, but the plotting side — the curve drawn with the decision margins
-underneath — is not built, and the decomposition is one-way, so it leaves
-interactions unattributed by construction.
+estimate and each row keeps the choices that produced it, and
+`ma.plot_specification_curve` draws it with the decision margins underneath, so a
+cluster of similar estimates can be traced to the decision that defines it.
+What is still missing is nothing in stage 7's list, but the decomposition remains
+one-way: it leaves interactions unattributed by construction, which is why the
+figure — not the decomposition — is where interactions are meant to be seen.
 
 ## Stage 8 — performance
 

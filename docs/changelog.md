@@ -200,6 +200,35 @@ the entry or the page named.
   so the share of significant specifications is not a probability that the effect
   is real.
 
+- **`plot_specification_curve`: the curve with the decisions underneath it.** The
+  upper panel draws one interval per usable specification, ordered by estimate,
+  with the median marked and an optional `mark_default=` circling the primary
+  analysis inside its own multiverse. The panels below are the decision margins:
+  for each decision, which value each specification took.
+
+  The margins are the point. The curve alone invites the reader to attribute the
+  movement to whichever decision they already suspected; the values underneath
+  make a *cluster* visible instead, and a cluster is what an interaction looks
+  like — the same fact as the one-way decomposition leaving interactions
+  unattributed, seen from the other side.
+
+  A multiverse with no usable specification is refused rather than drawn empty,
+  and the title carries the counts and the number of failures.
+
+- **`MissingPolicy`: the missing-data assumption is declared, not implied.**
+  Three strategies are named with the assumption each needs — `complete_case`
+  (consistent only under MCAR), `available_case` (more data, no coherent
+  covariance) and `likelihood` (full-information ML, valid under MAR given a
+  correct model) — and `fit.missing` reads the handling a fit actually performed.
+  `mechanism` defaults to `"unknown"` rather than `"MCAR"`: a policy that claims
+  missingness is ignorable without evidence is worse than one that admits it does
+  not know.
+
+  Multiple imputation is deliberately not a fourth strategy. Under MAR an
+  imputation procedure is only as credible as its imputation model, and verifying
+  it needs a coverage study under a *known* missingness mechanism — a project of
+  its own, not a `method="mi"` argument.
+
 - **A record can name the specification that produced it.** `build_record` and
   `save_record` take `specification=`, which accepts the `Specification`, its id
   string, or a plain `{"id": ..., "choices": ...}` mapping, and writes it into

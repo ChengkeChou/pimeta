@@ -1,6 +1,6 @@
 # Figures
 
-*24 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*25 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -9,6 +9,7 @@
 | [`funnel`](#funnel) | — |
 | [`netgraph`](#netgraph) | — |
 | [`plot_baujat`](#plot_baujat) | — |
+| [`plot_specification_curve`](#plot_specification_curve) | — |
 | [`plot_gosh`](#plot_gosh) | — |
 | [`plot_sroc`](#plot_sroc) | — |
 | [`plot_influence`](#plot_influence) | plot.infl.rma.uni |
@@ -103,6 +104,49 @@ plot_baujat(result, studlab=None, filename: 'str | None' = None, figsize: 'tuple
 Draw a Baujat plot (heterogeneity contribution vs. influence).
 
 ``result`` is a `BaujatResult` (fields ``x`` and ``y``).
+
+## `plot_specification_curve`
+
+```python
+plot_specification_curve(mv, *, filename=None, figsize=None, title=None, mark_default=None) -> 'PlotResult'
+```
+
+The specification curve, with the decisions underneath it.
+
+Both kinds of panel share one ordinal axis: the x position is the rank of a
+specification in the estimate ordering, so a column can be read straight down
+from an interval to every decision that produced it. The upper panel puts the
+estimate on the y axis with its interval; the lower ones show, for each
+decision, which value each specification took.
+
+Why the margins and not a table: the curve alone invites the reader to
+attribute the movement to whichever decision they already suspected. Putting
+the values underneath makes a cluster visible instead, and clusters are what
+interactions look like.
+
+The first version of this figure plotted the estimate on the x axis with the
+specifications stacked on y, and shared that axis with the margins -- so the
+margins were drawn at positions 0..M-1 on an axis measured in effect sizes,
+and all but the first marker fell outside the view. The tests passed; only
+rendering it showed the bug. The markers are now on the ordinal axis they
+belong to, and a test pins the shared x range to the number of
+specifications.
+
+**Args**
+
+- `mv` — a `multiverse.MultiverseResult`. Anything with ``curve()``, ``decisions`` and ``counts()`` works.
+- `filename` — save the figure here (300 dpi); ``None`` leaves it in memory.
+- `figsize` — figure size in inches; the default grows with the number of decisions, because a fixed height would crush them together.
+- `title` — figure title; defaults to the counts and the range.
+- `mark_default` — an optional specification id to highlight in the curve -- the primary analysis inside its own multiverse.
+
+**Returns**
+
+`PlotResult` whose ``ax`` is the upper (curve) panel.
+
+**Raises**
+
+- `ValueError` — when no specification produced a usable estimate, because a specification curve of nothing is not a diagnostic.
 
 ## `plot_gosh`
 

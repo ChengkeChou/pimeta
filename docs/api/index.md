@@ -1,6 +1,6 @@
 # API reference
 
-All 538 public names in `pimeta.__all__`, generated from the source docstrings.
+All 539 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -421,6 +421,7 @@ All 538 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`funnel`](plotting.md#funnel) | Figures | — |
 | [`netgraph`](plotting.md#netgraph) | Figures | — |
 | [`plot_baujat`](plotting.md#plot_baujat) | Figures | — |
+| [`plot_specification_curve`](plotting.md#plot_specification_curve) | Figures | — |
 | [`plot_gosh`](plotting.md#plot_gosh) | Figures | — |
 | [`plot_sroc`](plotting.md#plot_sroc) | Figures | — |
 | [`plot_influence`](plotting.md#plot_influence) | Figures | plot.infl.rma.uni |
