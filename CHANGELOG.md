@@ -41,6 +41,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- The IPD curve's robust band now gives **each grid point its own Satterthwaite
+  degrees of freedom** by default (`curve(robust=True, df="point")`;
+  `df="min"` keeps the previous single reference). The degrees of freedom come
+  from the cluster scores of the sandwich: the robust variance of a contrast is
+  `Σ_i (a'c_i)²`, so Satterthwaite gives `(Σu_i²)²/Σu_i⁴` with
+  `u_i = a'c_i` — the number of studies that actually carry weight at that
+  covariate value. Measured on 250 replications of twelve studies with a known
+  quadratic truth, coverage of the 95% band at covariates 45/50/55/60/65 was
+  0.816/0.884/0.836/0.860/0.740 model-based, 0.864/0.972/0.976/0.900/0.628 with
+  one df, and 0.944/0.996/0.984/0.920/0.740 with one per point. It fixes the
+  left edge and the middle (at the price of being conservative in the middle)
+  and does **not** fix the right edge, where the CR1 sandwich itself is what is
+  wrong and 34% of fits put the between-study covariance on a boundary. The
+  docstring and the capability matrix carry that table and say "better, not
+  calibrated".
 - The trend statistics of `ma.piecewise_joint` are computed by a module-level
   helper shared by `trend_test()` and the refits behind
   `structure_sensitivity()`, so the two routes cannot drift apart; a test pins

@@ -34,9 +34,9 @@ What is genuinely open:
 | RoBMA — Bayesian model averaging over selection models | not implemented; blocked on a JAGS reference |
 | Non-parametric scale for `tau_trend` (spline or Gaussian process) | not implemented; no reference, no measured shrinkage prior |
 | HTE — formal inference on treatment-effect modification | skeleton only |
-| IPD curve band | coverage measured at 0.74–0.87 against a nominal 0.95 |
+| IPD curve band | model-based 0.816–0.884; per-point Satterthwaite df gives 0.944–0.996 except at the edge of the covariate range (0.740 at `x = 65`) |
 | Joint prediction region | coverage 0.767 at `k = 10` |
-| Time-varying hazard ratio interval | estimate sits on the `rho = 1` boundary; the interval does not account for it |
+| Time-varying hazard ratio interval | `contrast_trend()` now avoids the `rho = 1` boundary entirely for a linear trend; the joint model still reports a range there |
 
 The last three are the reason stage 3 is not optional infrastructure. They are
 defects that a user would meet, and they are already measured.
@@ -289,10 +289,14 @@ network models a disconnected network against a well-connected one.
 mechanism named, or documented as a measured limitation with the scenario that
 shows it:
 
-- IPD curve band: coverage 0.74–0.87 against a nominal 0.95.
+- IPD curve band: model-based coverage 0.816–0.884 against a nominal 0.95;
+  per-point Satterthwaite degrees of freedom lift it to 0.944–0.996 except at
+  the edge of the covariate range, where the CR1 sandwich itself is wrong
+  (0.740 at `x = 65`, with 34% of fits on a variance boundary).
 - Joint prediction region: 0.767 at `k = 10`.
-- Time-varying hazard ratio: the estimate sits on `rho = 1`; the interval does
-  not.
+- Time-varying hazard ratio: `contrast_trend()` removes the `rho = 1` boundary
+  for a linear trend by construction; the joint model reports the spread across
+  structures instead of one number.
 - **New:** the standard prediction interval, 0.8815 at `k = 20` and 0.8040 at
   `k = 5` — see the table above.
 

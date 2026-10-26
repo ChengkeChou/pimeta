@@ -328,3 +328,51 @@ def test_the_band_covers_the_truth_at_the_rate_the_manual_reports():
     # catches gross miscalibration without pretending to be a precise estimate
     coverage = hits.sum() / (reps * len(points))
     assert 0.6 <= coverage <= 1.0, coverage
+
+
+# -- degrees of freedom: one reference for the band, or one per point ------- #
+
+def test_point_degrees_of_freedom_fall_where_fewer_studies_carry_the_contrast(
+        fit):
+    """The mechanism, checked directly rather than through the band.
+
+    Satterthwaite on the cluster scores counts the studies that actually carry
+    weight at that covariate value, so the ends of the support have fewer
+    degrees of freedom than the middle.
+    """
+    points = np.array([46.0, 55.0, 64.0])
+    df = fit._point_df(fit._design(points))
+    assert df.shape == (3,)
+    assert np.all(df >= 1.0)
+    assert df[0] < df[1]
+    assert df[2] < df[1]
+
+
+def test_the_point_band_differs_from_the_scalar_band_only_in_the_critical_value(
+        fit):
+    from scipy import stats
+
+    points = np.array([46.0, 55.0, 64.0])
+    scalar_band = fit.curve(points, robust=True, df="min")
+    point_band = fit.curve(points, robust=True, df="point")
+    # the covariance is the same; only the reference distribution moved
+    assert point_band.se == pytest.approx(scalar_band.se, rel=1e-12)
+    ratio = ((point_band.ci_ub - point_band.est)
+             / (scalar_band.ci_ub - scalar_band.est))
+    df = fit._point_df(fit._design(points))
+    scalar = fit._robust_vcov()[1]
+    expected = stats.t.ppf(0.975, df) / stats.t.ppf(0.975, scalar)
+    assert ratio == pytest.approx(expected, rel=1e-10)
+
+
+def test_an_unknown_df_choice_is_refused(fit):
+    with pytest.raises(ValueError, match="must be 'min' or 'point'"):
+        fit.curve([50.0], robust=True, df="nope")
+
+
+def test_the_model_based_band_ignores_the_df_choice(fit):
+    """``df`` is only read on the robust path, so it cannot change the default."""
+    plain = fit.curve([50.0])
+    also = fit.curve([50.0], df="point")
+    assert plain.ci_lb[0] == also.ci_lb[0]
+    assert plain.ci_ub[0] == also.ci_ub[0]

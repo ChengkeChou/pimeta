@@ -122,7 +122,7 @@ class IpdCurveResult:
 
     # -- the curve -------------------------------------------------------- #
     def curve(self, x=None, n: int = 50, level=None,
-              robust: bool = False) -> IpdCurve:
+              robust: bool = False, df: str = "point") -> IpdCurve:
         """Evaluate the treatment-effect curve.
 
         Args:
@@ -130,14 +130,47 @@ class IpdCurveResult:
             n: number of grid points when ``x`` is ``None``.
             level: confidence level, accepted as ``95``, ``0.95`` or ``0.05``;
                 defaults to the level the model was fitted at.
-            robust: use the CR2 cluster-robust covariance and Satterthwaite
-                degrees of freedom instead of the model-based one.  A Wald
-                band conditions on the covariance estimate, and with a dozen
-                studies the between-study variances are often estimated as
-                zero when they are not; the sandwich uses the observed
-                within-study residuals and does not depend on that estimate
-                being right.  Measured coverage for both choices is reported
-                by ``tools/coverage_ipd_curve.py``.
+            robust: use the cluster-robust covariance and a t reference
+                instead of the model-based one.  A Wald band conditions on the
+                covariance estimate, and with a dozen studies the
+                between-study variances are often estimated as zero when they
+                are not; the sandwich uses the observed within-study residuals
+                and does not depend on that estimate being right.  Measured
+                coverage for both choices is reported by
+                ``tools/coverage_ipd_curve.py``.
+            df: ``"point"`` (default) gives each grid point its own
+                Satterthwaite degrees of freedom, computed from how much each
+                study contributes to the contrast at that point: a point where
+                twelve studies all carry weight has roughly twelve, and one at
+                the edge of the support, where only two or three studies still
+                contribute, has two or three.  ``"min"`` uses one t reference
+                for the whole band, on the smallest of the per-coefficient
+                degrees of freedom, which is what ``robust()`` reports.  Only
+                read when ``robust=True``.
+
+                Measured on 250 replications of twelve studies with a known
+                quadratic truth (``tools/coverage_ipd_curve.py``), coverage of
+                the 95% confidence band at covariates 45/50/55/60/65:
+
+                =====  ======================  ============  =================
+                band   model-based t           robust + min  robust + point
+                =====  ======================  ============  =================
+                x=45   0.816                   0.864         0.944
+                x=50   0.884                   0.972         0.996
+                x=55   0.836                   0.976         0.984
+                x=60   0.860                   0.900         0.920
+                x=65   0.740                   0.628         0.740
+                =====  ======================  ============  =================
+
+                So per-point degrees of freedom fix the left edge and the
+                middle, where a single reference is too narrow, at the price of
+                being conservative in the middle.  They do **not** fix the
+                right edge: at x = 65 only a few studies carry the contrast and
+                the CR1 sandwich itself is the thing that is wrong there, not
+                only the reference distribution it is compared against.  A
+                third of these fits put the between-study covariance on a
+                boundary, which is the mechanism behind that; ``struct="HCS"``
+                or fewer basis columns is the response, not a different df.
 
         Returns:
             :class:`IpdCurve` with a confidence band for the average curve and
@@ -151,15 +184,21 @@ class IpdCurveResult:
         design = self._design(xv)
         est = design @ np.asarray(self.coef, dtype=float)
         if robust:
-            vcov, df = self._robust_vcov()
+            vcov, scalar_df = self._robust_vcov()
+            if str(df).lower() == "point":
+                crit = self._crit(level, self._point_df(design))
+            elif str(df).lower() == "min":
+                crit = self._crit(level, scalar_df)
+            else:
+                raise ValueError(
+                    f"'df' must be 'min' or 'point', not {df!r}")
         else:
-            vcov, df = np.asarray(self.vcov, dtype=float), None
+            vcov, crit = np.asarray(self.vcov, dtype=float), self._crit(level)
         var = np.einsum("gi,ij,gj->g", design, vcov, design)
         se = np.sqrt(np.maximum(var, 0.0))
         var_pred = np.einsum(
             "gi,ij,gj->g", design, vcov + self.Sigma, design)
         se_pred = np.sqrt(np.maximum(var_pred, 0.0))
-        crit = self._crit(level, df)
         lo, hi = self.support
         return IpdCurve(
             x=xv, est=est, se=se,
@@ -167,6 +206,52 @@ class IpdCurveResult:
             pred_lb=est - crit * se_pred, pred_ub=est + crit * se_pred,
             outside=(xv < lo) | (xv > hi),
         )
+
+    def _point_df(self, design: np.ndarray) -> np.ndarray:
+        """Satterthwaite degrees of freedom for each contrast in ``design``.
+
+        The robust variance of a contrast ``a`` is a sum over studies,
+        :math:`a'\\hat V a = \\sum_i (a' c_i)^2` with
+        :math:`c_i = (X'WX)^{-1} X_i' W_i e_i` the study's score.  A sum of
+        squared normals with weights :math:`u_i = a' c_i` has, by
+        Satterthwaite, :math:`(\\sum u_i^2)^2 / \\sum u_i^4` degrees of freedom
+        — equal to the number of studies when they contribute equally, and
+        close to the number that actually contribute at all when they do not.
+
+        This is the Satterthwaite reference for the **CR1** sandwich, not the
+        bias-reduced CR2 one; it shares the estimator's own small-sample
+        behaviour rather than correcting it, which is why it is offered next to
+        a measured coverage table rather than as a guaranteed 95%.
+        """
+        fit = self.fit
+        X = np.asarray(fit.X, dtype=float)
+        M = np.asarray(fit.M, dtype=float)
+        yi = np.asarray(fit.yi, dtype=float).ravel()
+        beta = np.asarray(fit.beta, dtype=float).ravel()
+        cluster = np.asarray(getattr(fit, "cluster", None)).ravel()
+        if cluster.size != X.shape[0]:
+            raise ValueError(
+                "the fit does not carry one cluster label per row, so the "
+                "per-point degrees of freedom cannot be computed")
+        W = np.linalg.inv(M)
+        bread = np.linalg.inv(X.T @ W @ X)
+        resid = yi - X @ beta
+
+        groups: dict = {}
+        for row, label in enumerate(cluster):
+            groups.setdefault(label, []).append(row)
+        scores = np.empty((len(groups), X.shape[1]))
+        for j, rows in enumerate(groups.values()):
+            idx = np.asarray(rows, dtype=int)
+            scores[j] = bread @ (X[idx].T @ W[np.ix_(idx, idx)] @ resid[idx])
+
+        u = scores @ design.T                     # studies x grid points
+        num = np.sum(u ** 2, axis=0) ** 2
+        den = np.sum(u ** 4, axis=0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            df = np.where(den > 0.0, num / den, np.nan)
+        return np.maximum(df, 1.0)
+
 
     def _robust_vcov(self):
         """CR1 sandwich with ``k - p`` degrees of freedom.
@@ -194,10 +279,11 @@ class IpdCurveResult:
                                     - self.center).values
         return np.column_stack([np.ones(basis.shape[0]), basis])
 
-    def _crit(self, level, df=None) -> float:
+    def _crit(self, level, df=None):
         alpha = level_to_alpha(self.level if level is None else level)
         if df is not None:
-            return float(stats.t.ppf(1.0 - alpha / 2.0, df))
+            # ``df`` may be an array: one Satterthwaite value per grid point
+            return stats.t.ppf(1.0 - alpha / 2.0, df)
         if self.test in ("t", "knha", "adhoc"):
             # the model's coefficient tests use their own degrees of freedom;
             # a curve combines all of them, so the smallest is the safe one
