@@ -498,6 +498,28 @@ everywhere it differs and identical at $k = 80$.  A fit with 20 or fewer
 residual degrees of freedom warns and quotes these numbers rather than letting
 a reader assume the nominal level.
 
+`ma.mv.kenward_roger_region` goes one level deeper: instead of charging the
+variance parameters as if they were free, it computes the Kenward–Roger
+denominator degrees of freedom from the observed information for the
+between-study covariance.  The derivatives are taken by refitting with
+`sigma2=theta`, so the curvature comes from the same code that fits the model.
+At $k = 10$ with $J = 2$ it gives $m = 7.2$ and a critical value of 11.7
+against 5.99 (chi-square) and 8.92 (Hotelling).  On the same harness, 150
+replications:
+
+| k | chi-square | Hotelling | Kenward–Roger |
+|---|---|---|---|
+| 10 | 0.820 | 0.820 | 0.903 |
+| 20 | 0.947 | 0.947 | 0.940 |
+
+It helps where it should — 0.820 to 0.903 at $k = 10$ — and is neutral at
+$k = 20$. But 0.903 is not 0.95, and the reason is structural: a **prediction**
+region also carries the uncertainty of $\hat\Sigma$ inside the ellipse, and that
+is not what a denominator degrees of freedom calibrates. So the default
+reference is unchanged, the function is available for a reader who wants the
+confidence-region calibration, and the measured table is reported rather than
+the nominal claim.
+
 The third column is the point.  The per-outcome intervals the region replaces
 never reach 0.95 at *any* $k$ — including $k = 80$, where the ellipsoid has
 converged — because independent intervals cannot be joint: a point can sit

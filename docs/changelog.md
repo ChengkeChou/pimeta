@@ -8,6 +8,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- `ma.mv.kenward_roger_region`: Kenward–Roger denominator degrees of freedom
+  for a joint region, computed from the variance parameters instead of charging
+  them as if they were free the way `k - p` does. The derivatives are taken by
+  refitting with `sigma2=theta`, so the curvature comes from the same code that
+  fits the model and no hand-written tensor derivative is needed; the parameter
+  vector is round-tripped through the covariance before anything is
+  differentiated, and a correlation on ±1 is refused rather than differentiated
+  through a flat likelihood. At `k = 10`, `J = 2` it gives `m = 7.2` and a
+  critical value of 11.7, against 5.99 (chi-square) and 8.92 (Hotelling).
+  Measured on the validated prediction-region harness
+  (`tools/coverage_predict_region.py`, 150 replications): coverage 0.820 under
+  chi-square and Hotelling alike at `k = 10`, **0.903** under Kenward–Roger;
+  at `k = 20`, 0.947 against 0.940. It helps where it should and is neutral
+  where it should be — but 0.903 is not 0.95, because a *prediction* region
+  also carries the uncertainty of `Sigma` inside the ellipse, which is not what
+  a denominator degrees of freedom calibrates. The default reference is
+  therefore unchanged and the table is reported instead.
 - `ma.contrast_trend` pools the change in the hazard ratio over follow-up
   without ever forming a between-study covariance. Each study is reduced inside
   the study to one number — the WLS slope of its interval-specific log hazard

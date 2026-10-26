@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from .confint import ConfintMvResult, confint_rma_mv
 from .corr import TauCorResult, tau_cor
+from .kr import kenward_roger_region
 from .region import PredictionRegion, predict_region
 from .sens import RhoSensitivityResult, rho_sensitivity
 from .vcov import shared_control_corr, vcalc
@@ -31,6 +32,7 @@ __all__ = [
     "TauCorResult",
     "RhoSensitivityResult",
     "confint_rma_mv",
+    "kenward_roger_region",
     "predict_region",
     "rho_sensitivity",
     "shared_control_corr",

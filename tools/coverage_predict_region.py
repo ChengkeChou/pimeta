@@ -92,6 +92,7 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
     print("the F reference is the Hotelling one, m = k - p")
     print()
     print(f"{'k':>5}{'chi2':>8}{'MC se':>8}{'F':>8}{'MC se':>8}"
+          f"{'KR':>8}{'MC se':>8}{'KR fail':>9}"
           f"{'marginal':>10}{'boundary':>10}{'chi2|ok':>9}{'F|ok':>8}")
     z = stats.norm.ppf(0.5 + 0.5 * level)
     rows = []
@@ -99,6 +100,8 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
         rng = np.random.default_rng([seed0, k])
         hit_z = np.zeros(reps, dtype=bool)
         hit_f = np.zeros(reps, dtype=bool)
+        hit_kr = np.zeros(reps, dtype=bool)
+        kr_bad = np.zeros(reps, dtype=bool)
         marg = np.zeros(reps, dtype=bool)
         bad = np.zeros(reps, dtype=bool)
         for r in range(reps):
@@ -108,21 +111,33 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
             tst = ma.predict_region(fit, level=level, test="t")
             hit_z[r] = d <= reg.crit
             hit_f[r] = d <= tst.crit
+            try:
+                kr = ma.mv.kenward_roger_region(fit, level=level)
+                hit_kr[r] = d <= kr["crit"]
+            except ValueError:
+                kr_bad[r] = True
             marg[r] = bool(np.all(
                 np.abs(fresh - reg.center) <= z * np.sqrt(np.diag(reg.cov))))
             bad[r] = bool(np.any(np.asarray(fit.sigma2, dtype=float) <= 1e-10))
         pz, pf, pm = hit_z.mean(), hit_f.mean(), marg.mean()
         okz, okf = hit_z[~bad], hit_f[~bad]
+        usable = ~kr_bad
+        pkr = hit_kr[usable].mean() if usable.any() else float("nan")
         print(f"{k:5d}{pz:8.3f}{_se(pz, reps):8.3f}{pf:8.3f}{_se(pf, reps):8.3f}"
+              f"{pkr:8.3f}{_se(pkr, int(usable.sum())):8.3f}"
+              f"{kr_bad.mean():9.3f}"
               f"{pm:10.3f}{bad.mean():10.3f}"
               f"{_mean(okz):9.3f}{_mean(okf):8.3f}")
-        rows.append((k, pz, pf, pm))
+        rows.append((k, pz, pf, pm, pkr))
     print()
     print("marginal is the coverage of two per-outcome z intervals: it "
           "under-covers because it ignores the correlation")
     for j, name in ((1, "chi2"), (2, "F")):
         worst = max(abs(row[j] - level) for row in rows)
         print(f"worst |coverage({name}) - {level:.2f}| = {worst:.3f}")
+    if any(np.isfinite(row[4]) for row in rows):
+        worst = max(abs(row[4] - level) for row in rows if np.isfinite(row[4]))
+        print(f"worst |coverage(KR) - {level:.2f}| = {worst:.3f}")
     return rows
 
 
