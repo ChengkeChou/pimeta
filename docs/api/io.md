@@ -1,9 +1,14 @@
 # Input, output and interoperability
 
-*37 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*42 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
+| [`AnalysisSpec`](#analysisspec) | — |
+| [`Decision`](#decision) | — |
+| [`Specification`](#specification) | — |
+| [`RunOutcome`](#runoutcome) | — |
+| [`execute`](#execute) | — |
 | [`read_rm5`](#read_rm5) | read.rm5 |
 | [`read_cdir`](#read_cdir) | read.cdir |
 | [`read_mtv`](#read_mtv) | read.mtv |
@@ -41,6 +46,81 @@
 | [`to_dataframe`](#to_dataframe) | — |
 | [`to_html`](#to_html) | — |
 | [`install_repr_html`](#install_repr_html) | — |
+
+## `AnalysisSpec`
+
+```python
+AnalysisSpec(decisions: 'tuple[Decision, ...]', version: 'int' = 1) -> None
+```
+
+A set of declared decisions and the grid it defines.
+
+**Attributes**
+
+- `decisions` — the declared decisions, in the order they should be read.
+- `version` — layout version, written to disk and into every id.
+
+## `Decision`
+
+```python
+Decision(name: 'str', values: 'tuple[Any, ...]', reasons: 'Mapping[Any, str]', default: 'Any' = None) -> None
+```
+
+One choice that the data did not force, with its admissible values.
+
+**Attributes**
+
+- `name` — the key that appears in a run record and in a table of results.
+- `values` — the admissible values, in the order the reader should meet them.
+- `reasons` — one line per value, saying why that value is defensible. Every value needs one: a value nobody can justify is not an option, and an empty string is not a justification.
+- `default` — the value used when a single specification is wanted; must be one of ``values``.
+
+**Raises**
+
+- `ValueError` — for fewer than two values, a missing or blank reason, a duplicate value, or a default that is not among the values.
+
+## `Specification`
+
+```python
+Specification(id: 'str', choices: 'tuple[tuple[str, Any], ...]') -> None
+```
+
+One point of the grid: the choices, and the id they hash to.
+
+## `RunOutcome`
+
+```python
+RunOutcome(id: 'str', choices: 'dict[str, Any]', ok: 'bool', result: 'Any' = None, error: 'str' = '', diagnostics: 'tuple[str, ...]' = ()) -> None
+```
+
+What happened when one specification was run.
+
+A failed specification is an outcome, not an exception: ``ok`` is ``False``,
+``error`` says why, and the entry stays in the list. Dropping failures is
+the largest silent bias in a published multiverse, and it starts here.
+
+## `execute`
+
+```python
+execute(spec: 'AnalysisSpec', run: 'Callable[[dict[str, Any]], Any]', *, on_error: 'str' = 'record', specs: 'list[Specification] | None' = None) -> 'list[RunOutcome]'
+```
+
+Run every specification and record what happened.
+
+**Args**
+
+- `spec` — the grid.
+- `run` — called with one ``{decision: value}`` mapping per specification; it receives the choices, so it is the caller's job to turn them into keyword arguments for a fit.
+- `on_error` — ``"record"`` (default) keeps a failed specification in the output with its error message; ``"raise"`` re-raises instead, which is what a script that cannot continue should ask for.
+- `specs` — an explicit subset of specifications to run; defaults to the whole grid.
+
+**Returns**
+
+One `RunOutcome` per specification, in the order given.
+
+**Raises**
+
+- `ValueError` — for an unknown ``on_error``.
 
 ## `read_rm5`
 

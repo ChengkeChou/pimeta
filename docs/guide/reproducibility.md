@@ -303,6 +303,85 @@ save_record("dta.json", dta_fit, data=counts,
 `pass_data=True` always injects the bundled data. `pass_data=False` never
 does, which is what you want for a function that takes no data at all.
 
+## Declaring the decisions: `AnalysisSpec`
+
+A record says what was run. A specification says what *could* have been run, and
+why each alternative was defensible. It is the object you write before you look
+at the results, and the one that makes a multiverse or a sensitivity table a
+declared set of analyses rather than an improvised one.
+
+```python
+import pimeta as ma
+
+spec = ma.AnalysisSpec(decisions=(
+    ma.Decision(
+        name="method", values=("REML", "DL", "FE"), default="REML",
+        reasons={
+            "REML": "the default here; less biased than DL at small k",
+            "DL": "what most published meta-analyses used, so it aids comparison",
+            "FE": "the assumption that there is no heterogeneity at all",
+        },
+    ),
+    ma.Decision(
+        name="test", values=("z", "knha"), default="z",
+        reasons={
+            "z": "the nominal reference; slightly liberal at small k",
+            "knha": "wider when the studies disagree; better coverage at small k",
+        },
+    ),
+))
+spec.size()          # 6
+spec.default()       # the specification made of the declared defaults
+one = spec.expand()[3]
+print(one)           # 4f9c1a0b2d3e: method=DL, test=knha
+```
+
+**Two rules keep this from becoming a combinatorics toy.** A decision enters
+only if more than one value is statistically defensible — a one-valued
+"decision" raises, because that is the method, not a choice. And the number of
+specifications is a *consequence* of what was declared; `expand()` is a Cartesian
+product, not a search, and nothing here rewards a bigger grid.
+
+**Ids come from the choices and nothing else.** Each specification's id is a
+`sha256:` digest of its own choices, so it does not change when a justification
+is reworded, when the decisions are declared in a different order, or when the
+grid is expanded twice. Two runs that made the same decisions collide on
+purpose: that is how they are recognised as the same analysis, and how a result
+is traced back to the specification that produced it.
+
+A specification round-trips through a file, and the file records its own size so
+a hand edit is caught rather than half-trusted:
+
+```python
+spec.save("spec.json")
+again = ma.AnalysisSpec.load("spec.json")
+assert [s.id for s in again.expand()] == [s.id for s in spec.expand()]
+```
+
+### Running the grid
+
+```python
+def run(choices):
+    return ma.rma(yi, vi=vi, method=choices["method"], test=choices["test"])
+
+outcomes = ma.execute(spec, run)
+usable = [o for o in outcomes if o.ok]
+failed = [o for o in outcomes if not o.ok]
+print(f"{len(usable)} usable of {len(outcomes)}; {len(failed)} failed")
+for o in failed:
+    print(o.id, o.error)
+```
+
+**A failed specification is an outcome, not an exception.** It keeps its id, its
+choices and its error message, and it stays in the list. Dropping the runs that
+did not converge is the largest silent bias in a published multiverse, and it
+starts with a bare `try: ... except: pass` in the loop. `on_error="raise"` is
+there for scripts that genuinely cannot continue.
+
+Each outcome also carries the diagnostic codes of its fit
+(`outcome.diagnostics`), so "usable" and "warned" are different columns rather
+than the same one.
+
 ## Practical advice
 
 1. **Save one record per model, in the repository that holds the paper.** A

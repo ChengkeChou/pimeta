@@ -411,6 +411,13 @@ from .settings import (
     settings_netmeta,
     setvals,
 )
+from .spec import (
+    AnalysisSpec,
+    Decision,
+    RunOutcome,
+    Specification,
+    execute,
+)
 from .surv import (
     KmResult,
     ReconstructedIpD,
@@ -902,6 +909,8 @@ __all__ = [
     "run_scenario",
     # sensitivity: one estimand under each assumption that could differ
     "sensitivity_table", "SensitivityResult", "SensitivityRow",
+    # the analysis specification: declared decisions and their grid
+    "AnalysisSpec", "Decision", "Specification", "RunOutcome", "execute",
     # multivariate reporting layer
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",
