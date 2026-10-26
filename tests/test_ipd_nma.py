@@ -46,14 +46,16 @@ Y = DATA[:, 4]
 TREAT = np.array(["B" if b > 0.5 else "C" if c > 0.5 else "A"
                   for b, c in zip(DB, DC)])
 
-# --- R 4.6.1, lme4 2.0.6, lmer(y ~ 0 + study + A + x + (0 + A | study)) ---
-R_D = [0.0702242209, 0.1491445777]
-R_SE = [0.1118358797, 0.1396767898]
-R_GAMMA = 0.5871860904
-R_SIGMA2 = 0.4955479661
-R_SIGMA = [[0.0945520125, -0.0384954842],
-           [-0.0384954842, 0.1147433433]]
-R_LOGLIK = -4269.2622289694
+# --- R 4.6.1, lme4 2.1.0, lmer(y ~ 0 + study + A + x + (0 + A | study)) ---
+# Regenerate the fixture with tools/make_ipd_nma_fixture.py and these with
+# tools/r_reference/ipd_nma.R.
+R_D = [-0.0527383413, -0.1206269834]
+R_SE = [0.1001206166, 0.1975693817]
+R_GAMMA = 0.6103484741
+R_SIGMA2 = 0.4950102593
+R_SIGMA = [[0.0546534625, 0.0008630806],
+           [0.0008630806, 0.3067673905]]
+R_LOGLIK = -4269.6772342730
 
 
 @pytest.fixture(scope="module")

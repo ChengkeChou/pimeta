@@ -94,13 +94,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   (`tools/make_onestage_slopes_fixture.py`) that fixes the seed, documents the
   design (24 studies of 165–275 participants, `D = [[0.09, 0.03],
   [0.03, 0.04]]`, residual SD 0.8) and rebuilds the file exactly, with the lme4
-  reference re-run on the rebuilt bytes. The list is down from seven files to
-  two.
+  reference re-run on the rebuilt bytes. `ipd_nma.csv` too: a generator that
+  fixes the seed and documents the design (eight studies of 180 participants
+  per arm, two of them without treatment C so the network is incomplete but
+  connected, correlated study-level arm effects, common covariate slope) with
+  the lme4 reference recomputed on the new bytes. The list is down from seven
+  files to **one** — `tvhr_piecewise.csv`, whose generator would have to
+  reproduce the per-study Poisson pipeline as well.
 - `tools/r_reference/onestage_slopes.R` added: `lme4` on the shipped
-  `onestage_slopes.csv` reproduces every pinned one-stage number, with
-  log-likelihoods agreeing to 1e-9 and variance components to 4e-6. The small
-  gap is `lme4` 2.0.6 (which produced the pinned values) against 2.1.0 (the
-  installed one), not the fixture. `tools/r_reference/ipd_nma.R` does the same
+  `onestage_slopes.csv` reproduces every pinned one-stage number. The fixture
+  and its constants are now both produced under `lme4` 2.1.0, so the reference
+  and the pinned values come from the same version; the earlier 2.0.6 pair
+  differed by up to 4e-6 in the variance components while the log-likelihoods
+  agreed to 1e-9. `tools/r_reference/ipd_nma.R` does the same
   for the IPD network fixture, including the re-expression of the
   random-effect block into the contrast parameterisation the model uses
   (`Sigma = L' V L` with `L = [B - A, C - A]`); there the log-likelihood agrees

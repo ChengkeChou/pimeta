@@ -28,7 +28,6 @@ ORIGINS = {"generated", "r-reference", "upstream", "unverified"}
 #: The files whose origin this repository cannot state. Pinned deliberately:
 #: see the module docstring.
 UNVERIFIED = {
-    "ipd_nma.csv",
     "tvhr_piecewise.csv",
 }
 

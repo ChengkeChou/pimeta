@@ -118,6 +118,18 @@ ORIGIN: dict[str, dict[str, Any]] = {
                 "(phi 0.6, SD 0.22) and between-study SD 0.18. The "
                 "generator fixes the seed and --check reproduces the bytes",
     },
+    "ipd_nma.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_ipd_nma_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "simulated individual-patient network: eight studies of 180 "
+                "participants per arm, two of them without treatment C so the "
+                "network is incomplete but connected, correlated study-level "
+                "arm effects and a common covariate slope. The generator "
+                "fixes the seed and --check reproduces the bytes, and "
+                "tools/r_reference/ipd_nma.R recomputes every pinned number "
+                "with lme4",
+    },
     "onestage_slopes.csv": {
         "origin": "generated",
         "produced_by": "tools/make_onestage_slopes_fixture.py",
@@ -176,7 +188,6 @@ ORIGIN: dict[str, dict[str, Any]] = {
 #: Fixtures whose origin is not recorded. Pinned by a test so the list can only
 #: shrink by recording a source, and can only grow by someone editing this file.
 UNVERIFIED = (
-    "ipd_nma.csv",
     "tvhr_piecewise.csv",
 )
 
