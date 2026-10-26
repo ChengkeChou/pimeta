@@ -161,3 +161,17 @@ def test_studies_dropped_fires_when_the_fit_covers_less_than_the_review():
 
 def test_studies_dropped_is_silent_when_nothing_was_dropped():
     assert "studies_dropped" not in ma.diagnose(_stub(k=6, k_all=6)).codes()
+
+
+def test_not_converged_fires_and_is_an_error():
+    diagnosis = ma.diagnose(_stub(converged=False))
+    assert "not_converged" in diagnosis.codes()
+    assert diagnosis.worst == "error"
+
+
+def test_not_converged_is_silent_when_the_search_converged():
+    assert "not_converged" not in ma.diagnose(_stub(converged=True)).codes()
+
+
+def test_not_converged_is_skipped_when_the_result_has_no_such_flag():
+    assert "not_converged" not in ma.diagnose(_stub()).codes()

@@ -242,6 +242,23 @@ def _check_zero_weight_study(fit) -> Diagnostic | None:
                "rather than implying the whole sample was used")
 
 
+def _check_not_converged(fit) -> Diagnostic | None:
+    """The optimiser says it did not converge.
+
+    Everything else in the fit is then a snapshot of a search that stopped early,
+    which is a different object from an estimate.
+    """
+    converged = getattr(fit, "converged", None)
+    if converged is None or converged:
+        return None
+    return Diagnostic(
+        code="not_converged", category="optimisation", severity="error",
+        message="the optimiser reports that it did not converge",
+        action="do not report these numbers as estimates. Increase the iteration "
+               "limit, change the starting values, or simplify the model; a "
+               "non-converged fit is a failed search, not a wide interval")
+
+
 def _check_studies_dropped(fit) -> Diagnostic | None:
     """Studies removed before fitting, which changes what the estimate covers.
 
@@ -316,8 +333,8 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
                "somewhere it should not be")
 
 
-_CHECKS = (_check_non_finite_estimate, _check_tau2_zero,
-           _check_variance_component, _check_ill_conditioned,
+_CHECKS = (_check_non_finite_estimate, _check_not_converged,
+           _check_tau2_zero, _check_variance_component, _check_ill_conditioned,
            _check_boundary_correlation, _check_studies_dropped,
            _check_zero_weight_study, _check_few_studies,
            _check_posterior_equals_prior)
