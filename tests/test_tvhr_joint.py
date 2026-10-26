@@ -13,7 +13,11 @@ Three claims are checked here, and they are different kinds of claim:
    per study and ``metafor::rma.mv`` on the stacked block reproduce every
    number, run with ``glm.control(epsilon = 1e-14)`` — the default stopping
    rule leaves the per-study variances wrong in the sixth digit, and a
-   reference that stops early is not a reference.
+   reference that stops early is not a reference.  The script is
+   ``tools/r_reference/tvhr_piecewise.R``: it rebuilds the split-follow-up
+   design explicitly and reproduces the constants below to 1e-9, including the
+   exact diagonality of each study's covariance block, which is a fact about
+   the design rather than an assumption about it.
 2. **Against itself.**  With ``struct="DIAG"`` the joint fit must reproduce
    separate pooling exactly, because a diagonal within-study covariance and a
    diagonal between-study covariance make the intervals independent.  That

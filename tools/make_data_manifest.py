@@ -188,12 +188,13 @@ ORIGIN: dict[str, dict[str, Any]] = {
 #: Fixtures whose origin is not recorded. Pinned by a test so the list can only
 #: shrink by recording a source, and can only grow by someone editing this file.
 UNVERIFIED = (
-    # The one remaining, and what leaving it here costs: its generator would
-    # have to reproduce the per-study pipeline (split_followup, then a Poisson
-    # fit per study) as well as the data, and the constants pinned in
-    # tests/test_tvhr_joint.py come from an R run whose script was not kept.
-    # Recording it as "generated" without a generator that rebuilds the bytes
-    # would be a claim this repository cannot support, so it stays listed.
+    # The one remaining.  Its *reference* is now reproducible:
+    # tools/r_reference/tvhr_piecewise.R rebuilds the split-follow-up design,
+    # fits each study with glm.fit on an explicit design matrix and pools with
+    # metafor::rma.mv, matching every pinned constant to 1e-9.  What is still
+    # missing is the generator: the file was simulated by a script that was not
+    # kept, and none of the seeds tried reproduces its bytes.  Recording it as
+    # "generated" without that would be a claim this repository cannot support.
     "tvhr_piecewise.csv",
 )
 
