@@ -373,6 +373,14 @@ diffed.
 Done means: a specification can be written to a file, expanded, executed and
 replayed, and each result names the specification that produced it.
 
+**Status.** `ma.AnalysisSpec` is in, with `Decision` (a value list, a reason per
+value, a declared default), fingerprint-derived specification ids, a file format
+that records its own size, and `ma.execute` which keeps failures as outcomes
+instead of dropping them. See
+[Reproducible analyses](reproducibility.md#declaring-the-decisions-analysisspec).
+Still open: wiring a `Specification` into `pimeta.record` so a saved fit carries
+the id of the specification that produced it, and the report object.
+
 ## Stage 7 — multiverse
 
 The statistics of stability, not a forest plot of everything:
@@ -400,6 +408,13 @@ whose weights nobody defined.
 Done means: the five quantities above are produced from a specification, failed
 specifications are in the output rather than absent from it, and the guide states
 what the numbers do not mean.
+
+**Status.** `ma.multiverse` produces all five, with failures counted and named;
+see [Multiverse analysis](multiverse.md). The specification curve is ordered by
+estimate and each row keeps the choices that produced it. Still open: nothing in
+stage 7's list, but the plotting side — the curve drawn with the decision margins
+underneath — is not built, and the decomposition is one-way, so it leaves
+interactions unattributed by construction.
 
 ## Stage 8 — performance
 

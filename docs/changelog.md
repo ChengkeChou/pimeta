@@ -133,6 +133,46 @@ the entry or the page named.
 
 ### Added
 
+- **`multiverse`: how far the answer moves across analyses that were all
+  defensible in advance.** Built on `AnalysisSpec`, it reports the counts
+  (considered, run, usable, failed), the sign agreement, the share of intervals
+  excluding zero, the estimate range and quantiles, the specification curve
+  ordered by estimate, and a variance decomposition across decision axes.
+
+  Failures are counted and named: a specification that raised, or whose result
+  could not be reduced to a finite estimate, keeps its id, its choices and its
+  error. Dropping those rows is the largest silent bias in a published
+  multiverse, because the analyses that break are not a random subset of the
+  analyses that work.
+
+  The decomposition is a one-way one, so an interaction between two decisions is
+  left unattributed and the shares sum to less than one — 0.9615 on the test
+  grid that has one. That shortfall is asserted rather than smoothed over, and it
+  is the second reason the numbers are labelled descriptive: the first is that an
+  unbalanced grid moves them.
+
+  The guide states what the numbers are not: `M` analyses are not `M` experiments,
+  so the share of significant specifications is not a probability that the effect
+  is real.
+
+- **`AnalysisSpec`: the decisions written down before the results are looked
+  at.** A value list per decision, a one-line statistical reason per value, and a
+  declared default. A one-valued "decision" is refused, because that is the
+  method rather than a choice, and the grid size is a consequence of what was
+  declared rather than something to maximise.
+
+  Every expanded specification carries a `sha256:` id computed from its choices
+  and nothing else — rewording a justification, declaring the decisions in a
+  different order, or expanding twice leaves the ids untouched, so a recorded
+  run stays recognisable and two runs that made the same decisions collide on
+  purpose. The file records its own size, a hand-edited one is refused, and a
+  future layout version is refused rather than guessed at.
+
+  `execute()` runs the grid and **keeps the failures**: a specification that
+  raised is an outcome with its id, its choices and its error message. Dropping
+  the runs that did not converge is the largest silent bias in a published
+  multiverse, and it starts with a bare `except` in the loop.
+
 - **`sensitivity_table`: one estimand under every assumption that could have
   been different.** Three families — the heterogeneity estimator (every method
   in `METHODS`, including `FE`), leave-one-out with Cook's distance and hat

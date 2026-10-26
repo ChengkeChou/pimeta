@@ -1,6 +1,6 @@
 # Input, output and interoperability
 
-*42 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -9,6 +9,8 @@
 | [`Specification`](#specification) | — |
 | [`RunOutcome`](#runoutcome) | — |
 | [`execute`](#execute) | — |
+| [`multiverse`](#multiverse) | — |
+| [`MultiverseResult`](#multiverseresult) | — |
 | [`read_rm5`](#read_rm5) | read.rm5 |
 | [`read_cdir`](#read_cdir) | read.cdir |
 | [`read_mtv`](#read_mtv) | read.mtv |
@@ -121,6 +123,38 @@ One `RunOutcome` per specification, in the order given.
 **Raises**
 
 - `ValueError` — for an unknown ``on_error``.
+
+## `multiverse`
+
+```python
+multiverse(spec: 'AnalysisSpec', run: 'Callable[[dict[str, Any]], Any]', *, extract: 'Callable[[Any], tuple[float, float, float]] | None' = None, on_error: 'str' = 'record', specs: 'list[Specification] | None' = None) -> 'MultiverseResult'
+```
+
+Run every specification and summarise how stable the answer is.
+
+**Args**
+
+- `spec` — the declared decisions.
+- `run` — called with one ``{decision: value}`` mapping per specification.
+- `extract` — turns a result into ``(estimate, ci_lb, ci_ub)``; defaults to `DEFAULT_EXTRACT`, which reads the first coefficient.
+- `on_error` — ``"record"`` (default) keeps failures; ``"raise"`` re-raises.
+- `specs` — an explicit subset to run; defaults to the whole grid.
+
+**Returns**
+
+`MultiverseResult`. Failures are counted and named, never dropped.
+
+**Raises**
+
+- `ValueError` — when a result cannot be turned into an estimate, because a silent skip would turn a broken specification into a missing row.
+
+## `MultiverseResult`
+
+```python
+MultiverseResult(outcomes: 'list[RunOutcome]', choices: 'list[dict[str, Any]]', estimates: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', ids: 'list[str]', failed: 'list[dict[str, Any]]', considered: 'int', decisions: 'tuple[str, ...]') -> None
+```
+
+What the declared analyses did, including the ones that failed.
 
 ## `read_rm5`
 
