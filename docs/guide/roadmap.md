@@ -206,6 +206,21 @@ noticing.
 Done means: a saved result from an older version can be read and its schema
 version checked; renaming a field breaks a test rather than a user's script.
 
+### Where this actually stands
+
+The schema half is done: `schema_version`, `software`, `diagnostics` and the
+golden-JSON tests are in place. The field map is written as
+[Field map: pimeta against metafor and netmeta](../reference/field-map.md), and
+`tests/test_field_map.py` verifies every claim in it that a Python repository can
+verify — each pimeta field exists on a real fit, each rename is the mechanical
+one, each "absent" field is genuinely absent. The R side of the claim rests on
+the parity tests and cannot be checked from here, which the page says.
+
+One row of that table is worth reading twice: R's `x$weight` is the *percentage*
+while `x$weights` is the raw weight. pimeta calls them `weights_pct` and
+`weights`, so a ported `x$weight → x.weight` fails loudly instead of quietly
+porting the wrong number.
+
 ## Stage 3 — the validation harness and the corpus
 
 Three objects, no framework. The first two exist; the third exists for six

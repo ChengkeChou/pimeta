@@ -210,6 +210,17 @@ the entry or the page named.
 
 ### Added
 
+- **`docs/reference/field-map.md`: the three-way table between pimeta and
+  metafor.** Same name and same statistic; same statistic under a different name;
+  absent on either side. The category that matters is the second one — a field
+  that keeps its name and changes meaning — and the sharpest row is R's
+  `x$weight` (the percentage) against `x$weights` (the raw weight): pimeta calls
+  them `weights_pct` and `weights`, so a ported `x$weight → x.weight` fails
+  loudly rather than porting the wrong number. `tests/test_field_map.py` verifies
+  every claim the repository can verify: each field exists on a real fit, each
+  rename is the mechanical one, each absent field is genuinely absent. The R side
+  rests on the parity tests, and the page says so.
+
 - **Two checks for sampling variances that cannot be variances.**
   `negative_variance` (error) fires on a fit that used a negative `vi`, which
   pimeta accepts without complaint: measured on this exact input, `vi = -0.01`

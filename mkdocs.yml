@@ -82,6 +82,7 @@ nav:
   - Reference:
       - API conventions: reference/api-conventions.md
       - Differences from R: reference/differences.md
+      - Field map against metafor: reference/field-map.md
       - R method-name map: reference/r-method-map.md
   - API reference:
       - Overview: api/index.md
