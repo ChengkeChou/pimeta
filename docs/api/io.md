@@ -127,7 +127,7 @@ One `RunOutcome` per specification, in the order given.
 ## `multiverse`
 
 ```python
-multiverse(spec: 'AnalysisSpec', run: 'Callable[[dict[str, Any]], Any]', *, extract: 'Callable[[Any], tuple[float, float, float]] | None' = None, on_error: 'str' = 'record', specs: 'list[Specification] | None' = None) -> 'MultiverseResult'
+multiverse(spec: 'AnalysisSpec', run: 'Callable[[dict[str, Any]], Any]', *, extract: 'Callable[[Any], tuple[float, float, float]] | None' = None, on_error: 'str' = 'record', specs: 'list[Specification] | None' = None, require_clean: 'bool' = True) -> 'MultiverseResult'
 ```
 
 Run every specification and summarise how stable the answer is.
@@ -139,10 +139,11 @@ Run every specification and summarise how stable the answer is.
 - `extract` — turns a result into ``(estimate, ci_lb, ci_ub)``; defaults to `DEFAULT_EXTRACT`, which reads the first coefficient.
 - `on_error` — ``"record"`` (default) keeps failures; ``"raise"`` re-raises.
 - `specs` — an explicit subset to run; defaults to the whole grid.
+- `require_clean` — when true (default), a specification whose fit reports an ``error``-severity diagnostic is moved to ``flagged`` and kept out of ``usable``. A fit that says its own numbers are not reportable should not contribute to a stability statistic; set this to ``False`` to include such fits anyway, which flags them but does not drop them.
 
 **Returns**
 
-`MultiverseResult`. Failures are counted and named, never dropped.
+`MultiverseResult`. Failures are counted and named, never dropped. ``flagged`` and ``failed`` are disjoint, so ``run == usable + failed + excluded`` holds, where ``excluded`` counts the flagged entries with ``excluded`` set.
 
 **Raises**
 
@@ -151,7 +152,7 @@ Run every specification and summarise how stable the answer is.
 ## `MultiverseResult`
 
 ```python
-MultiverseResult(outcomes: 'list[RunOutcome]', choices: 'list[dict[str, Any]]', estimates: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', ids: 'list[str]', failed: 'list[dict[str, Any]]', considered: 'int', decisions: 'tuple[str, ...]') -> None
+MultiverseResult(outcomes: 'list[RunOutcome]', choices: 'list[dict[str, Any]]', estimates: 'list[float]', ci_lb: 'list[float]', ci_ub: 'list[float]', ids: 'list[str]', failed: 'list[dict[str, Any]]', considered: 'int', decisions: 'tuple[str, ...]', flagged: 'list[dict[str, Any]]' = <factory>) -> None
 ```
 
 What the declared analyses did, including the ones that failed.

@@ -61,7 +61,7 @@ def test_default_extract_reads_the_first_coefficient():
 def test_counts_name_all_four_numbers():
     result = multiverse(_spec(), _run)
     assert result.counts() == {"considered": 4, "run": 4, "usable": 4,
-                               "failed": 0}
+                               "failed": 0, "flagged": 0}
     assert result.failure_rate == 0.0
 
 
@@ -241,7 +241,7 @@ def test_a_subset_can_be_run_and_is_counted_as_considered():
     subset = _spec().expand()[:2]
     result = multiverse(_spec(), _run, specs=subset)
     assert result.counts() == {"considered": 2, "run": 2, "usable": 2,
-                               "failed": 0}
+                               "failed": 0, "flagged": 0}
 
 
 def test_the_result_round_trips_through_json():
@@ -290,3 +290,138 @@ def test_multiverse_on_a_real_fit_grid():
     summary = result.summary()
     assert math.isfinite(summary["estimates"]["range"])
     assert summary["sign"]["agreement"] == 1.0
+
+
+# --------------------------------------------------------------- diagnostics
+
+class _Diag:
+    """The two attributes of a Diagnosis this module reads."""
+
+    def __init__(self, worst: str | None, codes: tuple[str, ...]):
+        self.worst = worst
+        self._codes = codes
+
+    def codes(self) -> list[str]:
+        return list(self._codes)
+
+
+class _Fitted(Fake):
+    def __init__(self, est: float, worst: str | None, codes: tuple[str, ...]):
+        super().__init__(est, est - 0.1, est + 0.1)
+        self.diagnostics = _Diag(worst, codes)
+
+
+def test_an_error_severity_fit_is_flagged_and_kept_out_of_the_curve():
+    # A fit that says its own numbers are not reportable must not contribute to
+    # a stability statistic. Before this, "usable" only meant "produced a finite
+    # number", so a non-converged specification counted the same as a good one.
+    def run(choices):
+        if choices["sign"] == -1:
+            return _Fitted(-0.2, "error", ("not_converged",))
+        return _Fitted(0.2, None, ())
+
+    result = multiverse(_spec(), run)
+    assert result.counts()["usable"] == 2
+    assert result.counts()["flagged"] == 2
+    assert result.counts()["failed"] == 0
+    excluded = [f for f in result.flagged if f["excluded"]]
+    assert len(excluded) == 2
+    assert excluded[0]["codes"] == ["not_converged"]
+    assert all(row["estimate"] > 0 for row in result.curve())
+
+
+def test_require_clean_false_keeps_the_flagged_fits_but_still_names_them():
+    def run(choices):
+        return _Fitted(0.2, "error", ("not_converged",))
+
+    result = multiverse(_spec(), run, require_clean=False)
+    assert result.counts()["usable"] == 4
+    assert result.counts()["flagged"] == 4
+    assert all(not f["excluded"] for f in result.flagged)
+
+
+def test_a_warning_severity_fit_stays_usable():
+    def run(choices):
+        return _Fitted(0.2, "warning", ("few_studies",))
+
+    result = multiverse(_spec(), run)
+    assert result.counts()["usable"] == 4
+    assert result.counts()["flagged"] == 4
+    assert all(not f["excluded"] for f in result.flagged)
+    assert "few_studies" in str(result)
+
+
+def test_a_result_without_diagnostics_is_neither_flagged_nor_excluded():
+    result = multiverse(_spec(), _run)
+    assert result.counts()["flagged"] == 0
+    assert result.flagged == []
+
+
+def test_a_flagged_specification_is_never_also_a_failure():
+    # `flagged` and `failed` must not overlap, or `counts()` cannot be
+    # reconciled: run = usable + failed + excluded.
+    def run(choices):
+        if choices["sign"] == -1:
+            return _Fitted(0.2, "error", ("not_converged",))
+        return Fake(float("nan"), 0.0, 1.0)
+
+    result = multiverse(_spec(), run)
+    counts = result.counts()
+    excluded = sum(1 for f in result.flagged if f["excluded"])
+    assert counts["run"] == counts["usable"] + counts["failed"] + excluded
+    assert counts["flagged"] == 2 and counts["failed"] == 2
+
+
+def test_the_flagged_entries_reach_the_export():
+    def run(choices):
+        return _Fitted(0.2, "error", ("not_converged",))
+
+    payload = json.loads(json.dumps(multiverse(_spec(), run).to_dict()))
+    assert payload["counts"]["flagged"] == 4
+    assert payload["flagged"][0]["codes"] == ["not_converged"]
+    assert payload["summary"]["flagged"]
+
+
+# ---------------------------------------------------------- diagnostics block
+
+def test_a_clean_grid_has_no_diagnostics():
+    result = multiverse(_spec(), _run)
+    assert result.diagnostics.codes() == []
+    assert result.diagnostics.worst is None
+
+
+def test_partial_failure_is_a_warning_naming_the_count():
+    def run(choices):
+        if choices["sign"] == 1:
+            raise RuntimeError("boom")
+        return Fake(0.2, 0.1, 0.3)
+
+    result = multiverse(_spec(), run)
+    diag = result.diagnostics
+    assert diag.codes() == ["specification_failed"]
+    assert diag.worst == "warning"
+    assert "2 of 4" in str(diag)
+
+
+def test_excluded_specifications_are_reported_as_such():
+    def run(choices):
+        if choices["sign"] == -1:
+            return _Fitted(0.2, "error", ("not_converged",))
+        return Fake(0.2, 0.1, 0.3)
+
+    diag = multiverse(_spec(), run).diagnostics
+    assert diag.codes() == ["specification_excluded"]
+    assert diag.worst == "warning"
+
+
+def test_a_grid_with_nothing_usable_is_an_error_not_an_empty_curve():
+    # An empty curve with no diagnostic reads as "no spread", which is the
+    # opposite of the truth: nothing was measured.
+    def run(choices):
+        raise RuntimeError("boom")
+
+    result = multiverse(_spec(), run)
+    assert result.counts()["usable"] == 0
+    assert result.diagnostics.worst == "error"
+    assert result.diagnostics.codes() == ["no_usable_specification"]
+    assert result.summary()["estimates"] is None

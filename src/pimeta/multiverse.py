@@ -30,11 +30,12 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
 
+from .checks import Diagnosis, Diagnostic
 from .spec import AnalysisSpec, RunOutcome, Specification, execute
 
 __all__ = ["MultiverseResult", "multiverse", "DEFAULT_EXTRACT"]
@@ -67,6 +68,11 @@ class MultiverseResult:
     failed: list[dict[str, Any]]
     considered: int
     decisions: tuple[str, ...]
+    #: Specifications that ran and produced an estimate but carried a
+    #: diagnostic. ``excluded`` marks the ones dropped from ``usable`` because
+    #: the fit reported an ``error``: a number a fit says is not reportable
+    #: does not belong in a stability statistic.
+    flagged: list[dict[str, Any]] = field(default_factory=list)
 
     # ---------------------------------------------------------------- counts
 
@@ -85,9 +91,64 @@ class MultiverseResult:
     # -------------------------------------------------------------- the curve
 
     def counts(self) -> dict[str, int]:
-        """Considered, run, usable, failed — the four numbers a reader needs."""
+        """Considered, run, usable, failed, flagged.
+
+        ``usable`` counts the specifications the curve is built from. A
+        specification that ran but was excluded for an ``error``-severity
+        diagnostic is in neither ``usable`` nor ``failed``: it is ``flagged``,
+        because "the fit said these numbers are not reportable" is a different
+        fact from "the fit crashed", and collapsing the two would hide the
+        first behind the second.
+        """
         return {"considered": self.considered, "run": self.run,
-                "usable": self.usable, "failed": len(self.failed)}
+                "usable": self.usable, "failed": len(self.failed),
+                "flagged": len(self.flagged)}
+
+    # ---------------------------------------------------------- diagnostics
+
+    @property
+    def diagnostics(self) -> Diagnosis:
+        """What a reader has to know before reading the curve.
+
+        A multiverse reports a spread over the specifications that produced a
+        number. Every specification that did not is a hole in that spread, and
+        the count of holes is the first thing that decides whether the spread
+        means anything: a grid with 60 of 64 specifications missing is not a
+        narrow result, it is a broken analysis with a narrow-looking report.
+
+        The codes are about the *grid*, not about any one fit. Per-fit findings
+        live on the fits and are summarised in :attr:`flagged`.
+        """
+        items: list[Diagnostic] = []
+        counts = self.counts()
+        excluded = sum(1 for f in self.flagged if f["excluded"])
+        if counts["usable"] == 0:
+            items.append(Diagnostic(
+                code="no_usable_specification", category="inference",
+                severity="error",
+                message=(f"none of the {counts['run']} specification(s) that ran "
+                         f"produced a usable estimate ({counts['failed']} failed, "
+                         f"{excluded} excluded)"),
+                action=("there is no stability statistic to read; inspect "
+                        "`failed` and `flagged` before the model or the data")))
+            return Diagnosis(items)
+        if counts["failed"]:
+            items.append(Diagnostic(
+                code="specification_failed", category="inference",
+                severity="warning",
+                message=(f"{counts['failed']} of {counts['run']} specification(s) "
+                         "produced no estimate and are absent from the curve"),
+                action=("read `failed`: the analyses that break are not a random "
+                        "subset of the analyses that work")))
+        if excluded:
+            items.append(Diagnostic(
+                code="specification_excluded", category="inference",
+                severity="warning",
+                message=(f"{excluded} of {counts['run']} specification(s) were left "
+                         "out because their own fit reported an error"),
+                action=("read `flagged`; pass require_clean=False to see them in "
+                        "the curve as well")))
+        return Diagnosis(items)
 
     def curve(self) -> list[dict[str, Any]]:
         """The usable specifications, ordered by estimate.
@@ -106,7 +167,11 @@ class MultiverseResult:
         """The five statistics, with the caveats attached to the fragile ones."""
         est = np.asarray(self.estimates, dtype=float)
         if est.size == 0:
+            # The same keys as the full block, so a caller reading `summary()`
+            # does not have to know which branch produced it. An empty grid is
+            # exactly when someone is most likely to be reading this.
             return {"counts": self.counts(), "failure_rate": self.failure_rate,
+                    "flagged": [dict(f) for f in self.flagged],
                     "estimates": None,
                     "note": "no specification produced an estimate"}
         lb = np.asarray(self.ci_lb, dtype=float)
@@ -117,6 +182,7 @@ class MultiverseResult:
         return {
             "counts": self.counts(),
             "failure_rate": self.failure_rate,
+            "flagged": [dict(f) for f in self.flagged],
             "estimates": {
                 "min": float(est.min()),
                 "max": float(est.max()),
@@ -195,13 +261,15 @@ class MultiverseResult:
             "variance_axes": self.variance_axes(),
             "curve": self.curve(),
             "failed": [dict(f) for f in self.failed],
+            "flagged": [dict(f) for f in self.flagged],
             "decisions": list(self.decisions),
         }
 
     def __str__(self) -> str:
         counts = self.counts()
         lines = [f"Multiverse over {counts['considered']} specification(s): "
-                 f"{counts['usable']} usable, {counts['failed']} failed"]
+                 f"{counts['usable']} usable, {counts['failed']} failed"
+                 + (f", {counts['flagged']} flagged" if counts["flagged"] else "")]
         block = self.summary()
         est = block.get("estimates")
         if est is None:
@@ -221,6 +289,13 @@ class MultiverseResult:
             for item in self.failed:
                 choices = ", ".join(f"{k}={v}" for k, v in item["choices"].items())
                 lines.append(f"    {item['id'][:12]} {choices}: {item['error']}")
+        if self.flagged:
+            lines.append("  specifications carrying a diagnostic:")
+            for item in self.flagged:
+                choices = ", ".join(f"{k}={v}" for k, v in item["choices"].items())
+                mark = "excluded" if item["excluded"] else "kept"
+                lines.append(f"    {item['id'][:12]} {choices}: "
+                             f"{', '.join(item['codes'])} ({mark})")
         return "\n".join(lines)
 
 
@@ -231,6 +306,7 @@ def multiverse(
     extract: Callable[[Any], tuple[float, float, float]] | None = None,
     on_error: str = "record",
     specs: list[Specification] | None = None,
+    require_clean: bool = True,
 ) -> MultiverseResult:
     """Run every specification and summarise how stable the answer is.
 
@@ -241,9 +317,17 @@ def multiverse(
             :func:`DEFAULT_EXTRACT`, which reads the first coefficient.
         on_error: ``"record"`` (default) keeps failures; ``"raise"`` re-raises.
         specs: an explicit subset to run; defaults to the whole grid.
+        require_clean: when true (default), a specification whose fit reports an
+            ``error``-severity diagnostic is moved to ``flagged`` and kept out of
+            ``usable``. A fit that says its own numbers are not reportable should
+            not contribute to a stability statistic; set this to ``False`` to
+            include such fits anyway, which flags them but does not drop them.
 
     Returns:
         :class:`MultiverseResult`. Failures are counted and named, never dropped.
+        ``flagged`` and ``failed`` are disjoint, so
+        ``run == usable + failed + excluded`` holds, where ``excluded`` counts
+        the flagged entries with ``excluded`` set.
 
     Raises:
         ValueError: when a result cannot be turned into an estimate, because a
@@ -258,11 +342,20 @@ def multiverse(
     ids: list[str] = []
     choices: list[dict[str, Any]] = []
     failed: list[dict[str, Any]] = []
+    flagged: list[dict[str, Any]] = []
     for outcome in outcomes:
         if not outcome.ok:
             failed.append({"id": outcome.id, "choices": dict(outcome.choices),
                            "error": outcome.error})
             continue
+        # The fit's own verdict, not a re-derivation of it: `execute` already
+        # collected the codes, and the severity lives on the result.
+        diag = getattr(outcome.result, "diagnostics", None)
+        codes = tuple(str(c) for c in diag.codes()) \
+            if diag is not None and hasattr(diag, "codes") \
+            else tuple(outcome.diagnostics)
+        worst = getattr(diag, "worst", None) if diag is not None else None
+        excluded = bool(require_clean and worst == "error")
         try:
             est, lb, ub = get(outcome.result)
         except Exception as exc:  # noqa: BLE001
@@ -275,6 +368,15 @@ def multiverse(
             failed.append({"id": outcome.id, "choices": dict(outcome.choices),
                            "error": "extract: a non-finite estimate"})
             continue
+        # Recorded only once the row is known not to be a failure, so that
+        # `flagged` and `failed` never both name the same specification and
+        # `run == usable + failed + excluded` holds exactly.
+        if codes:
+            flagged.append({"id": outcome.id, "choices": dict(outcome.choices),
+                            "codes": list(codes), "worst": worst,
+                            "excluded": excluded})
+        if excluded:
+            continue
         ids.append(outcome.id)
         choices.append(dict(outcome.choices))
         estimates.append(float(est))
@@ -284,4 +386,5 @@ def multiverse(
     return MultiverseResult(
         outcomes=outcomes, choices=choices, estimates=estimates,
         ci_lb=ci_lb, ci_ub=ci_ub, ids=ids, failed=failed,
+        flagged=flagged,
         considered=len(outcomes), decisions=spec.names)
