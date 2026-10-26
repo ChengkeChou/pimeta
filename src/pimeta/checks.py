@@ -206,11 +206,18 @@ def _check_boundary_correlation(fit) -> Diagnostic | None:
 
 def _check_non_finite_estimate(fit) -> Diagnostic | None:
     """A coefficient or standard error that is not a number."""
-    b = getattr(fit, "b", None)
+    # Families name their coefficient vector differently: `rma` uses `b`,
+    # `matreg` uses `beta`. Reading only `b` made the check silently skip whole
+    # model families, which is the failure mode this package keeps meeting.
+    raw = None
+    for attribute in ("b", "beta", "coef"):
+        raw = getattr(fit, attribute, None)
+        if raw is not None:
+            break
     se = getattr(fit, "se", None)
-    if b is None or se is None:
+    if raw is None or se is None:
         return None
-    parts = [np.atleast_1d(np.asarray(b, dtype=float)).ravel(),
+    parts = [np.atleast_1d(np.asarray(raw, dtype=float)).ravel(),
              np.atleast_1d(np.asarray(se, dtype=float)).ravel()]
     values = np.concatenate([p for p in parts if p.size])
     if values.size == 0 or np.all(np.isfinite(values)):
@@ -240,6 +247,54 @@ def _check_zero_weight_study(fit) -> Diagnostic | None:
         action="those studies contribute nothing to the estimate, which "
                "usually means an infinite or missing variance; report them "
                "rather than implying the whole sample was used")
+
+
+def _check_negative_variance(fit) -> Diagnostic | None:
+    """A negative sampling variance, which the fitter does not refuse.
+
+    Measured, not assumed: ``rma`` accepts ``vi = -0.01`` alongside five
+    ordinary variances and returns ``b = 0.2091``, ``se = 0.0786`` -- a
+    plausible-looking meta-analysis computed from weights ``1 / (vi + tau2)``
+    that are not all positive. Nothing in the output says so. A negative
+    variance is impossible for every effect-size measure, so its presence means
+    the input is wrong, not that the data are unusual.
+    """
+    vi = getattr(fit, "vi", None)
+    if vi is None:
+        return None
+    values = np.atleast_1d(np.asarray(vi, dtype=float)).ravel()
+    values = values[np.isfinite(values)]
+    if values.size == 0 or float(np.min(values)) >= 0.0:
+        return None
+    bad = int(np.sum(values < 0.0))
+    return Diagnostic(
+        code="negative_variance", category="data", severity="error",
+        message=(f"{bad} of {values.size} sampling variances are negative "
+                 f"(smallest {float(np.min(values)):.6g})"),
+        action="do not report these numbers. A negative variance makes the "
+               "weight 1/(vi + tau2) non-positive, so the estimate is not a "
+               "weighted mean of anything; the usual cause is an effect size "
+               "computed from a degenerate table or a mis-specified column")
+
+
+def _check_zero_variance(fit) -> Diagnostic | None:
+    """A sampling variance of exactly zero: a study treated as known exactly."""
+    vi = getattr(fit, "vi", None)
+    if vi is None:
+        return None
+    values = np.atleast_1d(np.asarray(vi, dtype=float)).ravel()
+    values = values[np.isfinite(values)]
+    if values.size == 0 or not np.any(values == 0.0):
+        return None
+    zero = int(np.sum(values == 0.0))
+    return Diagnostic(
+        code="zero_variance", category="data", severity="warning",
+        message=(f"{zero} of {values.size} sampling variances are exactly zero, "
+                 "so those studies have weight 1/tau2 and take the whole "
+                 "weight when the heterogeneity is estimated at zero"),
+        action="report this: a study with no sampling error is either a "
+               "data-entry error or a deliberate assumption, and either way "
+               "the pooled estimate is driven by it")
 
 
 def _check_not_converged(fit) -> Diagnostic | None:
@@ -281,6 +336,20 @@ def _check_studies_dropped(fit) -> Diagnostic | None:
 
 
 def _check_few_studies(fit) -> Diagnostic | None:
+    """Few studies, in a model that has to estimate a heterogeneity from them.
+
+    The condition is about identifying the between-study variance, so a result
+    that does not estimate one -- a heterogeneity test, a regression table, a
+    rankogram -- is not a ``few_studies`` problem however small its ``k``. Firing
+    there was the first false positive this rollout produced, on ``matreg`` with
+    two variables: the message talked about a variance the model never had.
+
+    A Bayesian fit stores the parameter as ``tau`` rather than ``tau2``, and it
+    estimates the same thing, so both count.
+    """
+    if (getattr(fit, "tau2", None) is None
+            and getattr(fit, "tau", None) is None):
+        return None
     k = getattr(fit, "k", None)
     if k is None or int(k) >= 5:
         return None
@@ -333,10 +402,11 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
                "somewhere it should not be")
 
 
-_CHECKS = (_check_non_finite_estimate, _check_not_converged,
-           _check_tau2_zero, _check_variance_component, _check_ill_conditioned,
-           _check_boundary_correlation, _check_studies_dropped,
-           _check_zero_weight_study, _check_few_studies,
+_CHECKS = (_check_non_finite_estimate, _check_negative_variance,
+           _check_not_converged, _check_tau2_zero, _check_variance_component,
+           _check_ill_conditioned, _check_boundary_correlation,
+           _check_studies_dropped, _check_zero_weight_study,
+           _check_zero_variance, _check_few_studies,
            _check_posterior_equals_prior)
 
 
@@ -350,6 +420,41 @@ def software_versions() -> dict:
 
     return {"pimeta": pimeta_version, "python": platform.python_version(),
             "numpy": np.__version__, "scipy": scipy.__version__}
+
+
+def attach_diagnostics(cls):
+    """Give a result class the standard ``diagnostics`` property.
+
+    Used as a class decorator, after ``@dataclass``::
+
+        @dataclass
+        @attach_diagnostics
+        class SomeResult:
+            ...
+
+    One decorator rather than a copy of the same six lines in twenty files,
+    because copies drift: three result classes already had this property written
+    by hand, and one of them had a ``diagnostics()`` method returning a dict
+    instead. A class only gets the decorator where ``diagnose``'s checks are
+    meaningful for it — a predictor table or a heterogeneity test is not a
+    meta-analysis fit, and firing ``few_studies`` on one would be a diagnostic
+    that is wrong, which is worse than one that is missing.
+
+    The property never raises: every check reads with ``getattr`` and skips what
+    the object does not carry.
+    """
+
+    def diagnostics(self) -> Diagnosis:
+        """The structured diagnostics for this fit.
+
+        A property rather than a stored field, so a check can be added or
+        removed without changing what the fit computes. Never raises: each
+        check reads what the object carries and skips the rest.
+        """
+        return diagnose(self)
+
+    cls.diagnostics = property(diagnostics)
+    return cls
 
 
 def diagnose(fit) -> Diagnosis:

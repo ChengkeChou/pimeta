@@ -192,3 +192,54 @@ def test_not_converged_is_silent_when_the_search_converged():
 
 def test_not_converged_is_skipped_when_the_result_has_no_such_flag():
     assert "not_converged" not in ma.diagnose(_stub()).codes()
+
+
+# --------------------------------------------------------------------------- #
+# sampling variances that cannot be variances
+# --------------------------------------------------------------------------- #
+def test_negative_variance_fires_on_a_real_fit_that_returned_plausible_numbers():
+    """The point of the check: the fit does not fail, it produces a number.
+
+    Measured on this exact input before writing the check: pimeta returns
+    ``b = 0.2091``, ``se = 0.0786`` from one negative variance among six. No
+    warning, no exception, no NaN. A reader has no way to tell.
+    """
+    yi = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2])
+    vi = np.array([-0.01, 0.04, 0.05, 0.03, 0.06, 0.05])
+    fit = ma.rma(yi, vi)
+    assert np.isfinite(fit.b[0]) and np.isfinite(fit.se[0])
+    diagnosis = ma.diagnose(fit)
+    assert "negative_variance" in diagnosis.codes()
+    assert diagnosis.worst == "error"
+
+
+def test_negative_variance_is_silent_on_ordinary_data():
+    yi = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2])
+    assert "negative_variance" not in ma.diagnose(ma.rma(yi, np.full(6, 0.04))).codes()
+
+
+def test_zero_variance_is_named_as_well_as_the_nan_it_causes():
+    """A zero variance has two consequences, and they are different facts.
+
+    The weights become infinite, which is the cause; the estimate becomes NaN,
+    which is the symptom. Reporting only the symptom leaves the user hunting for
+    a numerical problem in the optimiser.
+    """
+    yi = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2])
+    vi = np.array([0.0, 0.04, 0.05, 0.03, 0.06, 0.05])
+    with pytest.warns(RuntimeWarning):      # divide by zero in the weights
+        fit = ma.rma(yi, vi)
+    diagnosis = ma.diagnose(fit)
+    assert {"zero_variance", "non_finite_estimate"} <= set(diagnosis.codes())
+    assert diagnosis.worst == "error"
+
+
+def test_zero_variance_is_silent_when_every_variance_is_positive():
+    yi = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2])
+    assert "zero_variance" not in ma.diagnose(ma.rma(yi, np.full(6, 0.04))).codes()
+
+
+def test_variance_checks_are_skipped_when_the_result_carries_no_variances():
+    diagnosis = ma.diagnose(_stub())
+    assert "negative_variance" not in diagnosis.codes()
+    assert "zero_variance" not in diagnosis.codes()

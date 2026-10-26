@@ -94,6 +94,19 @@ the entry or the page named.
 
 ### Fixed
 
+- **`few_studies` fired on results that estimate no heterogeneity.** The check
+  read `k` alone, so a heterogeneity test, a `matreg` table or a rankogram with
+  fewer than five rows was told that "a between-study variance estimated from so
+  few is barely identified" — about a variance the model never estimated. The
+  condition now requires a `tau2` on the result, which is what makes the
+  sentence true. The false positive surfaced the moment `.diagnostics` was
+  rolled out to a family other than `rma`, which is the argument for rolling it
+  out at all.
+
+- **`non_finite_estimate` silently skipped every family that does not call its
+  coefficients `b`.** `matreg` uses `beta`; a result named that way was never
+  checked. The check now reads the first of `b`, `beta`, `coef` that exists.
+
 - **The multiverse counted a fit that disowned its own number as "usable".** A
   specification whose result carried an `error`-severity diagnostic — a fit that
   did not converge, an ill-conditioned design — returns finite numbers, so it
@@ -196,6 +209,32 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **Two checks for sampling variances that cannot be variances.**
+  `negative_variance` (error) fires on a fit that used a negative `vi`, which
+  pimeta accepts without complaint: measured on this exact input, `vi = -0.01`
+  among five ordinary variances returns `b = 0.2091` and `se = 0.0786` — a
+  plausible-looking meta-analysis whose weights `1 / (vi + tau2)` are not all
+  positive. `zero_variance` (warning) names the cause of the NaN that
+  `non_finite_estimate` reports as the symptom: a study treated as known exactly.
+  Both are demonstrated to fire on real fits in `tests/test_checks.py`.
+
+- **`attach_diagnostics`, and the rollout of `.diagnostics` to eight more
+  result classes.** `RmaResult`, `RmaMvResult` and `RobmaResult` had the property
+  written out by hand, one of them as a method returning a dict. The decorator
+  makes it one line: `DosresResult`, `IpdCurveResult`, `MatregResult`,
+  `NetmetaResult`, `RmaLsResult`, `RmaMhResult`, `RmaPetoResult`,
+  `SelModelResult` and `TimeCourseResult` now carry it, and the set is pinned by
+  `tests/test_diagnostics_rollout.py` so the next addition is deliberate.
+  `Diagnosis` is exported from the top level, since it is the return type of
+  every one of those properties.
+
+- **`tests/data/MANIFEST.json`**: every fixture's SHA-256, byte count, provenance
+  and the licence that governs it, with `tools/make_data_manifest.py`
+  regenerating it. Nine fixtures have no recorded source and are listed as
+  `unverified` — a pinned list, so the gap is visible and can only shrink by
+  recording a real source. A golden value is evidence only while its input is
+  fixed, and until now nothing checked that.
 
 - **`multiverse`: how far the answer moves across analyses that were all
   defensible in advance.** Built on `AnalysisSpec`, it reports the counts
@@ -1401,6 +1440,14 @@ the entry or the page named.
   machinery were all already present.
 
 ### Changed
+
+- **Breaking: `IpdCurveResult.diagnostics()` is now a property returning
+  `Diagnosis`, and the numbers moved to `IpdCurveResult.identifiability()`.**
+  The curve was the one fitted result whose `diagnostics` was a method returning
+  a dict, so its findings could not be counted alongside a fit's. Both are kept
+  because they answer different questions: the codes are countable and
+  exportable, the numbers are why a code fired. A caller of the old method needs
+  `identifiability()` for the dict and `.diagnostics.codes()` for the codes.
 
 - **Network meta-analysis records now capture the τ² estimator.** `_SETTING_ATTRS`
   gained `method_tau`, `reference_group` and `baseline_reference`, so a DL fit

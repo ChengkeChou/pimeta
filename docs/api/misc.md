@@ -1,11 +1,12 @@
 # Other
 
-*3 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*4 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
 | [`diagnose`](#diagnose) | — |
 | [`Diagnostic`](#diagnostic) | — |
+| [`Diagnosis`](#diagnosis) | — |
 | [`STRATEGIES`](#strategies) | — |
 
 ## `diagnose`
@@ -45,6 +46,14 @@ One thing worth knowing about a fit.
 - `severity` — ``error``, ``warning`` or ``info``.
 - `message` — what was found, with the numbers that show it.
 - `action` — what a user should do about it, or why there is nothing to do.
+
+## `Diagnosis`
+
+```python
+Diagnosis(items: 'list[Diagnostic]' = <factory>) -> None
+```
+
+The diagnostics for one fit, with the worst severity first.
 
 ## `STRATEGIES`
 

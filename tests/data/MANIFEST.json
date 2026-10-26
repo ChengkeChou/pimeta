@@ -1,0 +1,144 @@
+{
+  "count": 15,
+  "files": {
+    "_konstantopoulos2011.csv": {
+      "bytes": 1379,
+      "licence": "upstream",
+      "name": "_konstantopoulos2011.csv",
+      "note": "a published dataset bundled with metafor; the column set matches that dataset exactly. Redistribution is governed by metafor's licence and the original publication, not by this repository",
+      "origin": "upstream",
+      "sha256": "756fa9f9c60ee699aa9b1cc5ce61b01439ff333362e445f98aa2c38208cea23b",
+      "source": "metafor::dat.konstantopoulos2011"
+    },
+    "_nc_common_ref.csv": {
+      "bytes": 9031,
+      "licence": "unverified",
+      "name": "_nc_common_ref.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "604a8e5c3b6799753a6e249553b6c3b5f23700bb19d9144ae633330348b4a748"
+    },
+    "_nc_random_ref.csv": {
+      "bytes": 8963,
+      "licence": "unverified",
+      "name": "_nc_random_ref.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "278666efbae51a80a799ab96ff9aee703bc8963a4ac54bac98367a67b343786f"
+    },
+    "_r_senn2013.tsv": {
+      "bytes": 39794,
+      "licence": "MIT",
+      "name": "_r_senn2013.tsv",
+      "note": "output of the reference implementation, whose versions are recorded in the file's own header",
+      "origin": "r-reference",
+      "produced_by": "tools/r_reference/netmeta_senn2013.R",
+      "sha256": "559673e71a002007a663caed3d8c9d02a7b27af9ffefd3285564cf222a2f2b32"
+    },
+    "_senn2013_comparison.csv": {
+      "bytes": 1887,
+      "licence": "upstream",
+      "name": "_senn2013_comparison.csv",
+      "note": "the Senn 2013 network in contrast format, as distributed with netmeta",
+      "origin": "upstream",
+      "sha256": "de6d42e04affcd251ddf5cbcca0ac590a2cfcdee0b30d2ad44e4ff20cae5688b",
+      "source": "netmeta::senn2013"
+    },
+    "dynhet.csv": {
+      "bytes": 1399,
+      "licence": "MIT",
+      "name": "dynhet.csv",
+      "note": "simulated time-varying heterogeneity; the generating script fixes the seed, so the bytes are reproducible",
+      "origin": "generated",
+      "produced_by": "tools/make_dynhet_fixture.py",
+      "sha256": "4bdc2f1f931077ff200e33c308b9d2c1b0b8c5620054a167f8354ecc407609af"
+    },
+    "ipd_nma.csv": {
+      "bytes": 265107,
+      "licence": "unverified",
+      "name": "ipd_nma.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "535d5d0d5db986b0a0cdee0e6703206a34d804058b345ce8950999fa772878cc"
+    },
+    "nma_bayes.csv": {
+      "bytes": 1085,
+      "licence": "MIT",
+      "name": "nma_bayes.csv",
+      "note": "simulated arm-level network for the Bayesian NMA; checked against tools/quadrature_nma_bayes.py and multinma",
+      "origin": "generated",
+      "produced_by": "tools/make_nma_bayes_fixture.py",
+      "sha256": "98995e6c728dddfad4aec3d88da711cf645a5aab18817d6da6ecbcf695eed94e"
+    },
+    "nma_dose.csv": {
+      "bytes": 1039,
+      "licence": "unverified",
+      "name": "nma_dose.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "bbf25f8b685eeb6deea8a73287cb79119c2ab7984364f73f497e0f602df59959"
+    },
+    "nma_timecourse.csv": {
+      "bytes": 1683,
+      "licence": "unverified",
+      "name": "nma_timecourse.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "aef8696e694dd877e59337e5b48f002937f5c50e12677cd283032e1b22f8ecba"
+    },
+    "onestage_slopes.csv": {
+      "bytes": 128717,
+      "licence": "unverified",
+      "name": "onestage_slopes.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "e527b0fdc8dd9c3cd5830422e7085b39a4ba41826b8ac6b081b52e2dc27e4dc6"
+    },
+    "prediction_joint.csv": {
+      "bytes": 773,
+      "licence": "unverified",
+      "name": "prediction_joint.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "0c3246f9548be97faa9685e048d3c0bbe6f8d10d9eaed47d5430d879cc76b5ac"
+    },
+    "robma.csv": {
+      "bytes": 388,
+      "licence": "MIT",
+      "name": "robma.csv",
+      "note": "simulated selection-model fixture used by the RoBMA and diagnostics tests",
+      "origin": "generated",
+      "produced_by": "tools/make_robma_fixture.py",
+      "sha256": "1ea8b8d90c2ec78321785a8c176fee4f04e1e306daba93011069db74c6c7f95f"
+    },
+    "timecourse.csv": {
+      "bytes": 1494,
+      "licence": "unverified",
+      "name": "timecourse.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "c9705d318297d25c02ef9763986949ef60484c9dd2dec07b9f5066b798859026"
+    },
+    "tvhr_piecewise.csv": {
+      "bytes": 100425,
+      "licence": "unverified",
+      "name": "tvhr_piecewise.csv",
+      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
+      "origin": "unverified",
+      "sha256": "61439ac2336fb2d7e24a90ea20b350560322f398dd264edd002b808d2febe7ff"
+    }
+  },
+  "note": "Generated by tools/make_data_manifest.py. Every fixture under tests/data is listed with its SHA-256, its provenance and the licence that governs it. 'unverified' means exactly that: no source is recorded in this repository, and the entry says so rather than asserting one.",
+  "schema": 1,
+  "unverified": [
+    "_nc_common_ref.csv",
+    "_nc_random_ref.csv",
+    "ipd_nma.csv",
+    "nma_dose.csv",
+    "nma_timecourse.csv",
+    "onestage_slopes.csv",
+    "prediction_joint.csv",
+    "timecourse.csv",
+    "tvhr_piecewise.csv"
+  ]
+}

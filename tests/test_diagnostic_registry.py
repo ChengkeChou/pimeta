@@ -31,6 +31,8 @@ REGISTRY: dict[str, str] = {
     "boundary_correlation": "a correlation was estimated on its +-1 boundary",
     "non_finite_estimate": "a reported number is not finite",
     "zero_weight_study": "a study contributed no information",
+    "negative_variance": "a sampling variance is negative, so the weights are not weights",
+    "zero_variance": "a sampling variance is zero: that study is known exactly",
     "not_converged": "the optimiser stopped without converging",
     "studies_dropped": "rows were removed before fitting",
     "few_studies": "too few studies for the reference to be nominal",

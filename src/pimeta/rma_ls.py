@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import optimize, stats
 
+from .checks import attach_diagnostics
 from .missing import complete_cases
 
 __all__ = [
@@ -196,6 +197,7 @@ def _default_terms(idx, m, intercept_incl):
 # result object
 # --------------------------------------------------------------------------- #
 
+@attach_diagnostics
 @dataclass
 class RmaLsResult:
     """Location-scale fit (mirrors metafor's ``rma.ls`` objects)."""

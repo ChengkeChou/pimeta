@@ -245,8 +245,13 @@ class IpdCurveResult:
         return len(self.names) - 1
 
     # -- can the covariance be believed? ----------------------------------- #
-    def diagnostics(self) -> dict:
+    def identifiability(self) -> dict:
         """Whether the between-study covariance is identifiable at this ``k``.
+
+        The numbers, as opposed to :attr:`diagnostics`, which says the same
+        thing in the package-wide code vocabulary. Both exist because they
+        answer different questions: the codes are countable and exportable, the
+        numbers are what a reader needs to see why a code fired.
 
         A covariance matrix over ``K + 1`` coefficients has ``(K+1)(K+2)/2``
         parameters, and every one of them has to be estimated from whole
@@ -305,6 +310,68 @@ class IpdCurveResult:
             "notes": notes,
         }
 
+    @property
+    def diagnostics(self):
+        """The identifiability findings, as :class:`~pimeta.checks.Diagnosis`.
+
+        A property returning a ``Diagnosis`` like every other fitted result, so
+        a curve's findings can be counted along with a ``rma`` fit's instead of
+        needing a special case. The detail the codes summarise stays available
+        in :meth:`identifiability`.
+        """
+        from .checks import SEVERITIES, Diagnosis, Diagnostic
+
+        detail = self.identifiability()
+        items = []
+        tau2 = np.asarray(self.tau2, dtype=float)
+        at_zero = detail["tau2_at_zero"]
+        if tau2.size and len(at_zero) == tau2.size:
+            items.append(Diagnostic(
+                code="tau2_zero", category="boundary", severity="warning",
+                message="every between-study variance in the curve "
+                        "covariance is estimated at zero",
+                action="no heterogeneity was detected, so the prediction band "
+                       "equals the confidence band; that is an estimate, not "
+                       "a failure, and it should be said in the report"))
+        elif at_zero:
+            items.append(Diagnostic(
+                code="variance_component_zero", category="boundary",
+                severity="warning",
+                message=f"variance component(s) {at_zero} of the curve "
+                        "covariance sit at zero",
+                action="the curve is fixed rather than estimated in those "
+                       "directions; report the band with that caveat"))
+        if detail["rho_at_bound"]:
+            items.append(Diagnostic(
+                code="boundary_correlation", category="boundary",
+                severity="warning",
+                message=f"correlation(s) {detail['rho_at_bound']} sit on "
+                        "+/-1, which makes the covariance singular",
+                action="the likelihood is flat along that ridge, so another "
+                       "implementation may stop elsewhere and the band "
+                       "inherits the difference"))
+        condition = detail["condition"]
+        if np.isfinite(condition) and condition >= 1e10:
+            items.append(Diagnostic(
+                code="ill_conditioned", category="identifiability",
+                severity="warning",
+                message=f"the curve covariance has condition number "
+                        f"{condition:.3g}",
+                action="the coefficients are nearly collinear, so their "
+                       "standard errors are large for a structural reason"))
+        n_vc = detail["n_variance_parameters"]
+        if n_vc and self.k < 3 * n_vc:
+            items.append(Diagnostic(
+                code="few_studies", category="identifiability",
+                severity="warning",
+                message=f"{self.k} studies for {n_vc} variance parameters: "
+                        "fewer than three per parameter",
+                action="use struct='HCS' (one common correlation) or fewer "
+                       "basis columns; an unstructured covariance needs more "
+                       "studies than this"))
+        items.sort(key=lambda d: SEVERITIES.index(d.severity))
+        return Diagnosis(items=items)
+
     # -- reporting -------------------------------------------------------- #
     def coef_table(self) -> list[dict]:
         return [
@@ -360,7 +427,8 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
             estimates every variance and correlation, which needs a lot of
             studies; ``"HCS"`` gives each coefficient its own variance but one
             common correlation, and is what to use when ``k`` is small.  See
-            :meth:`IpdCurveResult.diagnostics`.
+            :meth:`IpdCurveResult.identifiability` for the numbers and
+            :attr:`IpdCurveResult.diagnostics` for the codes.
         family: ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
         covariates: further participant-level covariates, adjusted for but not
             pooled.
@@ -554,7 +622,7 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
     # A boundary estimate is not an error, but it is not something to discover
     # three sections later either: on the boundary the likelihood is flat in
     # that direction and the prediction band is a choice of stopping point.
-    problems = result.diagnostics()["notes"]
+    problems = result.identifiability()["notes"]
     if problems:
         warnings.warn(
             "the between-study covariance of the treatment block is not well "

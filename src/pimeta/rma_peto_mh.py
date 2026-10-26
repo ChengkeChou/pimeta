@@ -22,6 +22,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .escalc import escalc
 from .levels import level_to_alpha
 from .metabin import _mh_or, _mh_rr
@@ -29,6 +30,7 @@ from .metabin import _mh_or, _mh_rr
 _Z_975 = stats.norm.ppf(0.975)
 
 
+@attach_diagnostics
 @dataclass
 class RmaPetoResult:
     """``metafor::rma.peto`` — Peto's one-step odds ratio (fixed effects)."""
@@ -60,6 +62,7 @@ class RmaPetoResult:
     drop00: bool = True
 
 
+@attach_diagnostics
 @dataclass
 class RmaMhResult:
     """``metafor::rma.mh`` — Mantel-Haenszel (fixed effects)."""

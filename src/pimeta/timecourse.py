@@ -43,6 +43,7 @@ import numpy as np
 from scipy import stats
 
 from .basis import Basis, rcs
+from .checks import attach_diagnostics
 from .levels import level_to_alpha, level_to_percent
 from .rma_mv import rma_mv
 
@@ -75,6 +76,7 @@ class TimeCourseCurve:
         }
 
 
+@attach_diagnostics
 @dataclass
 class TimeCourseResult:
     """A pooled time-course model.

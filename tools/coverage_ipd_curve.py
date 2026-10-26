@@ -87,7 +87,7 @@ def run(reps, seed0=0, test="z", robust=False):
         cover_ci[rep] = (curve.ci_lb <= true) & (true <= curve.ci_ub)
         cover_pred[rep] = (curve.pred_lb <= true) & (true <= curve.pred_ub)
         tau2_max[rep] = float(np.max(fit.tau2))
-        if fit.diagnostics()["boundary"]:
+        if fit.identifiability()["boundary"]:
             at_boundary += 1
 
     n = int(fitted.sum())

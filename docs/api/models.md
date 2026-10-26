@@ -460,7 +460,7 @@ Pool a treatment-by-covariate spline jointly across studies.
 - `n_knots` — knots for the default restricted cubic spline.
 - `knots` — explicit knot positions.  The same knots are used in every study, which is what makes the coefficients comparable.
 - `center` — value the covariate is centred at, by default its median.  The linear coefficient of the block is the treatment effect *at this value*, and without centring it is the effect at covariate = 0, which is usually an extrapolation (age 0, dose 0) and can have a standard error an order of magnitude too wide.  Pass ``0`` to switch centring off.
-- `struct` — structure of the between-study covariance.  ``"UN"`` (default) estimates every variance and correlation, which needs a lot of studies; ``"HCS"`` gives each coefficient its own variance but one common correlation, and is what to use when ``k`` is small.  See `IpdCurveResult.diagnostics`.
+- `struct` — structure of the between-study covariance.  ``"UN"`` (default) estimates every variance and correlation, which needs a lot of studies; ``"HCS"`` gives each coefficient its own variance but one common correlation, and is what to use when ``k`` is small.  See `IpdCurveResult.identifiability` for the numbers and `IpdCurveResult.diagnostics` for the codes.
 - `family` — ``"binomial"`` (logistic) or ``"gaussian"`` (linear).
 - `covariates` — further participant-level covariates, adjusted for but not pooled.
 - `method` — τ² estimator for the second stage.

@@ -43,6 +43,7 @@ import numpy as np
 from scipy import stats
 
 from .basis import Basis
+from .checks import attach_diagnostics
 from .pooling import predict_rma
 from .utils import bldiag
 
@@ -238,6 +239,7 @@ def dose_cov(dose, events=None, totals=None, *, effects=None, variances=None,
 # --------------------------------------------------------------------------- #
 # the model
 # --------------------------------------------------------------------------- #
+@attach_diagnostics
 @dataclass
 class DosresResult:
     """A pooled dose-response curve.

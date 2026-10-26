@@ -1,6 +1,6 @@
 # API reference
 
-All 539 public names in `pimeta.__all__`, generated from the source docstrings.
+All 540 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -542,4 +542,5 @@ All 539 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`NETMETA_DEFAULTS`](s3.md#netmeta_defaults) | S3-style generics and reporting | — |
 | [`diagnose`](misc.md#diagnose) | Other | — |
 | [`Diagnostic`](misc.md#diagnostic) | Other | — |
+| [`Diagnosis`](misc.md#diagnosis) | Other | — |
 | [`STRATEGIES`](misc.md#strategies) | Other | — |

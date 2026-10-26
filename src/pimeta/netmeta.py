@@ -28,6 +28,7 @@ from typing import Any
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .data_compat import resolve
 from .missing import complete_cases
 from .nma.binary import (  # noqa: F401  (re-export: pip.api and docs use these)
@@ -1177,6 +1178,7 @@ def netheat_matrix(result: NetmetaResult, random: bool = False,
 # Result dataclasses
 # ---------------------------------------------------------------------------
 
+@attach_diagnostics
 @dataclass
 class NetmetaResult:
     """Results of a (common + random effects) network meta-analysis.

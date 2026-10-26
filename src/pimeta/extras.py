@@ -13,6 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .mv.vcov import vcalc
 
 __all__ = [
@@ -148,6 +149,7 @@ def hettest(result, method=None, test="score", seed=None, iter=1000):
 # matreg
 # --------------------------------------------------------------------------- #
 
+@attach_diagnostics
 @dataclass
 class MatregResult:
     """Result of :func:`matreg` (``metafor::matreg``).

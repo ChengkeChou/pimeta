@@ -128,7 +128,8 @@ estimates to zero, which is a property of 30 studies with noisy coefficients and
 not of the implementation, so a second test builds heterogeneous studies directly
 to check that the prediction band really is wider than the confidence band.
 
-**When the covariance cannot be identified**, `diagnostics()` says so instead of
+**When the covariance cannot be identified**, `identifiability()` says so and
+`diagnostics` turns the same finding into the package-wide codes, instead of
 leaving it to be discovered later: it reports how many studies each variance
 parameter is estimated from, which `tau2` components sit at zero, which
 correlations sit on ±1 (which makes `Sigma` singular and the likelihood flat, so

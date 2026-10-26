@@ -21,6 +21,7 @@ from typing import Any, cast
 import numpy as np
 from scipy import integrate, optimize, special, stats
 
+from .checks import attach_diagnostics
 from .rma_uni import RmaResult, rma
 
 _EPS = np.finfo(float).eps
@@ -34,6 +35,7 @@ TYPE_OPTIONS = [
 ]
 
 
+@attach_diagnostics
 @dataclass
 class SelModelResult:
     """Fitted ``rma.uni.selmodel`` model, mirroring the R ``$`` field set."""
