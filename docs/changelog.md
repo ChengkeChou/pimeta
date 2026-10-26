@@ -142,7 +142,7 @@ the entry or the page named.
   against them with a tolerance derived from both runs' Monte Carlo errors.
 
   The first thing it measured is a defect: the default prediction interval
-  covers 0.8815 ± 0.0072 at `k = 20` and 0.8040 ± 0.0140 at `k = 5` against a
+  covers 0.8815 ± 0.0072 at `k = 20` and 0.8040 ± 0.0089 at `k = 5` against a
   nominal 0.95. The `t` reference recovers 1.8 and 8.7 points and still falls
   short, which identifies the shortfall as the uncertainty in `tau2` that the
   standard formula does not charge for. Recorded as a limitation rather than

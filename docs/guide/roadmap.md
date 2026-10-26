@@ -444,11 +444,16 @@ in the default test suite.
   [Dynamic heterogeneity](dynamic-heterogeneity.md) stops applying.
 - **State-space `tau2(t)`** — the same prerequisite as the non-parametric case.
 - **Prediction-interval coverage.** 0.8815 ± 0.0072 at `k = 20` and
-  0.8040 ± 0.0140 at `k = 5`, measured by the `null` and `tiny` baselines. The
-  `t` reference closes part of the gap; closing the rest needs a variance that
-  accounts for the uncertainty in `tau2`, which is a change of method rather
-  than a correction. Until then the default prediction interval is a lower
-  bound on the uncertainty and this page says so.
+  0.8040 ± 0.0089 at `k = 5`, measured by the `null` and `tiny` baselines. Two
+  alternatives were measured rather than assumed. `predtype="t"` gave 0.8990 and
+  0.8935 at the same settings — never worse, and 9 points better at `k = 5`, so
+  the one keyword is worth it. A parametric bootstrap over the sampling
+  distribution of `tau2` gave 0.910 at `k = 20` and 0.860 at `k = 5`, so it does
+  not earn its cost as a default and is kept in `tools/coverage_pi.py` as the
+  evidence rather than shipped. What remains is the variance that accounts for
+  the uncertainty in `tau2`; closing it is a change of method, not a correction.
+  Until then the default is documented as a lower bound on the uncertainty, in
+  the `predict` docstring and in [Pooling](pooling.md#prediction-intervals).
 
 ## What could reorder this
 

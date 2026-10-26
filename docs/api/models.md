@@ -219,6 +219,16 @@ as in metafor:
 tau^2). ``test`` mirrors metafor's ``test`` (``"z"`` default, or
 ``"knha"``/``"t"`` for a t-based CI).
 
+**Measured coverage.** The prediction interval contains ``sqrt(se^2 +
+tau2)``, which treats ``tau2`` as known; over 2000 replications per
+scenario against the true effect of a new study, the default covered
+0.882 +/- 0.007 at ``k = 20`` and 0.804 +/- 0.014 at ``k = 5`` against a
+nominal 0.95. ``predtype="t"`` covered 0.899 and 0.894 at the same
+settings: never worse, and materially better when ``k`` is small. Neither
+reaches nominal, because the residual is the uncertainty in ``tau2``, which
+no plug-in variance includes. ``tools/coverage_pi.py`` reproduces the
+table, including a parametric bootstrap that does not beat ``t``.
+
 ## `PredictResult`
 
 ```python

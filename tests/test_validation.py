@@ -297,3 +297,23 @@ def test_every_registered_scenario_is_a_real_scenario():
         "every scenario in SCENARIOS needs a baseline, and every baseline "
         "needs a scenario; regenerate with tools/validate.py --all --write"
     )
+
+
+def test_the_guide_quotes_the_measured_prediction_interval_coverage():
+    # The pooling guide states what the default prediction interval covers. A
+    # number in prose is a claim, so it is checked against the baseline that
+    # produced it: if either is regenerated without the other, this fails. This
+    # test exists because the first draft of that table quoted a Monte Carlo
+    # error that had been estimated from the formula instead of read off the
+    # measurement.
+    doc = (Path(__file__).resolve().parents[1] / "docs" / "guide"
+           / "pooling.md").read_text(encoding="utf-8")
+    for name in ("null", "tiny", "unequal"):
+        report = json.loads((BASELINE_DIR / f"{name}.json")
+                            .read_text(encoding="utf-8"))
+        for key in ("pi", "pi_t"):
+            cell = report["coverage"][key]
+            quoted = f"{cell['estimate']:.4f} ± {cell['mcse']:.4f}"
+            assert quoted in doc, (
+                f"pooling.md does not quote {name}.{key} as {quoted}; "
+                "regenerate the table or fix the prose")
