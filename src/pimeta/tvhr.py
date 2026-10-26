@@ -16,7 +16,7 @@ where :math:`e_{ik}` is the exposure of participant :math:`i` in interval
 study estimates its own baseline hazard; :math:`\\beta_k` is that study's
 log hazard ratio in interval :math:`k`.
 
-The per-study estimates are then pooled.  Two routes, and the difference
+The per-study estimates are then pooled.  Three routes, and the difference
 between them is what is being estimated:
 
 - :func:`piecewise_exp` pools each interval with its own univariate model.
@@ -25,7 +25,16 @@ between them is what is being estimated:
 - :func:`piecewise_joint` stacks a study's interval-specific log hazard ratios
   into a vector, gives each study its own sampling covariance, puts a
   between-study covariance on top and fits them together — so a trend test and
-  a joint region have the covariance they need.
+  a joint region have the covariance they need.  Its weakness is that the
+  between-study covariance has :math:`J(J+1)/2` parameters to estimate from a
+  handful of studies.
+- :func:`contrast_trend` reduces each study to **one** number first — the slope
+  of its log hazard ratio against time — and pools those by an ordinary
+  univariate random-effects model.  The study-level level is shared by all
+  intervals, and a centred contrast annihilates it exactly, so the correlation
+  that goes to :math:`\\pm 1` in the joint model cannot appear at all: one
+  variance parameter remains, and Knapp–Hartung and Q-profile intervals, which
+  need a scalar, become available.
 
 On the within-study correlation, which is where this model is usually
 misdescribed.  The intervals partition each participant's follow-up, so a
@@ -48,7 +57,8 @@ Two limitations are deliberate and worth stating:
   depends on where the optimiser stopped.  On the shipped 16-study fixture the
   omnibus statistic is 40.6 with ``struct="DIAG"``, 52.1 with ``"UN"`` and 57.3
   with ``"HCS"``: the qualitative answer survives, the number does not, and a
-  fit with a boundary correlation warns.
+  fit with a boundary correlation warns.  :func:`contrast_trend` avoids the
+  problem instead of reporting around it: it never forms the covariance.
 - **The cut points are not chosen by the data.**  Picking where to break
   follow-up is a model-selection problem with its own multiplicity, exactly as
   choosing the number of spline knots is; the break points are the analyst's.
@@ -63,12 +73,17 @@ from __future__ import annotations
 import math
 import warnings
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 from scipy import stats
 
-__all__ = ["PiecewiseJointResult", "PiecewiseResult", "piecewise_exp",
-           "piecewise_joint", "poisson_irls", "split_followup"]
+if TYPE_CHECKING:  # pragma: no cover - import cycle at runtime
+    from .rma_mv import RmaMvResult
+
+__all__ = ["PiecewiseJointResult", "PiecewiseResult", "contrast_trend",
+           "piecewise_exp", "piecewise_joint", "poisson_irls",
+           "split_followup"]
 
 
 def split_followup(time, event, breaks):
@@ -463,6 +478,63 @@ def piecewise_exp(time, event, *, study, treat, breaks, method="REML",
 # --------------------------------------------------------------------------- #
 # joint pooling: the interval-specific log hazard ratios as one vector
 # --------------------------------------------------------------------------- #
+def _wald_test(weights, beta, vcov):
+    """A one-degree-of-freedom Wald test of ``weights @ beta == 0``."""
+    w = np.asarray(weights, dtype=float).ravel()
+    beta = np.asarray(beta, dtype=float).ravel()
+    vcov = np.asarray(vcov, dtype=float)
+    if w.size != beta.size:
+        raise ValueError("the contrast must cover every interval")
+    ok = np.isfinite(beta)
+    wk = w[ok]
+    var = float(wk @ vcov[np.ix_(ok, ok)] @ wk)
+    if var <= 0.0:
+        return {"stat": float("nan"), "df": 1, "pval": float("nan")}
+    est = float(wk @ beta[ok])
+    stat = est ** 2 / var
+    return {"stat": float(stat), "df": 1,
+            "pval": float(stats.chi2.sf(stat, 1)),
+            "estimate": est, "se": math.sqrt(var)}
+
+
+def _trend_stat(beta, vcov, kind):
+    """The trend statistics from an estimate vector and its covariance.
+
+    Separated from :meth:`PiecewiseJointResult.trend_test` so the same test can
+    be recomputed from a *refit* under a different between-study structure
+    without building a fake result object to hold it.
+    """
+    beta = np.asarray(beta, dtype=float).ravel()
+    vcov = np.asarray(vcov, dtype=float)
+    label = str(kind).lower()
+    ok = np.isfinite(beta)
+    n = int(np.sum(ok))
+    if n < 2:
+        raise ValueError("a trend needs at least two estimable intervals")
+    if label == "linear":
+        pos = np.arange(beta.size, dtype=float)
+        return _wald_test(pos - pos[ok].mean(), beta, vcov)
+    if label == "diff":
+        w = np.zeros(beta.size)
+        idx = np.flatnonzero(ok)
+        w[idx[0]] = -1.0
+        w[idx[-1]] = 1.0
+        return _wald_test(w, beta, vcov)
+    if label == "any":
+        b = beta[ok]
+        C = np.zeros((n - 1, n))
+        for i in range(1, n):
+            C[i - 1, i] = 1.0
+            C[i - 1, 0] = -1.0
+        diff = C @ b
+        middle = C @ vcov[np.ix_(ok, ok)] @ C.T
+        stat = float(diff @ np.linalg.solve(middle, diff))
+        return {"stat": stat, "df": n - 1,
+                "pval": float(stats.chi2.sf(stat, n - 1))}
+    raise ValueError(
+        f"unknown trend kind {kind!r}; use 'linear', 'diff' or 'any'")
+
+
 @dataclass
 class PiecewiseJointResult:
     """Interval-specific hazard ratios pooled as a vector.
@@ -530,29 +602,105 @@ class PiecewiseJointResult:
 
     def _wald(self, weights):
         """A one-degree-of-freedom Wald test of ``weights @ beta == 0``."""
-        w = np.asarray(weights, dtype=float).ravel()
-        ok = np.isfinite(self.beta)
-        if w.size != self.beta.size:
-            raise ValueError("the contrast must cover every interval")
-        b = self.beta[ok]
-        wk = w[ok]
-        V = np.asarray(self.vcov, dtype=float)[np.ix_(ok, ok)]
-        var = float(wk @ V @ wk)
-        if var <= 0.0:
-            return {"stat": float("nan"), "df": 1, "pval": float("nan")}
-        stat = float((wk @ b) ** 2 / var)
-        return {
-            "stat": stat,
-            "df": 1,
-            "pval": float(stats.chi2.sf(stat, 1)),
-            "estimate": float(wk @ b),
-            "se": math.sqrt(var),
-            "ci_lb": float(wk @ b - self._crit() * math.sqrt(var)),
-            "ci_ub": float(wk @ b + self._crit() * math.sqrt(var)),
-        }
+        res = _wald_test(weights, self.beta, self.vcov)
+        if "estimate" in res:
+            crit = self._crit()
+            res["ci_lb"] = res["estimate"] - crit * res["se"]
+            res["ci_ub"] = res["estimate"] + crit * res["se"]
+        return res
 
     def _crit(self) -> float:
         return float(stats.norm.ppf(0.5 + self.level / 200.0))
+
+    def structure_sensitivity(self, structs: tuple[str, ...] = ("UN", "HCS",
+                                                              "DIAG"),
+                              level: float | None = None) -> dict:
+        """Refit the stacked model under other between-study structures.
+
+        ``struct="UN"`` estimates one variance and one correlation per interval
+        pair, and with three intervals on a handful of studies the correlation
+        estimate can reach +/-1.  When it does, the between-study covariance is
+        singular and any joint test that contrasts the intervals is decided by
+        where on that ridge the optimiser stopped -- not by the data.  The
+        qualitative answer survives that; the *statistic* does not, and a
+        single number reported without the spread is a false precision.
+
+        This refits the same stacked data and design under each structure and
+        recomputes the trend statistics, so the range is a computation rather
+        than a sentence.  ``"UN"`` makes the fewest assumptions and is the
+        least stable; ``"HCS"`` assumes one common correlation and ``"DIAG"``
+        assumes none, which is the most restrictive and the most stable.  A
+        conclusion that holds under all three is a conclusion about the data;
+        one that holds only under ``"UN"`` is a conclusion about the optimiser.
+
+        Args:
+            structs: the structures to refit.  ``"CS"`` is accepted too, as
+                are any others :func:`~pimeta.rma_mv` supports.
+            level: confidence level for the recomputed intervals; defaults to
+                the level the result was fitted at.
+
+        Returns:
+            A dict with ``by_struct`` -- one entry per structure holding
+            ``tests`` (the same keys :meth:`trend_test` returns, for
+            ``"any"``, ``"linear"`` and ``"diff"``), ``tau2``, ``boundary``
+            (whether that fit landed on the correlation ridge) and ``error``
+            if the refit failed -- and ``spread``, which gives the smallest and
+            largest statistic each trend test takes across the structures that
+            converged.
+
+        Raises:
+            ValueError: the result was built without a fitted model, or the
+                covariance is not positive definite under every structure.
+        """
+        from .rma_mv import rma_mv
+
+        if self.model is None:
+            raise ValueError("this result carries no fitted model to refit")
+        model = cast("RmaMvResult", self.model)
+        lvl = self.level if level is None else float(level)
+        if lvl <= 1.0:
+            lvl *= 100.0
+        by_struct: dict[str, dict] = {}
+        for struct in structs:
+            try:
+                fit = rma_mv(np.asarray(model.yi, dtype=float), V=model.V,
+                             mods=model.X, data=model._data,
+                             random=model.random, struct=str(struct),
+                             intercept=model.intercept_incl,
+                             method=model.method, level=lvl / 100.0)
+            except (ValueError, np.linalg.LinAlgError) as exc:
+                by_struct[str(struct)] = {"error": str(exc)}
+                continue
+            tests: dict[str, dict] = {}
+            for kind in ("any", "linear", "diff"):
+                try:
+                    tests[kind] = _trend_stat(fit.beta, fit.vb, kind)
+                except ValueError:
+                    continue
+            G, _ = fit.g_matrix()
+            sigma = (np.asarray(G, dtype=float) if G is not None
+                     else np.zeros((0, 0)))
+            boundary = False
+            if sigma.size and sigma.shape[0] > 1:
+                sd = np.sqrt(np.maximum(np.diag(sigma), 0.0))
+                with np.errstate(divide="ignore", invalid="ignore"):
+                    corr = sigma / np.outer(sd, sd)
+                off = corr[~np.eye(sigma.shape[0], dtype=bool)]
+                boundary = bool(np.any(np.abs(off[np.isfinite(off)]) >= 0.999))
+            by_struct[str(struct)] = {
+                "tests": tests,
+                "tau2": np.diag(sigma).copy() if sigma.size else np.zeros(0),
+                "boundary": boundary,
+            }
+        spread: dict[str, dict] = {}
+        for kind in ("any", "linear", "diff"):
+            vals = [r["tests"][kind]["stat"] for r in by_struct.values()
+                    if "tests" in r and kind in r["tests"]
+                    and np.isfinite(r["tests"][kind]["stat"])]
+            if vals:
+                spread[kind] = {"min": float(min(vals)),
+                                "max": float(max(vals))}
+        return {"by_struct": by_struct, "spread": spread, "level": lvl}
 
     def trend_test(self, kind: str = "linear") -> dict:
         """Is the hazard ratio changing over follow-up?
@@ -570,35 +718,12 @@ class PiecewiseJointResult:
             freedom versions, ``estimate``, ``se``, ``ci_lb``, ``ci_ub`` on the
             log scale.
         """
-        label = str(kind).lower()
-        ok = np.isfinite(self.beta)
-        n = int(np.sum(ok))
-        if n < 2:
-            raise ValueError("a trend needs at least two estimable intervals")
-        if label == "linear":
-            pos = np.arange(self.beta.size, dtype=float)
-            centre = pos[ok].mean()
-            return self._wald(pos - centre)
-        if label == "diff":
-            w = np.zeros(self.beta.size)
-            idx = np.flatnonzero(ok)
-            w[idx[0]] = -1.0
-            w[idx[-1]] = 1.0
-            return self._wald(w)
-        if label == "any":
-            b = self.beta[ok]
-            V = np.asarray(self.vcov, dtype=float)[np.ix_(ok, ok)]
-            C = np.zeros((n - 1, n))
-            for i in range(1, n):
-                C[i - 1, i] = 1.0
-                C[i - 1, 0] = -1.0
-            diff = C @ b
-            middle = C @ V @ C.T
-            stat = float(diff @ np.linalg.solve(middle, diff))
-            return {"stat": stat, "df": n - 1,
-                    "pval": float(stats.chi2.sf(stat, n - 1))}
-        raise ValueError(
-            f"unknown trend kind {kind!r}; use 'linear', 'diff' or 'any'")
+        result = _trend_stat(self.beta, self.vcov, kind)
+        if "estimate" in result:
+            crit = self._crit()
+            result["ci_lb"] = result["estimate"] - crit * result["se"]
+            result["ci_ub"] = result["estimate"] + crit * result["se"]
+        return result
 
     def to_dict(self) -> dict:
         return {
@@ -794,7 +919,8 @@ def piecewise_joint(time, event, *, study, treat, breaks, rho=None,
                 "optimiser stopped: on the shipped fixture struct='UN' gives "
                 "chi2 = 52.1 for a constant hazard ratio where struct='HCS' "
                 "gives 57.3 and struct='DIAG' gives 40.6.  The qualitative "
-                "answer survives that spread; the statistic does not",
+                "answer survives that spread; the statistic does not.  "
+                "structure_sensitivity() recomputes the spread for this fit",
                 RuntimeWarning, stacklevel=2)
     se = np.sqrt(np.diag(vcov))
     crit = float(stats.norm.ppf(0.5 + level / 200.0))
@@ -806,5 +932,190 @@ def piecewise_joint(time, event, *, study, treat, breaks, rho=None,
         rho=None if rho is None else float(rho), method=method, level=level,
         struct=struct,
     )
+
+
+def contrast_trend(time, event, *, study, treat, breaks, times=None,
+                   rho=None, method="REML", test="knha", level=95.0,
+                   min_events=1):
+    """The change in the hazard ratio over follow-up, as one slope per study.
+
+    :func:`piecewise_joint` estimates a between-study covariance over the
+    interval-specific log hazard ratios and contrasts it afterwards.  With a
+    handful of studies that covariance can be singular — one correlation
+    reaches :math:`\\pm 1`, the likelihood is flat along the ridge, and every
+    statistic that contrasts intervals depends on where the optimiser stopped.
+    This function never forms that matrix.
+
+    Each study is reduced to **one** number inside the study before anything is
+    pooled: the slope of its log hazard ratios against time, centred on that
+    study's own information-weighted mean time :math:`\\bar t_i`,
+
+    .. math::
+
+        \\hat\\beta_{1i}
+            = \\frac{\\mathbf{c}_i' \\mathbf{V}_i^{-1} \\mathbf{y}_i}
+                   {\\mathbf{c}_i' \\mathbf{V}_i^{-1} \\mathbf{c}_i},
+        \\qquad
+        s_{1i}^2 = \\frac{1}{\\mathbf{c}_i' \\mathbf{V}_i^{-1} \\mathbf{c}_i},
+        \\qquad \\mathbf{c}_i = \\mathbf{t}_i - \\bar t_i .
+
+    Those slopes are then pooled by an ordinary random-effects meta-analysis,
+    so the only between-study parameter is one scalar
+    :math:`\\tau^2_{\\text{trend}}`.
+
+    Why the ridge cannot reappear.  The cause of :math:`\\rho \\to 1` is the
+    study-level *level*: a random effect shared by all of a study's intervals,
+    moving them up and down together.  A centred contrast satisfies
+    :math:`\\mathbf{c}_i' \\mathbf{1} = 0`, so that effect cancels **exactly**
+    rather than approximately.  Centring on the information-weighted mean also
+    makes the slope orthogonal to the intercept within each study, which is why
+    the level and the trend can be estimated separately at all.
+
+    What is given up: this is a test of a *linear* change in the log hazard
+    ratio.  A hazard ratio that falls and then flattens has a slope near zero
+    even though it is not constant, so use :func:`piecewise_joint`'s
+    ``trend_test("any")`` when the shape itself is the question, and read
+    :meth:`PiecewiseJointResult.structure_sensitivity` with it.
+
+    Args:
+        time, event, study, treat, breaks, min_events: as in
+            :func:`piecewise_exp`.
+        times: time to attach to each interval, one value per interval.  The
+            default is the midpoint.  Pass explicit values when the cut points
+            were chosen unevenly and the midpoints are not what the slope should
+            be taken against.
+        rho: within-study correlation imposed on the sampling covariance
+            before the slope is taken, for aggregate input.  It changes
+            :math:`s_{1i}^2` — a within-study model assumption — and is not a
+            between-study correlation, because there is none to estimate.
+        method: ``tau^2`` estimator passed to :func:`~pimeta.rma`.
+        test: ``"knha"`` (default; Knapp–Hartung), ``"t"``, ``"z"`` or
+            ``"adhoc"``.  Knapp–Hartung is the default here because it is the
+            reason for taking this route: it needs a single variance, which the
+            joint model does not have.
+        level: confidence level.
+        min_events: as in :func:`piecewise_exp`.
+
+    Returns:
+        A dict with ``k``, ``studies``, ``slope`` and ``slope_var`` (per
+        study), ``beta``, ``se``, ``ci_lb``, ``ci_ub``, ``p_value``,
+        ``tau2``, ``I2``, ``Q``, ``df``, ``ratio`` (the hazard ratio per unit
+        of time), ``times``, ``excluded`` (study -> why), and ``model``, the
+        underlying :class:`~pimeta.RmaResult`.
+
+    Raises:
+        ValueError: on mismatched lengths, a treatment indicator that is not
+            0/1, fewer than three boundaries, fewer than two studies, a
+            ``rho`` outside ``[-1, 1]``, a ``times`` of the wrong length, or
+            fewer than two studies with two or more estimable intervals.
+    """
+    from .rma_uni import rma
+
+    time = np.asarray(time, dtype=float).ravel()
+    event = np.asarray(event).ravel()
+    study = np.asarray(study).ravel()
+    treat = np.asarray(treat).ravel()
+    breaks = np.asarray(breaks, dtype=float).ravel()
+    n = time.size
+    if not (event.size == study.size == treat.size == n):
+        raise ValueError("'time', 'event', 'study' and 'treat' must be the "
+                         "same length")
+    if not set(np.unique(treat).tolist()) <= {0, 1}:
+        raise ValueError("'treat' must be a 0/1 indicator")
+    if rho is not None and not -1.0 <= float(rho) <= 1.0:
+        raise ValueError("'rho' must lie in [-1, 1]")
+    if breaks.size < 3:
+        raise ValueError("a trend needs at least two intervals, so 'breaks' "
+                         "must have three or more boundaries")
+    level = float(level)
+    if level <= 1.0:
+        level *= 100.0
+    k_int = breaks.size - 1
+    labels = _interval_labels(breaks)
+    if times is None:
+        # ``split_followup`` truncates each study at ``breaks[-1]``, so every
+        # interval is closed and the midpoint is well defined for all of them.
+        points = np.asarray(0.5 * (breaks[:-1] + breaks[1:]), dtype=float)
+    else:
+        points = np.asarray(times, dtype=float).ravel()
+        if points.size != k_int:
+            raise ValueError(f"'times' must give one time per interval "
+                             f"({k_int}), not {points.size}")
+    if len(np.unique(study)) < 2:
+        raise ValueError("at least two studies are needed to pool")
+
+    studies, log_hr, se_hr, cov_hr, dropped = _fit_study_blocks(
+        time, event, study, treat, breaks, min_events)
+
+    slopes: list[float] = []
+    variances: list[float] = []
+    kept: list = []
+    excluded: dict[str, str] = {str(s): why for s, why in dropped}
+    for i, s in enumerate(studies):
+        ok = np.isfinite(log_hr[i])
+        if int(ok.sum()) < 2:
+            excluded[str(s)] = "fewer than two intervals with an estimate"
+            continue
+        idx = np.flatnonzero(ok)
+        block = np.array(cov_hr[i], dtype=float)[np.ix_(idx, idx)]
+        if rho is not None:
+            sd = np.sqrt(np.diag(block))
+            corr = np.full(block.shape, float(rho))
+            np.fill_diagonal(corr, 1.0)
+            block = corr * np.outer(sd, sd)
+        try:
+            info = np.linalg.inv(block)
+        except np.linalg.LinAlgError:
+            excluded[str(s)] = "the within-study covariance is not invertible"
+            continue
+        t = points[idx]
+        ones = np.ones(idx.size)
+        weight = float(ones @ info @ ones)
+        if weight <= 0.0:
+            excluded[str(s)] = "the within-study covariance is not positive "
+            excluded[str(s)] += "definite"
+            continue
+        centred = t - float(ones @ info @ t) / weight
+        denom = float(centred @ info @ centred)
+        if denom <= 1e-14:
+            excluded[str(s)] = "the interval times are degenerate for this study"
+            continue
+        slopes.append(float(centred @ info @ log_hr[i][idx]) / denom)
+        variances.append(1.0 / denom)
+        kept.append(s)
+
+    if len(kept) < 2:
+        raise ValueError(
+            "fewer than two studies have two or more estimable intervals, so "
+            "there is no between-study variance to estimate; the study-level "
+            "slopes are in 'excluded'")
+
+    fit = rma(np.array(slopes, dtype=float), vi=np.array(variances, dtype=float),
+              method=method, test=test, level=level / 100.0,
+              slab=[str(s) for s in kept])
+    return {
+        "k": len(kept),
+        "studies": kept,
+        "slope": np.array(slopes, dtype=float),
+        "slope_var": np.array(variances, dtype=float),
+        "beta": float(fit.b[0]),
+        "se": float(fit.se[0]),
+        "ci_lb": float(fit.ci_lb[0]),
+        "ci_ub": float(fit.ci_ub[0]),
+        "p_value": float(fit.pval[0]),
+        "df": fit.dfs,
+        "tau2": float(fit.tau2),
+        "I2": float(fit.I2),
+        "Q": float(fit.QE),
+        "ratio": float(np.exp(fit.b[0])),
+        "times": points.copy(),
+        "labels": labels,
+        "excluded": excluded,
+        "rho": None if rho is None else float(rho),
+        "method": method,
+        "test": test,
+        "level": level,
+        "model": fit,
+    }
 
 

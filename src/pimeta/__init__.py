@@ -505,6 +505,7 @@ from .transforms import (
 from .tvhr import (
     PiecewiseJointResult,
     PiecewiseResult,
+    contrast_trend,
     piecewise_exp,
     piecewise_joint,
     poisson_irls,
@@ -731,6 +732,7 @@ __all__ = [
     "TimeCourseResult",
     "TimeCourseCurve",
     "piecewise_joint",
+    "contrast_trend",
     "PiecewiseJointResult",
     "PiecewiseResult",
     "poisson_irls",

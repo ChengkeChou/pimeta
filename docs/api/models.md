@@ -1,6 +1,6 @@
 # Models
 
-*104 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*105 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -45,6 +45,7 @@
 | [`TimeCourseResult`](#timecourseresult) | — |
 | [`TimeCourseCurve`](#timecoursecurve) | — |
 | [`piecewise_joint`](#piecewise_joint) | — |
+| [`contrast_trend`](#contrast_trend) | — |
 | [`PiecewiseJointResult`](#piecewisejointresult) | — |
 | [`PiecewiseResult`](#piecewiseresult) | — |
 | [`poisson_irls`](#poisson_irls) | — |
@@ -1032,6 +1033,70 @@ between-study covariance on top and fits them together —so
 **Raises**
 
 - `ValueError` — on mismatched lengths, a treatment indicator that is not 0/1, fewer than two studies, or a ``rho`` outside ``[-1, 1]``.
+
+## `contrast_trend`
+
+```python
+contrast_trend(time, event, *, study, treat, breaks, times=None, rho=None, method='REML', test='knha', level=95.0, min_events=1)
+```
+
+The change in the hazard ratio over follow-up, as one slope per study.
+
+`piecewise_joint` estimates a between-study covariance over the
+interval-specific log hazard ratios and contrasts it afterwards.  With a
+handful of studies that covariance can be singular — one correlation
+reaches :math:`\pm 1`, the likelihood is flat along the ridge, and every
+statistic that contrasts intervals depends on where the optimiser stopped.
+This function never forms that matrix.
+
+Each study is reduced to **one** number inside the study before anything is
+pooled: the slope of its log hazard ratios against time, centred on that
+study's own information-weighted mean time :math:`\bar t_i`,
+
+.. math::
+
+    \hat\beta_{1i}
+        = \frac{\mathbf{c}_i' \mathbf{V}_i^{-1} \mathbf{y}_i}
+               {\mathbf{c}_i' \mathbf{V}_i^{-1} \mathbf{c}_i},
+    \qquad
+    s_{1i}^2 = \frac{1}{\mathbf{c}_i' \mathbf{V}_i^{-1} \mathbf{c}_i},
+    \qquad \mathbf{c}_i = \mathbf{t}_i - \bar t_i .
+
+Those slopes are then pooled by an ordinary random-effects meta-analysis,
+so the only between-study parameter is one scalar
+:math:`\tau^2_{\text{trend}}`.
+
+Why the ridge cannot reappear.  The cause of :math:`\rho \to 1` is the
+study-level *level*: a random effect shared by all of a study's intervals,
+moving them up and down together.  A centred contrast satisfies
+:math:`\mathbf{c}_i' \mathbf{1} = 0`, so that effect cancels **exactly**
+rather than approximately.  Centring on the information-weighted mean also
+makes the slope orthogonal to the intercept within each study, which is why
+the level and the trend can be estimated separately at all.
+
+What is given up: this is a test of a *linear* change in the log hazard
+ratio.  A hazard ratio that falls and then flattens has a slope near zero
+even though it is not constant, so use `piecewise_joint`'s
+``trend_test("any")`` when the shape itself is the question, and read
+`PiecewiseJointResult.structure_sensitivity` with it.
+
+**Args**
+
+- `time, event, study, treat, breaks, min_events` — as in `piecewise_exp`.
+- `times` — time to attach to each interval, one value per interval.  The default is the midpoint.  Pass explicit values when the cut points were chosen unevenly and the midpoints are not what the slope should be taken against.
+- `rho` — within-study correlation imposed on the sampling covariance before the slope is taken, for aggregate input.  It changes :math:`s_{1i}^2` — a within-study model assumption — and is not a between-study correlation, because there is none to estimate.
+- `method` — ``tau^2`` estimator passed to `rma`.
+- `test` — ``"knha"`` (default; Knapp–Hartung), ``"t"``, ``"z"`` or ``"adhoc"``.  Knapp–Hartung is the default here because it is the reason for taking this route: it needs a single variance, which the joint model does not have.
+- `level` — confidence level.
+- `min_events` — as in `piecewise_exp`.
+
+**Returns**
+
+A dict with ``k``, ``studies``, ``slope`` and ``slope_var`` (per study), ``beta``, ``se``, ``ci_lb``, ``ci_ub``, ``p_value``, ``tau2``, ``I2``, ``Q``, ``df``, ``ratio`` (the hazard ratio per unit of time), ``times``, ``excluded`` (study -> why), and ``model``, the underlying `RmaResult`.
+
+**Raises**
+
+- `ValueError` — on mismatched lengths, a treatment indicator that is not 0/1, fewer than three boundaries, fewer than two studies, a ``rho`` outside ``[-1, 1]``, a ``times`` of the wrong length, or fewer than two studies with two or more estimable intervals.
 
 ## `PiecewiseJointResult`
 

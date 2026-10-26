@@ -297,6 +297,34 @@ Already there, in more depth than "pool a log hazard ratio":
   `"linear"` (the usual monotone trend), `"diff"` (last interval against the
   first) and `"any"` (the omnibus test that the hazard ratio is constant) — and
   `ma.predict_region` applies to the underlying fit.
+  `structure_sensitivity()` refits the same stacked data under `"UN"`,
+  `"HCS"` and `"DIAG"` and reports the trend statistics under each. That
+  exists because the unstructured between-study covariance estimates a
+  correlation per interval pair from a handful of studies, and on the shipped
+  fixture one correlation reaches 0.9998: the covariance is then singular and
+  the *statistic* is decided by where the optimiser stopped on the ridge. The
+  omnibus statistic for "the hazard ratio is constant" takes 52.09, 57.28 and
+  40.58 under the three structures — the conclusion is the same, the number is
+  not. `structure_sensitivity()` computes that spread for the fit at hand
+  instead of quoting it, and `piecewise_joint` warns when the correlation is at
+  the boundary.
+- `ma.contrast_trend` answers the same question without forming that
+  covariance at all. Each study is reduced to **one** number inside the study —
+  the WLS slope of its interval-specific log hazard ratios against interval
+  time, centred on its own information-weighted mean time — and the slopes are
+  pooled by an ordinary univariate random-effects model. The study-level level
+  is a random effect shared by all of a study's intervals and is exactly what
+  drives the correlation to ±1; a centred contrast satisfies `c'1 = 0`, so that
+  effect cancels exactly rather than approximately, and the only between-study
+  parameter left is one scalar τ²_trend. That is why Knapp–Hartung, Q-profile
+  intervals and everything else that needs a single variance become available.
+  On the fixture it gives −0.0438 per month (95% CI −0.0565 to −0.0311,
+  p = 2.5e-6, df = 15) against −0.0507 per month from the joint model's linear
+  contrast; the contrast route is more precise because it does not spend
+  parameters on the level covariance. What it cannot do is detect a hazard
+  ratio that changes shape without changing slope — for that, the omnibus test
+  in `piecewise_joint` is still the right tool, read together with
+  `structure_sensitivity()`.
 
 On the correlation between a study's interval-specific estimates, which is
 where this model is usually misdescribed. The intervals *partition* each

@@ -99,12 +99,50 @@ ORIGIN: dict[str, dict[str, Any]] = {
                 "intercept and slope and AR(1) within-study errors; the "
                 "reference numbers come from tools/r_reference/timecourse.R",
     },
+    "nma_dose.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_nma_dose_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "simulated dose-response network: two agents on separate "
+                "Emax curves (1.4 / 30 and 0.9 / 25), study offsets and "
+                "per-arm deviations with SD 0.22, three head-to-head "
+                "contrasts at unequal doses. The generator fixes the seed "
+                "and --check reproduces the bytes",
+    },
+    "nma_timecourse.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_nma_timecourse_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "simulated repeated-measures network: one treatment per "
+                "study on unbalanced schedules, AR(1) within-study errors "
+                "(phi 0.6, SD 0.22) and between-study SD 0.18. The "
+                "generator fixes the seed and --check reproduces the bytes",
+    },
     "_r_senn2013.tsv": {
         "origin": "r-reference",
         "produced_by": "tools/r_reference/netmeta_senn2013.R",
         "licence": OWN_LICENCE,
         "note": "output of the reference implementation, whose versions are "
                 "recorded in the file's own header",
+    },
+    "_nc_common_ref.csv": {
+        "origin": "r-reference",
+        "produced_by": "tools/r_reference/netcontrib_senn2013.R",
+        "licence": OWN_LICENCE,
+        "note": "netmeta::netcontrib on Senn 2013, common effects: a 45 x 15 "
+                "matrix of the weight each direct comparison carries in each "
+                "network estimate. Reproduced by the script to 8.1e-14 with "
+                "netmeta 3.7.0",
+    },
+    "_nc_random_ref.csv": {
+        "origin": "r-reference",
+        "produced_by": "tools/r_reference/netcontrib_senn2013.R",
+        "licence": OWN_LICENCE,
+        "note": "netmeta::netcontrib on Senn 2013, random effects. Reproduced "
+                "to 3.8e-15, and the estimator is pinned by that: with REML "
+                "tau2 = 0.10105 and the matrix is off by 3.2e-3, with the "
+                "default DL tau2 = 0.10872 and it agrees, which is also "
+                "pimeta's default",
     },
     "_konstantopoulos2011.csv": {
         "origin": "upstream",
@@ -128,12 +166,8 @@ ORIGIN: dict[str, dict[str, Any]] = {
 #: shrink by recording a source, and can only grow by someone editing this file.
 UNVERIFIED = (
     "ipd_nma.csv",
-    "nma_dose.csv",
-    "nma_timecourse.csv",
     "onestage_slopes.csv",
     "tvhr_piecewise.csv",
-    "_nc_common_ref.csv",
-    "_nc_random_ref.csv",
 )
 
 _ORIGINS = ("generated", "r-reference", "upstream", "unverified")

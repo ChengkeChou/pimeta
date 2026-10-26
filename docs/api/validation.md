@@ -80,7 +80,7 @@ broken estimator acquires a good-looking bias.
 ## `run_scenario`
 
 ```python
-run_scenario(scenario: 'Scenario', reps: 'int' = 1000, seed: 'int' = 1, *, method: 'str' = 'REML', level: 'float' = 0.95, fit: 'Callable[[Dataset], Any] | None' = None) -> 'dict[str, Any]'
+run_scenario(scenario: 'Scenario', reps: 'int' = 1000, seed: 'int' = 1, *, method: 'str' = 'REML', level: 'float' = 0.95, fit: 'Callable[[Dataset], Any] | None' = None, n_jobs: 'int | None' = None) -> 'dict[str, Any]'
 ```
 
 Simulate ``reps`` replications of ``scenario`` and summarise them.
@@ -93,6 +93,7 @@ Simulate ``reps`` replications of ``scenario`` and summarise them.
 - `method` — tau^2 estimator passed to `rma`.
 - `level` — confidence level.
 - `fit` — optional replacement for the estimator. It receives a `Dataset` and must return an object carrying ``b``, ``se``, ``ci_lb``, ``ci_ub``, ``pval``, ``tau2``, ``I2`` and ``predict()``. Injecting it lets this module be used for models other than `rma` without importing them here.
+- `n_jobs` — worker processes for the *fits*. ``None`` or ``1`` runs them in this process. All ``reps`` datasets are simulated first, serially, from the one seeded generator, so the random stream a replication consumes does not depend on how many workers there are: the report is identical to the serial one to the last bit, and ``tests/test_parallel.py`` checks that with ``float.hex()``. Only the fitting is spread out, and each fit receives a dataset rather than a generator. ``n_jobs > 1`` needs ``fit`` to be picklable (a module-level function or a ``partial`` of one).
 
 **Returns**
 

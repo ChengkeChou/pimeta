@@ -416,6 +416,34 @@ before still verify afterwards.
 4. **Keep `call=` accurate.** Replay is only as good as the recorded call; if it
    drifts from what was actually run, the record is fiction.
 
+## Parallel execution, and why it is not everywhere
+
+`validation.run_scenario` and `DynamicHetResult.test_trend` accept `n_jobs`.
+Those are the only places in the package where work is spread over processes,
+and the reason is not timidity. **A parallelism that changes a number is not a
+speed-up, it is a different analysis.**
+
+Every repetition in those two loops is a pure function of data drawn *before*
+the loop starts. `run_scenario` simulates all `reps` datasets first, serially,
+from one seeded generator; the workers then only fit them. Nothing is
+accumulated across workers, results are collected in submission order, and the
+answer is identical to the serial loop **to the last bit** — `tests/test_parallel.py`
+compares `float.hex()`, not `pytest.approx`.
+
+What is deliberately *not* parallelised:
+
+| Candidate | Why not |
+|---|---|
+| the REML optimiser | BLAS already threads the linear algebra; what is left is per-study Python, which has to be vectorised rather than multiplied |
+| a cumulative / running meta-analysis | the answer is a sum, and floating-point addition is not associative, so splitting it across workers moves the last digits |
+| leave-one-out sweeps | the same, and each refit is cheap next to the pickling |
+
+The callable handed to a worker must be picklable — a module-level function or a
+`functools.partial` of one — because a lambda or a closure cannot be sent to
+another process. `pimeta.parallel.check_picklable` reports that where the caller
+can fix it instead of inside a child process. The short version: parallel over
+independent repetitions, never over an accumulation.
+
 ## See also
 
 - [Data frames and formulas](data-frames.md) — how `data=` resolves column names

@@ -99,6 +99,7 @@ import math
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 import numpy as np
@@ -106,6 +107,7 @@ from scipy import optimize, stats
 
 from .bayes import Posterior, sample_log_posterior
 from .levels import level_to_alpha
+from .parallel import map_ordered
 
 __all__ = ["BayesTauTrendResult", "TauTrendResult", "bayes_tau_trend", "tau_trend"]
 
@@ -428,7 +430,7 @@ class TauTrendResult:
         return out
 
     def test_trend(self, method: str = "wald", *, n_boot: int = 999,
-                   seed=None) -> dict:
+                   seed=None, n_jobs: int | None = None) -> dict:
         """Test that the scale does not change with time.
 
         ``"wald"`` is the Wald statistic on the scale slopes, referred to an F
@@ -443,6 +445,11 @@ class TauTrendResult:
         null is **no heterogeneity at all**, because there :math:`\\alpha_0`
         sits on its boundary and the chi-square reference is wrong.  It costs
         ``n_boot`` pairs of refits.
+
+        ``n_jobs`` spreads those refits over processes.  Every bootstrap sample
+        is drawn first, serially, from the seeded generator, so the samples do
+        not depend on how many workers run them and the p-value is identical to
+        the serial one to the last bit (``tests/test_parallel.py``).
         """
         if self.q == 1:
             raise ValueError(
@@ -479,13 +486,15 @@ class TauTrendResult:
             rng = np.random.default_rng(seed)
             centre = null["X"] @ null["beta"]
             sd = np.sqrt(null["v"] + null["tau2"])
-            count = 0
-            for _ in range(int(n_boot)):
-                yb = centre + rng.normal(0.0, 1.0, centre.size) * sd
-                value = _lrt_once(yb, null["v"], null["X"], null["Z"],
-                                  null["method"])
-                if value is not None and value >= stat:
-                    count += 1
+            # Draw every replicate before any of them is fitted: the stream a
+            # replicate consumes must not depend on the worker that fits it.
+            draws = [centre + rng.normal(0.0, 1.0, centre.size) * sd
+                     for _ in range(int(n_boot))]
+            values = map_ordered(
+                partial(_lrt_once, v=null["v"], X=null["X"], Z=null["Z"],
+                        method=null["method"]),
+                draws, n_jobs=n_jobs)
+            count = sum(1 for value in values if value is not None and value >= stat)
             return {"method": "bootstrap", "statistic": float(stat), "df1": r,
                     "df2": None,
                     "p_value": float((count + 1) / (int(n_boot) + 1)),

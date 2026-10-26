@@ -120,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="replications (default: the baseline's own count)")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--method", default=None, help="tau^2 estimator")
+    ap.add_argument("--jobs", type=int, default=None,
+                    help="worker processes for the fits; the report is "
+                         "identical to the serial one")
     ap.add_argument("--write", action="store_true",
                     help="write the baseline instead of comparing with it")
     ap.add_argument("--out", default=None,
@@ -154,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[{name}] {reps} reps, seed {seed}, method {method} ...",
               flush=True)
         report = run_scenario(SCENARIOS[name], reps=reps, seed=seed,
-                              method=method)
+                              method=method, n_jobs=args.jobs)
 
         if args.write:
             BASELINE_DIR.mkdir(parents=True, exist_ok=True)

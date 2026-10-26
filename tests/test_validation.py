@@ -216,7 +216,7 @@ def test_run_scenario_is_reproducible_and_carries_its_settings():
     b = run_scenario(s, reps=20, seed=99)
     assert json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
     assert a["settings"] == {"reps": 20, "seed": 99, "method": "REML",
-                             "level": 0.95}
+                             "level": 0.95, "n_jobs": 1}
     assert a["scenario"]["name"] == "quick"
 
 

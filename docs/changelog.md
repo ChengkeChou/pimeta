@@ -6,6 +6,76 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `ma.contrast_trend` pools the change in the hazard ratio over follow-up
+  without ever forming a between-study covariance. Each study is reduced inside
+  the study to one number — the WLS slope of its interval-specific log hazard
+  ratios against interval time, centred on its own information-weighted mean
+  time — and those slopes are pooled by an ordinary univariate random-effects
+  model. The study-level level is a random effect shared by all of a study's
+  intervals and is exactly what drives the correlation to ±1 in
+  `piecewise_joint`; a centred contrast satisfies `c'1 = 0`, so it cancels
+  exactly and only one variance parameter remains, which is what makes
+  Knapp–Hartung (the default here) available. On the 16-study fixture it gives
+  −0.0438 per month (95% CI −0.0565 to −0.0311, p = 2.5e-6, df = 15) against
+  −0.0507 per month from the joint model's linear contrast; the contrast route
+  is more precise because it does not spend parameters on the level covariance,
+  not because it is luckier. It answers a linear-trend question only: a hazard
+  ratio that changes shape without changing slope still needs
+  `piecewise_joint(...).trend_test("any")`.
+- `PiecewiseJointResult.structure_sensitivity()` for `ma.piecewise_joint`:
+  refits the same stacked data under `"UN"`, `"HCS"` and `"DIAG"` and reports
+  the trend statistics under each, with the smallest and largest value every
+  statistic takes across the structures that converge. With three intervals the
+  unstructured between-study covariance estimates one correlation per interval
+  pair from a handful of studies, and on the shipped fixture one of them reaches
+  0.9998: the covariance is singular, and any joint test that contrasts the
+  intervals is then decided by where on that ridge the optimiser stopped. On
+  that fixture the omnibus statistic for a constant hazard ratio is **52.09**
+  under `"UN"`, **57.28** under `"HCS"` and **40.58** under `"DIAG"` — the
+  conclusion survives the spread, the number does not. Those three numbers used
+  to be quoted inside the boundary warning from a manual run; the warning now
+  points at this method, which computes them for the fit at hand (0.09 s for
+  three refits on the 16-study fixture).
+
+### Changed
+
+- The trend statistics of `ma.piecewise_joint` are computed by a module-level
+  helper shared by `trend_test()` and the refits behind
+  `structure_sensitivity()`, so the two routes cannot drift apart; a test pins
+  them against each other to 1e-8.
+- Two fixtures leave the `unverified` list because they can now be **rebuilt**:
+  `tests/data/nma_dose.csv` and `tests/data/nma_timecourse.csv` each have a
+  generator (`tools/make_nma_dose_fixture.py`,
+  `tools/make_nma_timecourse_fixture.py`) that fixes the seed, documents the
+  data-generating process and reproduces the shipped bytes exactly under
+  `--check`. Two more leave it because they can now be **recomputed**:
+  `_nc_common_ref.csv` and `_nc_random_ref.csv` are `netmeta::netcontrib`
+  output on Senn 2013, and `tools/r_reference/netcontrib_senn2013.R` reproduces
+  them with netmeta 3.7.0 to 8.1e-14 (common) and 3.8e-15 (random). The list is
+  down from seven files to three. The random-effects one also pins the
+  estimator: with `method.tau = "REML"` (tau² = 0.10105) the matrix is off by
+  3.2e-3, with the default DL (tau² = 0.10872) it agrees — and DL is also
+  pimeta's default, so fixture and code agree for the same reason rather than by
+  coincidence.
+- `tools/r_reference/onestage_slopes.R` added: `lme4` on the shipped
+  `onestage_slopes.csv` reproduces every pinned one-stage number, with
+  log-likelihoods agreeing to 1e-9 and variance components to 4e-6. The small
+  gap is `lme4` 2.0.6 (which produced the pinned values) against 2.1.0 (the
+  installed one), not the fixture. `tools/r_reference/ipd_nma.R` does the same
+  for the IPD network fixture, including the re-expression of the
+  random-effect block into the contrast parameterisation the model uses
+  (`Sigma = L' V L` with `L = [B - A, C - A]`); there the log-likelihood agrees
+  to 5e-11 and the variances to 1.2e-5, the same version gap.
+- `validation.run_scenario` and `DynamicHetResult.test_trend` accept `n_jobs`.
+  Both spread only *independent repetitions* over processes, all randomness is
+  drawn before the loop starts, and results are collected in submission order,
+  so the answer is identical to the serial run to the last bit —
+  `tests/test_parallel.py` compares `float.hex()`. Accumulations (a running
+  meta-analysis, leave-one-out) are deliberately not parallelised: there the
+  sum is the answer, and floating-point addition is not associative.
+
 ### Known limitations
 
 Everything this package currently cannot do, in one place, with the reason. Each

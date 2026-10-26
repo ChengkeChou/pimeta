@@ -277,6 +277,157 @@ def test_the_record_and_the_text(joint_diag):
     assert "last vs first" in text
 
 
+def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
+    """The warning quotes 52.1 / 57.3 / 40.6; those have to be computed.
+
+    A sentence in a warning is a claim like any other.  This is the
+    recomputation the warning points at, so the three numbers are checked
+    against the fit rather than against the prose.
+    """
+    out = joint_un.structure_sensitivity()
+    by = out["by_struct"]
+    assert set(by) == {"UN", "HCS", "DIAG"}
+    assert by["UN"]["tests"]["any"]["stat"] == pytest.approx(52.09, abs=0.05)
+    assert by["HCS"]["tests"]["any"]["stat"] == pytest.approx(57.28, abs=0.05)
+    assert by["DIAG"]["tests"]["any"]["stat"] == pytest.approx(40.58, abs=0.05)
+    # the spread is exactly what the per-structure stats say it is
+    stats = [r["tests"]["any"]["stat"] for r in by.values()]
+    assert out["spread"]["any"]["min"] == pytest.approx(min(stats), rel=1e-12)
+    assert out["spread"]["any"]["max"] == pytest.approx(max(stats), rel=1e-12)
+    # and the refit under the fitted structure must agree with the fit itself
+    assert by["UN"]["tests"]["linear"]["stat"] == pytest.approx(
+        joint_un.trend_test("linear")["stat"], rel=1e-8)
+
+
+def test_the_diagonal_structure_cannot_sit_on_the_ridge(joint_un):
+    """The ridge is a property of ``UN``, which is why the spread exists."""
+    by = joint_un.structure_sensitivity()["by_struct"]
+    assert by["UN"]["boundary"] is True
+    assert by["DIAG"]["boundary"] is False
+
+
+def test_every_structure_agrees_the_hazard_ratio_falls(joint_un):
+    """The claim that survives the ridge is the qualitative one."""
+    by = joint_un.structure_sensitivity()["by_struct"]
+    for struct, row in by.items():
+        assert row["tests"]["any"]["pval"] < 1e-6, struct
+        assert row["tests"]["linear"]["estimate"] < 0.0, struct
+    # and the statistic itself is not stable to one decimal place
+    assert (by["HCS"]["tests"]["any"]["stat"]
+            - by["DIAG"]["tests"]["any"]["stat"]) > 10.0
+
+
+def test_a_structure_that_fails_is_reported_not_raised(joint_un):
+    out = joint_un.structure_sensitivity(structs=("UN", "not-a-structure"))
+    assert "error" in out["by_struct"]["not-a-structure"]
+    assert "tests" in out["by_struct"]["UN"]
+    # the failing structure contributes nothing to the spread
+    assert out["spread"]["any"]["min"] == pytest.approx(
+        out["by_struct"]["UN"]["tests"]["any"]["stat"], rel=1e-12)
+
+
+# -- the contrast route: one slope per study, one variance to estimate ------- #
+
+@pytest.fixture(scope="module")
+def contrast():
+    return ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                             breaks=BREAKS)
+
+
+def test_the_contrast_slope_is_the_within_study_wls_slope(separate, contrast):
+    """Every reported slope has to be c'V^-1 y / c'V^-1 c, with c centred.
+
+    This is the whole model, so it is checked directly on one study rather than
+    only through the pooled answer.
+    """
+    log_hr = np.asarray(separate.log_hr)
+    cov = np.asarray(separate.cov_hr)
+    points = np.array([3.0, 9.0, 18.0])       # midpoints of the three intervals
+    worst = 0.0
+    for i in range(log_hr.shape[0]):
+        ok = np.isfinite(log_hr[i])
+        if ok.sum() < 2:
+            continue
+        idx = np.flatnonzero(ok)
+        info = np.linalg.inv(cov[i][np.ix_(idx, idx)])
+        t = points[idx]
+        w = info.sum()                        # 1' V^-1 1
+        c = t - (np.ones(idx.size) @ info @ t) / w
+        hand = float(c @ info @ log_hr[i][idx]) / float(c @ info @ c)
+        worst = max(worst, abs(hand - contrast["slope"][i]))
+    assert worst < 1e-12
+
+
+def test_the_contrast_trend_agrees_with_the_joint_answer(contrast, joint_un):
+    """Same question, different weighting: same sign, similar size.
+
+    The point of the two routes is not that they give the same number -- the
+    contrast route gives more weight to a study whose slope is well determined
+    and none to its level, which is the nuisance dimension being removed -- but
+    they must not disagree about the direction.
+    """
+    joint = joint_un.trend_test("linear")
+    per_month = joint["estimate"] / 12.0      # the joint contrast spans 12 months
+    assert contrast["beta"] < 0.0
+    assert contrast["ci_ub"] < 0.0
+    assert contrast["beta"] == pytest.approx(per_month, rel=0.35)
+
+
+def test_the_contrast_model_has_one_variance_parameter(contrast):
+    """No correlation to estimate, which is the reason for the route."""
+    assert isinstance(contrast["tau2"], float)
+    assert contrast["tau2"] >= 0.0
+    assert contrast["df"] == contrast["k"] - 1        # Knapp-Hartung
+    assert contrast["k"] == 16
+    assert contrast["excluded"] == {}
+    assert contrast["times"].tolist() == [3.0, 9.0, 18.0]
+
+
+def test_the_contrast_answer_does_not_depend_on_the_between_study_structure():
+    """The joint fit's statistic moves by 40% between structures; this one has
+    no structure to move."""
+    fit = ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                            breaks=BREAKS)
+    again = ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                              breaks=BREAKS, rho=None)
+    assert fit["beta"] == again["beta"]
+    assert fit["tau2"] == again["tau2"]
+
+
+def test_a_constant_hazard_ratio_shows_no_trend_through_the_contrast():
+    time, event, study, treat = _simulate([0.35, 0.35, 0.35], seed=7,
+                                          k=14, n=250)
+    out = ma.contrast_trend(time, event, study=study, treat=treat,
+                            breaks=BREAKS)
+    assert out["p_value"] > 0.05
+    assert abs(out["beta"]) < 0.02
+
+
+def test_a_declining_hazard_ratio_shows_a_trend_through_the_contrast():
+    time, event, study, treat = _simulate([0.60, 0.30, 0.00], seed=9,
+                                          k=14, n=250)
+    out = ma.contrast_trend(time, event, study=study, treat=treat,
+                            breaks=BREAKS)
+    assert out["beta"] < 0.0
+    assert out["p_value"] < 0.01
+    assert out["ratio"] == pytest.approx(float(np.exp(out["beta"])), rel=1e-12)
+
+
+def test_the_contrast_refusals():
+    with pytest.raises(ValueError, match="three or more boundaries"):
+        ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                          breaks=np.array([0.0, 6.0]))
+    with pytest.raises(ValueError, match="one time per interval"):
+        ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                          breaks=BREAKS, times=[1.0, 2.0])
+    with pytest.raises(ValueError, match="rho"):
+        ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT,
+                          breaks=BREAKS, rho=2.0)
+    with pytest.raises(ValueError, match="0/1"):
+        ma.contrast_trend(TIME, EVENT, study=STUDY, treat=TREAT + 1,
+                          breaks=BREAKS)
+
+
 def _simulate(effect, *, seed, k, n, breaks=BREAKS, sd_study=0.12,
               rho_study=0.5, base=0.08, mean_censor=40.0, horizon=24.0):
     """Piecewise-exponential survival data with a known log hazard ratio."""

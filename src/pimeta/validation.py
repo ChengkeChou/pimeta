@@ -28,9 +28,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any
 
 import numpy as np
+
+from .parallel import map_ordered, resolve_jobs
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -41,7 +44,6 @@ __all__ = [
     "run_scenario",
     "summarise_fits",
 ]
-
 SCHEMA_VERSION = 1
 
 #: How the sampling standard errors are spread across studies. The spread
@@ -333,6 +335,62 @@ def summarise_fits(estimates: list[dict[str, Any]], mu: float,
 # running a scenario end to end
 # --------------------------------------------------------------------------
 
+def _record_for(data: Dataset, res: Any, level: float) -> dict[str, Any]:
+    """One replication's fit as the record :func:`summarise_fits` reads.
+
+    A model that cannot predict is recorded as having no interval rather than
+    as having missed: those are different diagnoses and only the second one is
+    about calibration.
+    """
+    if res is None:
+        return {"b": float("nan"), "se": float("nan"),
+                "ci_lb": float("nan"), "ci_ub": float("nan"),
+                "pval": float("nan"), "tau2": float("nan"),
+                "I2": float("nan"), "pi_lb": None, "pi_ub": None,
+                "mu_new": data.mu_new}
+    try:
+        pred = res.predict(level)
+        pi_lb, pi_ub = pred.pi_lb, pred.pi_ub
+    except Exception:  # noqa: BLE001 - a model that cannot predict is data
+        pi_lb, pi_ub = None, None
+    try:
+        pred_t = res.predict(level, predtype="t")
+        pi_lb_t, pi_ub_t = pred_t.pi_lb, pred_t.pi_ub
+    except Exception:  # noqa: BLE001
+        pi_lb_t, pi_ub_t = None, None
+    return {
+        "b": float(res.b[0]),
+        "se": float(res.se[0]),
+        "ci_lb": float(res.ci_lb[0]),
+        "ci_ub": float(res.ci_ub[0]),
+        "pval": float(res.pval[0]),
+        "tau2": float(res.tau2),
+        "I2": float(res.I2),
+        "pi_lb": None if pi_lb is None else float(pi_lb),
+        "pi_ub": None if pi_ub is None else float(pi_ub),
+        "pi_lb_t": None if pi_lb_t is None else float(pi_lb_t),
+        "pi_ub_t": None if pi_ub_t is None else float(pi_ub_t),
+        "mu_new": data.mu_new,
+    }
+
+
+def _default_fit_record(data: Dataset, *, method: str,
+                        level: float) -> dict[str, Any]:
+    """Fit one replication with :func:`pimeta.rma`.
+
+    Module-level and keyword-only so a :class:`functools.partial` of it can be
+    pickled and sent to a worker process; a closure would not be.
+    """
+    return _record_for(data, _default_fit(method=method, level=level)(data),
+                       level)
+
+
+def _record_for_estimator(data: Dataset, *, estimator: Callable[[Any], Any],
+                          level: float) -> dict[str, Any]:
+    """The same, for a caller-supplied estimator."""
+    return _record_for(data, estimator(data), level)
+
+
 def run_scenario(
     scenario: Scenario,
     reps: int = 1000,
@@ -341,6 +399,7 @@ def run_scenario(
     method: str = "REML",
     level: float = 0.95,
     fit: Callable[[Dataset], Any] | None = None,
+    n_jobs: int | None = None,
 ) -> dict[str, Any]:
     """Simulate ``reps`` replications of ``scenario`` and summarise them.
 
@@ -356,6 +415,15 @@ def run_scenario(
             ``ci_lb``, ``ci_ub``, ``pval``, ``tau2``, ``I2`` and ``predict()``.
             Injecting it lets this module be used for models other than
             :func:`pimeta.rma` without importing them here.
+        n_jobs: worker processes for the *fits*. ``None`` or ``1`` runs them in
+            this process. All ``reps`` datasets are simulated first, serially,
+            from the one seeded generator, so the random stream a replication
+            consumes does not depend on how many workers there are: the report
+            is identical to the serial one to the last bit, and
+            ``tests/test_parallel.py`` checks that with ``float.hex()``. Only
+            the fitting is spread out, and each fit receives a dataset rather
+            than a generator. ``n_jobs > 1`` needs ``fit`` to be picklable
+            (a module-level function or a ``partial`` of one).
 
     Returns:
         A JSON-serialisable report with the six calibration blocks plus the
@@ -364,49 +432,22 @@ def run_scenario(
     if reps < 2:
         raise ValueError("reps must be at least 2 for a Monte Carlo error")
     rng = np.random.default_rng(seed)
-    estimator = fit if fit is not None else _default_fit(method=method, level=level)
-
-    records: list[dict[str, Any]] = []
-    for _ in range(reps):
-        data = simulate_study(scenario, rng)
-        res = estimator(data)
-        if res is None:
-            records.append({"b": float("nan"), "se": float("nan"),
-                            "ci_lb": float("nan"), "ci_ub": float("nan"),
-                            "pval": float("nan"), "tau2": float("nan"),
-                            "I2": float("nan"), "pi_lb": None, "pi_ub": None,
-                            "mu_new": data.mu_new})
-            continue
-        try:
-            pred = res.predict(level)
-            pi_lb, pi_ub = pred.pi_lb, pred.pi_ub
-        except Exception:  # noqa: BLE001 - a model that cannot predict is data
-            pi_lb, pi_ub = None, None
-        try:
-            pred_t = res.predict(level, predtype="t")
-            pi_lb_t, pi_ub_t = pred_t.pi_lb, pred_t.pi_ub
-        except Exception:  # noqa: BLE001
-            pi_lb_t, pi_ub_t = None, None
-        records.append({
-            "b": float(res.b[0]),
-            "se": float(res.se[0]),
-            "ci_lb": float(res.ci_lb[0]),
-            "ci_ub": float(res.ci_ub[0]),
-            "pval": float(res.pval[0]),
-            "tau2": float(res.tau2),
-            "I2": float(res.I2),
-            "pi_lb": None if pi_lb is None else float(pi_lb),
-            "pi_ub": None if pi_ub is None else float(pi_ub),
-            "pi_lb_t": None if pi_lb_t is None else float(pi_lb_t),
-            "pi_ub_t": None if pi_ub_t is None else float(pi_ub_t),
-            "mu_new": data.mu_new,
-        })
+    # Simulate everything before fitting anything: that is what makes the
+    # result independent of n_jobs.
+    datasets = [simulate_study(scenario, rng) for _ in range(reps)]
+    if fit is None:
+        per_rep: Callable[[Dataset], dict[str, Any]] = partial(
+            _default_fit_record, method=method, level=level)
+    else:
+        per_rep = partial(_record_for_estimator, estimator=fit, level=level)
+    records = map_ordered(per_rep, datasets, n_jobs=n_jobs)
 
     report = summarise_fits(records, scenario.mu, scenario.tau2)
     report["schema_version"] = SCHEMA_VERSION
     report["scenario"] = _scenario_dict(scenario)
     report["settings"] = {"reps": reps, "seed": seed, "method": method,
-                          "level": level}
+                          "level": level,
+                          "n_jobs": resolve_jobs(n_jobs, reps)}
     return report
 
 
