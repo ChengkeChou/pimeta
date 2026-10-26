@@ -31,6 +31,12 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy import optimize, stats
 
+from ._projection import (
+    quad_form,
+    quad_form_squared,
+    trace_projection,
+    trace_projection_squared,
+)
 from .basis import Basis
 from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
 from .missing import complete_cases
@@ -52,17 +58,36 @@ _TAU2_MAX = 1e6
 # tau-squared estimation (generalised — arbitrary design matrix X)
 # --------------------------------------------------------------------------- #
 def _proj(X: np.ndarray, w: np.ndarray) -> np.ndarray:
-    """``P = W - W X (X'W X)^-1 X' W`` with ``W = diag(w)``."""
+    """``P = W - W X (X'W X)^-1 X' W`` with ``W = diag(w)``.
+
+    Kept as the reference implementation. It is **not** used on any hot path:
+    forming ``P`` costs ``O(k^2)`` memory and ``O(k^2 p)`` time, and everything
+    the estimators need from it is a trace or a quadratic form, which the
+    helpers in :mod:`pimeta._projection` compute in ``O(kp)``. The tests compare
+    the two.
+    """
     W = np.diag(w)
     stXWX = np.linalg.inv(X.T @ W @ X)
     return W - W @ X @ stXWX @ X.T @ W
 
 
+_quad_form = quad_form
+_quad_form_squared = quad_form_squared
+_trace_P = trace_projection
+_trace_P2 = trace_projection_squared
+
+
 def _tau2_he(y, v, X, ymc, k, p):
-    """Hedges estimator (unweighted projection)."""
-    P = np.eye(k) - X @ np.linalg.inv(X.T @ X) @ X.T
-    rss = float(ymc @ P @ ymc)
-    tr_pv = float(np.sum(np.diag(P) * v))
+    """Hedges estimator (unweighted projection).
+
+    ``tr(P V)`` is evaluated as ``sum(v) - tr((X'X)^-1 X'VX)``: the explicit
+    ``I - X (X'X)^-1 X'`` would be a ``k x k`` matrix, which is 3.2 GB at
+    ``k = 20000`` for a number that fits in a ``p x p`` trace.
+    """
+    w = np.ones(k)
+    rss = _quad_form(X, w, ymc)
+    stXX = np.linalg.inv(X.T @ X)
+    tr_pv = float(np.sum(v) - np.trace(stXX @ (X.T @ (v[:, None] * X))))
     return max(0.0, (rss - tr_pv) / (k - p))
 
 
@@ -72,10 +97,7 @@ def _tau2_eb(y, v, X, ymc, k, p):
     threshold = 1e-5
     for _ in range(100):
         wi = 1.0 / (v + tau2)
-        W = np.diag(wi)
-        stXWX = np.linalg.inv(X.T @ W @ X)
-        P = W - W @ X @ stXWX @ X.T @ W
-        adj = (float(ymc @ P @ ymc) * k / (k - p) - k) / float(wi.sum())
+        adj = (_quad_form(X, wi, ymc) * k / (k - p) - k) / float(wi.sum())
         while tau2 + adj < 0.0:
             adj /= 2.0
         tau2_new = tau2 + adj
@@ -104,22 +126,19 @@ def _tau2_estimate(y, v, X, method):
 
     if method == "HS":
         w = 1.0 / v
-        P = _proj(X, w)
-        rss = float(ymc @ P @ ymc)
+        rss = _quad_form(X, w, ymc)
         return max(0.0, (rss - k) / float(w.sum()))
 
     if method == "DL":
         w = 1.0 / v
-        P = _proj(X, w)
-        rss = float(ymc @ P @ ymc)
-        tr_p = float(np.trace(P))
+        rss = _quad_form(X, w, ymc)
+        tr_p = _trace_P(X, w)
         return max(0.0, (rss - (k - p)) / tr_p)
 
     if method == "SJ":
         tau2_0 = float(np.var(ymc, ddof=0))  # sum((y-mean)^2)/k
         w = 1.0 / (v + tau2_0)
-        P = _proj(X, w)
-        rss = float(ymc @ P @ ymc)
+        rss = _quad_form(X, w, ymc)
         return max(0.0, tau2_0 * rss / (k - p))
 
     if method in ("PM", "MP"):
@@ -127,8 +146,7 @@ def _tau2_estimate(y, v, X, method):
 
         def f(t2: float) -> float:
             w = 1.0 / (v + t2)
-            P = _proj(X, w)
-            return float(ymc @ P @ ymc) - target
+            return _quad_form(X, w, ymc) - target
 
         if f(0.0) <= 0.0:
             return 0.0
@@ -157,19 +175,17 @@ def _se_tau2(v, X, tau2, method, k, p):
     if method in ("FE",):
         return None
     wi = 1.0 / (v + tau2)
-    W = np.diag(wi)
-    stXWX = np.linalg.inv(X.T @ W @ X)
-    P = W - W @ X @ stXWX @ X.T @ W
     if method == "ML":
         return float(math.sqrt(2.0 / float(np.sum(wi ** 2))))
     if method == "REML":
-        return float(math.sqrt(2.0 / float(np.sum(P * P))))
+        return float(math.sqrt(2.0 / _trace_P2(X, wi)))
     if method == "DL":
-        tr_p = float(np.trace(P))
+        tr_p = _trace_P(X, wi)
+        tr_p2 = _trace_P2(X, wi)
         return float(math.sqrt(
             (1.0 / tr_p ** 2)
             * (2.0 * (k - p) + 4.0 * max(tau2, 0.0) * tr_p
-               + 2.0 * max(tau2, 0.0) ** 2 * float(np.sum(P * P)))
+               + 2.0 * max(tau2, 0.0) ** 2 * tr_p2)
         ))
     return None
 
@@ -538,10 +554,13 @@ def rma(
     tau2 = _tau2_estimate(yi, vi, X, method_key)
 
     # --- weighted least squares ------------------------------------------ #
+    # Weighted products are formed by scaling X and y rather than by building
+    # the k-by-k diagonal matrix W: `np.diag(w) @ X` materialises k^2 entries,
+    # which is 3.2 GB at k = 20000 and was the last quadratic step left in the
+    # fit. `w[:, None] * X` is the same product with k*p entries.
     wi = 1.0 / (vi + tau2) if not tau2_fix else 1.0 / vi
-    W = np.diag(wi)
-    stXWX = np.linalg.inv(X.T @ W @ X)
-    b = stXWX @ X.T @ W @ yi
+    stXWX = np.linalg.inv(X.T @ (wi[:, None] * X))
+    b = stXWX @ (X.T @ (wi * yi))
     vb = stXWX  # (X'W X)^-1
 
     # --- test / s2w scaling ---------------------------------------------- #
@@ -599,14 +618,13 @@ def rma(
 
     # --- QE residual heterogeneity (fixed-effect weights) ----------------- #
     wi_fe = 1.0 / vi
-    P_fe = _proj(X, wi_fe)
     ymc = yi - yi.mean()
-    QE = max(0.0, float(ymc @ P_fe @ ymc))
+    QE = max(0.0, _quad_form(X, wi_fe, ymc))
     QE_df = k - p
     QEp = float(stats.chi2.sf(QE, QE_df)) if QE_df > 0 else math.nan
 
     # --- I^2 / H^2 / vt --------------------------------------------------- #
-    tr_p_fe = float(np.trace(P_fe))
+    tr_p_fe = _trace_P(X, wi_fe)
     if k > p and tr_p_fe > 0:
         vt = (k - p) / tr_p_fe
     else:

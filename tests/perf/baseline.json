@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "environment": {
+    "python": "3.12.3",
+    "numpy": "2.5.4",
+    "platform": "Windows-11-10.0.26300-SP0",
+    "processor": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+    "pimeta": "1.1.0"
+  },
+  "settings": {
+    "repeat": 7
+  },
+  "cases": {
+    "rma_reml_20": {
+      "stresses": "iterative tau^2 at a small k",
+      "k": 20,
+      "p": 1,
+      "repeat": 7,
+      "min_seconds": 0.0010779000003822148,
+      "median_seconds": 0.0011130999773740768,
+      "peak_kb": 17.7666015625
+    },
+    "rma_reml_200": {
+      "stresses": "iterative tau^2 at a large k",
+      "k": 200,
+      "p": 1,
+      "repeat": 7,
+      "min_seconds": 0.001108399999793619,
+      "median_seconds": 0.0011347000254318118,
+      "peak_kb": 73.484375
+    },
+    "rma_dl_200": {
+      "stresses": "the closed-form path, as a floor on the iterative one",
+      "k": 200,
+      "p": 1,
+      "repeat": 7,
+      "min_seconds": 0.0008840000373311341,
+      "median_seconds": 0.0009305999847128987,
+      "peak_kb": 73.25
+    },
+    "metareg_2mods_200": {
+      "stresses": "a design matrix on the iterative path",
+      "k": 200,
+      "p": 3,
+      "repeat": 7,
+      "min_seconds": 0.0015682000084780157,
+      "median_seconds": 0.0016734999953769147,
+      "peak_kb": 83.6318359375
+    },
+    "rma_mv_2outcomes_40": {
+      "stresses": "a block-diagonal covariance with 80 rows",
+      "k": 40,
+      "p": 2,
+      "repeat": 7,
+      "min_seconds": 0.00637389998883009,
+      "median_seconds": 0.006730599969159812,
+      "peak_kb": 524.525390625
+    },
+    "robma_20": {
+      "stresses": "exact quadrature over the model set",
+      "k": 20,
+      "p": 1,
+      "repeat": 7,
+      "min_seconds": 0.2791659999638796,
+      "median_seconds": 0.29259729996556416,
+      "peak_kb": 2467.916015625
+    },
+    "tau_trend_40": {
+      "stresses": "dynamic heterogeneity, analytic gradient",
+      "k": 40,
+      "p": 2,
+      "repeat": 7,
+      "min_seconds": 0.03758050000760704,
+      "median_seconds": 0.039389500045217574,
+      "peak_kb": 29.900390625
+    }
+  }
+}

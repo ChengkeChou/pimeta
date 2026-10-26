@@ -29,6 +29,12 @@ from numpy.typing import ArrayLike
 from scipy import integrate, stats
 
 from ._numeric import zeroin as _zeroin
+from ._projection import (
+    quad_form,
+    quad_form_squared,
+    trace_projection,
+    trace_projection_squared,
+)
 from .tau2 import estimate_tau2
 
 # 95% CI z-quantile, equivalent to R's qnorm(0.975).
@@ -176,24 +182,21 @@ def _metafor_fisher_scoring_tau2(
 
     # Hedges (HE) start value (also metafor's ML/REML/EB initial tau^2):
     #   P = I - X (X'X)^-1 X';  tau2 = (ymc' P ymc - tr(P V)) / (k - p)
+    # The projection is never formed: from ._projection gives tr(P V) as the
+    # p x p expression, which is what keeps a k of 20000 from asking for 3 GiB.
     stXX = np.linalg.inv(X.T @ X)
-    P = np.eye(k) - X @ stXX @ X.T
-    rss = float(ymc @ P @ ymc)
-    tr_pv = float(np.sum(np.diag(P) * v))  # tr(P %*% diag(v))
+    rss = quad_form(X, np.ones(k), ymc)
+    tr_pv = float(np.sum(v) - np.trace(stXX @ (X.T @ (v[:, None] * X))))
     tau2 = max(0.0, (rss - tr_pv) / (k - p))
 
     threshold = 1e-5  # metafor's con$threshold
     for _ in range(100):  # metafor's con$maxiter
         wi = 1.0 / (v + tau2)
-        W = np.diag(wi)
-        stXWX = np.linalg.inv((X.T * wi) @ X)
-        P = W - W @ X @ stXWX @ X.T @ W
-        PP = P @ P
-        yppy = float(ymc @ PP @ ymc)
+        yppy = quad_form_squared(X, wi, ymc)
         if method == "ML":
             adj = (yppy - float(wi.sum())) / float(np.sum(wi ** 2))
         else:  # REML
-            adj = (yppy - float(np.trace(P))) / float(np.trace(PP))
+            adj = (yppy - trace_projection(X, wi)) / trace_projection_squared(X, wi)
 
         while tau2 + adj < 0.0:  # step-halving at the tau^2 >= 0 boundary
             adj /= 2.0

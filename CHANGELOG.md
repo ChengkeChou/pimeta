@@ -94,6 +94,42 @@ the entry or the page named.
 
 ### Fixed
 
+- **Two `k x k` matrices removed from the linear algebra, and a benchmark to keep
+them out.** `_proj` built `P = W - W X (X'WX)^-1 X'W` explicitly to obtain
+`tr(P)`, `tr(P^2)` and `y'Py`, and the ML/REML Fisher-scoring loop built
+`np.eye(k) - X (X'X)^-1 X'` plus a fresh `np.diag(w)` and two `k x k` products per
+iteration. Both are `O(k^2)` in memory and `O(k^2 p)` in time for quantities that
+have closed forms in `p x p` matrices; `pimeta._projection` now supplies them.
+
+  Measured on `rma`, three estimators: 507 ms → 2.3 ms at `k = 2000` for REML,
+  389 → 1.7 ms for DL, and `k = 20000` went from `MemoryError` ("unable to
+  allocate 2.98 GiB") to 31 ms. `k = 200000` now fits in 288 ms.
+
+  The quadratic form is computed as `sum(w r^2)` from the weighted residual rather
+  than by expanding the product, which is algebraically identical and avoids
+  subtracting two large nearly equal numbers when the model fits well.
+
+  Equivalence was checked rather than assumed: `tools/validate.py --all`
+  reproduces all six stored baselines with deltas of 0.0000 at the reported
+  precision, and `tests/test_projection_helpers.py` compares every `O(kp)`
+  expression against the explicit `k x k` one on random data.
+
+  One reference constant did move: the Copas pipeline's slope, which is a
+  *composition* of metasens' downstream code with pimeta's own sensitivity
+  surface, went from 0.14937955364276298 to 0.14937955278623571 (relative
+  5.8e-9). That test's `rel=1e-15` was pinning `rma`'s last digits rather than
+  metasens' algorithm; it now asserts seven significant figures, still four
+  orders tighter than the 1.4e-5 disagreement between the two surfaces that the
+  same test file measures separately.
+
+- **`tools/bench.py`, and the first thing it found was a bug in itself.** The tool
+  records wall time and peak traced memory for seven cases and compares against
+  `tests/perf/baseline.json`. Its first version timed the runs with `tracemalloc`
+  enabled, which inflates allocation-heavy code unevenly and reported
+  `rma(method="DL")` at 22.9 ms against an untraced 2.5 ms; timing and tracing are
+  now separate passes. Without that correction the comparison between rows would
+  have been meaningless as well as the absolute numbers being wrong.
+
 - **`to_html` crashed on every result whose `to_dict()` had a nested block.**
   The table flattener recursed into a mapping and then called `vars()` on it, so
   the moment `RmaResult.to_dict()` grew a `diagnostics` block — itself a dict —

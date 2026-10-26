@@ -443,6 +443,47 @@ Done means: a baseline exists for every model family, each optimisation is
 justified by the profile rather than by intuition, and the equivalence gate runs
 in the default test suite.
 
+**Status.** `tools/bench.py` records wall time and peak traced memory for seven
+cases covering `rma` (three estimators, two sizes), a meta-regression, a
+multivariate fit, RoBMA and `tau_trend`, and compares a fresh run against
+`tests/perf/baseline.json`.
+
+It paid for itself immediately, and it also caught a fault in itself. The first
+version timed the runs with `tracemalloc` active, which inflates allocation-heavy
+code unevenly; it reported `rma(method="DL")` at 22.9 ms where the untraced time
+is 2.5 ms. Timing and tracing are now two separate passes.
+
+With a trustworthy number, the probe found two quadratic steps, both of the shape
+the stage predicted — a `k x k` object rebuilt where a `p x p` expression would
+do:
+
+- `_proj` formed `P = W - W X (X'WX)^-1 X'W` explicitly for `tr(P)`, `tr(P^2)`
+  and `y'Py`;
+- the Fisher-scoring loop in `pooling` built `np.eye(k) - X (X'X)^-1 X'` and, per
+  iteration, `np.diag(w)` followed by two `k x k` products.
+
+Both now go through `pimeta._projection`, which computes the four quantities from
+`p x p` matrices in `O(kp)`. `y'Py` is evaluated as `sum(w r^2)` with the weighted
+residual, which is also numerically better than expanding the product.
+
+| | before | after |
+|---|---|---|
+| `rma(method="FE")`, k = 2000 | 134 ms | 1.7 ms |
+| `rma(method="DL")`, k = 2000 | 389 ms | 1.7 ms |
+| `rma(method="REML")`, k = 2000 | 507 ms | 2.3 ms |
+| `rma(method="REML")`, k = 20000 | `MemoryError`, 2.98 GiB | 31 ms |
+| `rma(method="REML")`, k = 200000 | — | 288 ms |
+
+The equivalence gate held: `tools/validate.py --all` reproduces every stored
+baseline with deltas of 0.0000 at the reported precision, and the full suite is
+unchanged. `tests/test_projection_helpers.py` compares each `O(kp)` expression
+against the explicit `k x k` one, so the algebra is checked rather than assumed.
+
+Not done, and not justified yet: vectorisation beyond what numpy already gives,
+an optional `numba` path, and process-level parallelism for multiverse and
+simulation runs. The profile no longer points at them — 200 000 studies in 288 ms
+is not the binding constraint for this library.
+
 ## Not planned
 
 - **A general workflow engine.** The composable API plus the run record is the
