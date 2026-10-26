@@ -16,7 +16,7 @@ purpose: with the 25–60 participant studies a first attempt used, the sampling
 noise in each study's own intercept and slope is comparable to the variance
 being estimated, both implementations land on the correlation boundary
 ``rho = 0.99998``, and there is nothing left to discriminate.  The estimates
-here are interior (``rho = 0.339`` estimated against 0.5 true).
+here are interior (``rho = 0.712`` estimated against 0.5 true).
 """
 
 import pathlib
@@ -35,28 +35,30 @@ AGE = DATA[:, 2]
 Y = DATA[:, 3]
 COV = {"agec": AGE - 55.0, "treat:agec": TREAT * (AGE - 55.0)}
 
-# --- lme4 2.0.6, R 4.6.1, from tests/data/onestage_slopes.csv ---------------
-R_INT_B = [0.440110804160, -0.110285509409, 0.021023273689, 0.009700602656]
-R_INT_SE = [0.069666071960, 0.022525380724, 0.001712465637, 0.002462876929]
-R_INT_TAU2 = 0.110356827916
-R_INT_SIGMA2 = 0.653810808302
-R_INT_LOGLIK = -6276.166598487071
+# --- lme4 2.1.0, R 4.6.1, from tests/data/onestage_slopes.csv ---------------
+# Regenerate the fixture with tools/make_onestage_slopes_fixture.py and these
+# with tools/r_reference/onestage_slopes.R.
+R_INT_B = [0.574846269376, -0.158773991757, 0.022382670718, 0.008308243906]
+R_INT_SE = [0.080088206405, 0.022218186785, 0.001747292394, 0.002455889992]
+R_INT_TAU2 = 0.147992622635
+R_INT_SIGMA2 = 0.659599378963
+R_INT_LOGLIK = -6532.613438871319
 
-R_UN_B = [0.438713009394, -0.107649398114, 0.021267710059, 0.009178881863]
-R_UN_SE = [0.059034754017, 0.050088520277, 0.001698863451, 0.002442946704]
-R_UN_D = [[0.077602191864, 0.020732734380],
-          [0.020732734380, 0.048110546744]]
-R_UN_SIGMA2 = 0.641585575432
-R_UN_LOGLIK = -6242.258083330077
+R_UN_B = [0.573360420176, -0.156558653359, 0.022090035412, 0.008651410203]
+R_UN_SE = [0.064596613890, 0.046637636794, 0.001735416031, 0.002440666935]
+R_UN_D = [[0.094274026644, 0.043976216246],
+          [0.043976216246, 0.040444152689]]
+R_UN_SIGMA2 = 0.650000594750
+R_UN_LOGLIK = -6502.327209688169
 
-R_DG_D = [0.081711571849, 0.050781079718]
-R_DG_SIGMA2 = 0.641457536975
-R_DG_LOGLIK = -6243.226453981669
+R_DG_D = [0.103062576665, 0.046201311974]
+R_DG_SIGMA2 = 0.649698105290
+R_DG_LOGLIK = -6506.939969039937
 
-R_ML_D = [[0.074092045670, 0.020123396010],
-          [0.020123396010, 0.045658444549]]
-R_ML_SIGMA2 = 0.641332707792
-R_ML_LOGLIK = -6227.343870175364
+R_ML_D = [[0.090097842575, 0.042419225898],
+          [0.042419225898, 0.038176412984]]
+R_ML_SIGMA2 = 0.649765192239
+R_ML_LOGLIK = -6487.288469115336
 
 
 @pytest.fixture(scope="module")

@@ -118,6 +118,17 @@ ORIGIN: dict[str, dict[str, Any]] = {
                 "(phi 0.6, SD 0.22) and between-study SD 0.18. The "
                 "generator fixes the seed and --check reproduces the bytes",
     },
+    "onestage_slopes.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_onestage_slopes_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "24 simulated studies of 165-275 participants with a "
+                "correlated random intercept and treatment slope "
+                "(D = [[0.09, 0.03], [0.03, 0.04]]) and residual SD 0.8; the "
+                "generator fixes the seed and --check reproduces the bytes, "
+                "and tools/r_reference/onestage_slopes.R recomputes every "
+                "pinned number with lme4",
+    },
     "_r_senn2013.tsv": {
         "origin": "r-reference",
         "produced_by": "tools/r_reference/netmeta_senn2013.R",
@@ -166,7 +177,6 @@ ORIGIN: dict[str, dict[str, Any]] = {
 #: shrink by recording a source, and can only grow by someone editing this file.
 UNVERIFIED = (
     "ipd_nma.csv",
-    "onestage_slopes.csv",
     "tvhr_piecewise.csv",
 )
 

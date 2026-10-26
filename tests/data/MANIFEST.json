@@ -91,12 +91,13 @@
       "sha256": "aef8696e694dd877e59337e5b48f002937f5c50e12677cd283032e1b22f8ecba"
     },
     "onestage_slopes.csv": {
-      "bytes": 128717,
-      "licence": "unverified",
+      "bytes": 133189,
+      "licence": "MIT",
       "name": "onestage_slopes.csv",
-      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
-      "origin": "unverified",
-      "sha256": "e527b0fdc8dd9c3cd5830422e7085b39a4ba41826b8ac6b081b52e2dc27e4dc6"
+      "note": "24 simulated studies of 165-275 participants with a correlated random intercept and treatment slope (D = [[0.09, 0.03], [0.03, 0.04]]) and residual SD 0.8; the generator fixes the seed and --check reproduces the bytes, and tools/r_reference/onestage_slopes.R recomputes every pinned number with lme4",
+      "origin": "generated",
+      "produced_by": "tools/make_onestage_slopes_fixture.py",
+      "sha256": "73d5e6912cdf9fcd904d1026f29b097c7c8f2cce1ddf8a301e4088458c3cb170"
     },
     "prediction_joint.csv": {
       "bytes": 792,
@@ -138,7 +139,6 @@
   "schema": 1,
   "unverified": [
     "ipd_nma.csv",
-    "onestage_slopes.csv",
     "tvhr_piecewise.csv"
   ]
 }

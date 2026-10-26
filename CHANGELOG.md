@@ -90,7 +90,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   estimator: with `method.tau = "REML"` (tau² = 0.10105) the matrix is off by
   3.2e-3, with the default DL (tau² = 0.10872) it agrees — and DL is also
   pimeta's default, so fixture and code agree for the same reason rather than by
-  coincidence.
+  coincidence. `onestage_slopes.csv` joined them the same way: a generator
+  (`tools/make_onestage_slopes_fixture.py`) that fixes the seed, documents the
+  design (24 studies of 165–275 participants, `D = [[0.09, 0.03],
+  [0.03, 0.04]]`, residual SD 0.8) and rebuilds the file exactly, with the lme4
+  reference re-run on the rebuilt bytes. The list is down from seven files to
+  two.
 - `tools/r_reference/onestage_slopes.R` added: `lme4` on the shipped
   `onestage_slopes.csv` reproduces every pinned one-stage number, with
   log-likelihoods agreeing to 1e-9 and variance components to 4e-6. The small

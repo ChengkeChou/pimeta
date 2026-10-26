@@ -29,7 +29,6 @@ ORIGINS = {"generated", "r-reference", "upstream", "unverified"}
 #: see the module docstring.
 UNVERIFIED = {
     "ipd_nma.csv",
-    "onestage_slopes.csv",
     "tvhr_piecewise.csv",
 }
 
