@@ -114,6 +114,7 @@ from .extras import (
 from .fmt import dfround, fmtp, fmtp2, fmtt, fmtx
 from .fsn import FsnResult, fsn
 from .gosh import GoshResult, gosh
+from .hte import bayes_factor_normal, subgroup_evidence
 from .ipd import IpdResult, StudyFit, ipd_two_stage, linear_model, logistic_model
 from .ipd_curve import IpdCurve, IpdCurveResult, ipd_two_stage_curve
 from .levels import level_to_alpha, level_to_percent
@@ -923,6 +924,8 @@ __all__ = [
     "run_scenario",
     # sensitivity: one estimand under each assumption that could differ
     "sensitivity_table", "SensitivityResult", "SensitivityRow",
+    # subgroup evidence: a Bayes factor and an equivalence proportion
+    "subgroup_evidence", "bayes_factor_normal",
     # the analysis specification: declared decisions and their grid
     "AnalysisSpec", "Decision", "Specification", "RunOutcome", "execute",
     # stability across that grid

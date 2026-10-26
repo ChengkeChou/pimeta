@@ -1,6 +1,6 @@
 # API reference
 
-All 542 public names in `pimeta.__all__`, generated from the source docstrings.
+All 544 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -367,6 +367,8 @@ All 542 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`MatregResult`](diagnostics.md#matregresult) | Diagnostics and utilities | matreg |
 | [`profile_rma`](diagnostics.md#profile_rma) | Diagnostics and utilities | profile.rma.uni |
 | [`ProfileResult`](diagnostics.md#profileresult) | Diagnostics and utilities | profile.rma.uni |
+| [`subgroup_evidence`](diagnostics.md#subgroup_evidence) | Diagnostics and utilities | — |
+| [`bayes_factor_normal`](diagnostics.md#bayes_factor_normal) | Diagnostics and utilities | BF10 |
 | [`MissingPolicy`](diagnostics.md#missingpolicy) | Diagnostics and utilities | — |
 | [`complete_case_policy`](diagnostics.md#complete_case_policy) | Diagnostics and utilities | — |
 | [`policy_from_result`](diagnostics.md#policy_from_result) | Diagnostics and utilities | — |

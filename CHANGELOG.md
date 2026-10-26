@@ -114,6 +114,26 @@ the entry or the page named.
   The bug was found by rebuilding a fixture from a documented simulation, which
   is the argument for doing that rather than keeping data of unknown lineage.
 
+- **`predict_region` defaults to the Hotelling `F` reference.** Measured over
+  300 replications of two correlated outcomes, the region covered 0.83 with the
+  `F` reference against 0.77 with the asymptotic chi-square at `k = 10`, and
+  0.93 against 0.92 at `k = 20`; the asymptotic one is now something you ask for.
+  Neither reaches 0.95 at `k = 10`: the `F` reference is exact for a *known*
+  Wishart covariance, while a meta-analysis estimates the between-study
+  covariance by REML from the same studies, so its effective degrees of freedom
+  are fewer than `k - p`. An exact-Wishart calculation suggests a critical value
+  of about 10.0 at `k = 10`, which would over-correct — the measurement says
+  0.83, not the 0.95 that calculation predicts.
+
+- **Two diagnostics that were listed as undiagnosable now exist.**
+  `near_rank_deficient` fires when the design is full rank but has a condition
+  number above `1e6`: the exact case is refused by `rma` and can never reach a
+  fit, but the near case produces standard errors nobody can interpret.
+  `flat_likelihood` fires when the curvature of the log-likelihood in `tau2` is
+  not negative at an interior estimate, which means the optimiser stopped on a
+  surface whose maximum is not there; with the location coefficients profiled
+  out the Hessian is one number, and three likelihood evaluations settle it.
+
 - **RoBMA's step functions could be named but not used.** `BIAS_PRIOR_WEIGHTS`
   lists the six Vevea–Hedges step functions of the default ensemble, so
   `bias_models=("none", "one-sided: 0.025, 0.05")` passed validation and was then
@@ -238,6 +258,29 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **`predtype="cd"`: a prediction interval that integrates the uncertainty of
+  `tau2` out instead of plugging it in.** The pivot
+  `Q(tau2) = sum (y_i - mu(tau2))^2 / (v_i + tau2) ~ chi^2_{k-1}` is exact for
+  every `k`; inverting it gives a confidence distribution for `tau2`, and the
+  interval is the `t_{k-2}` mixture over that distribution (Nagashima, Noma &
+  Furukawa 2019). Measured at 2000 replications per scenario against the true
+  effect of a new study: **0.949 ± 0.005** at `k = 20` and 0.947 ± 0.005 on the
+  unequal-variance scenario, against 0.882 and 0.883 for metafor's plug-in
+  interval and 0.899/0.903 for `t`. At `k = 5` it **over-covers**
+  (0.986 ± 0.003, roughly 25% wider than the coverage requires), which is the
+  honest limitation of the method at that `k` and the reason it is offered
+  rather than made the default. Costs about 7 ms and is defined for an
+  intercept-only model only.
+
+- **`ma.subgroup_evidence` and `ma.bayes_factor_normal`: evidence about a
+  subgroup difference, not just a p-value.** A Bayes factor for the point null
+  against a normal prior on the difference, computed as the ratio of the two
+  models' predictive densities (exact, no sampling), plus the posterior mass
+  inside a clinically irrelevant region and the tail probability on the wrong
+  sign. `BF10 = 0.371` for an exact zero difference with `se = 0.2` and a prior
+  scale of 0.5 is checkable by hand, and the tests do exactly that. The prior
+  scale is an argument, so it is reported in the output rather than buried.
 
 - **`tests/data/prediction_joint.csv` is now regenerable from a documented
   simulation.** `tools/make_prediction_joint_fixture.py` fixes the seed and

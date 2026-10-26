@@ -46,7 +46,8 @@ def fit():
 
 
 def test_the_region_is_the_chi_square_ellipsoid(fit):
-    region = ma.predict_region(fit)
+    # `test="z"` explicitly: the default is now the Hotelling reference.
+    region = ma.predict_region(fit, test="z")
     expect = stats.chi2.ppf(0.95, 2)
     assert region.crit == pytest.approx(expect, rel=1e-12)
     assert region.dim == 2
@@ -109,7 +110,7 @@ def test_one_outcome_reduces_to_the_ordinary_prediction_interval():
     yi = rng.normal(theta, np.sqrt(vi))
     fit = ma.rma_mv(yi, V=np.diag(vi), data={"study": list(range(k))},
                     random="~ 1 | study", struct="CS")
-    region = ma.predict_region(fit)
+    region = ma.predict_region(fit, test="z")
     assert region.dim == 1
     lo, hi = region.margin(0)
     z = stats.norm.ppf(0.975)
@@ -189,7 +190,7 @@ def test_a_per_outcome_interval_is_anti_conservative_jointly(fit):
     Point-wise this is a tautology (the projection is wider), but it is the
     property that is quoted, and it is the one a reader is tempted to skip.
     """
-    region = ma.predict_region(fit)
+    region = ma.predict_region(fit, test="z")
     z = stats.norm.ppf(0.975)
     for i in range(region.dim):
         lo, hi = region.margin(i)
@@ -199,7 +200,7 @@ def test_a_per_outcome_interval_is_anti_conservative_jointly(fit):
 
 def test_the_asymptotic_reference_warns_with_few_studies(fit):
     with pytest.warns(RuntimeWarning, match="asymptotic"):
-        ma.predict_region(fit)
+        ma.predict_region(fit, test="z")
 
 
 def test_the_hotelling_reference_is_quiet(fit):
@@ -228,8 +229,9 @@ def test_the_hotelling_critical_value_is_the_closed_form(fit):
     assert region.test == "t"
     assert region.df == pytest.approx([2.0, float(m - 2)])
     # the covariance is the same ellipsoid; only the reference moved
-    assert region.cov == pytest.approx(ma.predict_region(fit).cov, rel=1e-12)
-    assert region.crit > ma.predict_region(fit).crit
+    assert region.cov == pytest.approx(
+        ma.predict_region(fit, test="z").cov, rel=1e-12)
+    assert region.crit > ma.predict_region(fit, test="z").crit
     assert "Hotelling" in str(region)
 
 

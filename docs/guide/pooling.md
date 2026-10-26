@@ -127,6 +127,35 @@ something you ask for rather than something you get.
 pi = ma.predict(r, level=0.95, predtype="default")
 ```
 
+### The interval that integrates tau² out
+
+`t` does not fix the problem, it halves it. The interval still plugs in a point
+estimate of `tau2`; the coverage gap that remains is the variance of that
+estimate. `predtype="cd"` removes the plug-in entirely, using the exact pivot
+`Q(tau2) = sum_i (y_i - mu(tau2))^2 / (v_i + tau2) ~ chi^2_{k-1}`, which holds
+for **any** `k`: inverting it gives a confidence distribution for `tau2`, and the
+prediction interval is the mixture of `t_{k-2}` densities over that distribution
+(Nagashima, Noma & Furukawa 2019). At 2000 replications per scenario:
+
+| scenario | k | metafor's interval | `t` | `cd` |
+|---|---|---|---|---|
+| `null` | 20 | 0.882 ± 0.007 | 0.899 | 0.949 ± 0.005 |
+| `tiny` | 5 | 0.804 ± 0.009 | 0.893 | 0.986 ± 0.003 |
+| `unequal` | 20 | 0.883 ± 0.007 | 0.903 | 0.947 ± 0.005 |
+
+At `k = 20` the interval is calibrated. At `k = 5` it **over-covers**: the pivot's
+confidence distribution has a long upper tail there, so the mixture is about 25%
+wider than the coverage requires. That is why `cd` is offered rather than imposed
+— it never under-covers, but it is conservative exactly where studies are
+scarcest. It costs about 7 ms and is defined only for an intercept-only model,
+because a prediction at new moderator values has no confidence distribution for
+`tau2` to integrate over.
+
+```python
+# Never under-covers; calibrated from about k = 20 upwards.
+pi = ma.predict(r, level=0.95, predtype="cd")
+```
+
 Regenerate the table with `python tools/coverage_pi.py --reps 500`; the
 `null`, `tiny` and `unequal` baselines carry the same measurement under
 `coverage.pi` and `coverage.pi_t`, each with its own Monte Carlo error.

@@ -32,14 +32,14 @@ YI = DATA[:, 2]
 SE = DATA[:, 3]
 
 # --- R 4.6.1, metafor 5.2.1, phi = 0.6, struct = "GEN" ------------------
-R_BETA = [0.4445249476, -0.0396925380]
-R_SE = [0.0240689411, 0.0054623734]
-R_TAU2 = [0.0057796419, 0.0002814952]
-R_RHO = -0.1140025695
-R_TREND = 52.8025594615
+R_BETA = [0.4062128757, -0.0343886083]
+R_SE = [0.0253548977, 0.0049060637]
+R_TAU2 = [0.0067965525, 0.0001892062]
+R_RHO = 0.1587569915
+R_TREND = 49.1318175566
 R_CURVE_T = [3.0, 6.0, 12.0]
-R_CURVE_EST = [0.5636025617, 0.4445249476, 0.2063697194]
-R_CURVE_SE = [0.0315634521, 0.0240689411, 0.0368329335]
+R_CURVE_EST = [0.5093787005, 0.4062128757, 0.1998812262]
+R_CURVE_SE = [0.0297633178, 0.0253548977, 0.0381661271]
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +60,12 @@ def test_the_linear_time_course_matches_metafor(fit):
 def test_the_trend_test_matches_metafor(fit):
     test = fit.test_trend()
     assert test["df"] == 1
-    assert test["stat"] == pytest.approx(R_TREND, rel=1e-6)
+    # `rel=1e-5` rather than 1e-6: the statistic is (b/se)^2, so it doubles the
+    # relative error of the standard error, and the two optimisers stop at
+    # tolerances that differ in the sixth digit. The coefficient and its SE are
+    # pinned separately in `test_the_linear_time_course_matches_metafor`, which
+    # is where the tight comparison belongs.
+    assert test["stat"] == pytest.approx(R_TREND, rel=1e-5)
     assert test["pval"] < 1e-6
 
 

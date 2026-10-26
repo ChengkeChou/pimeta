@@ -41,6 +41,7 @@ from .basis import Basis
 from .data_compat import FormulaSpec, design_matrix, resolve, resolve_mods
 from .missing import complete_cases
 from .pooling import (
+    PredictResult,
     _metafor_fisher_scoring_tau2,
     confint_tau2,
     predict_rma,
@@ -340,6 +341,23 @@ class RmaResult:
         """
         conf = self.level if level is None else level
         alpha = 1.0 - conf
+        if str(kw.get("predtype", "")).lower() == "cd":
+            # The confidence-distribution interval needs the data, not just the
+            # summary, so it lives here rather than in `predict_rma`.
+            if newmods is not None:
+                raise ValueError(
+                    "predtype='cd' is defined for an intercept-only model; a "
+                    "prediction at new moderator values has no confidence "
+                    "distribution for tau) to integrate over")
+            from .predict_cd import cd_prediction_interval
+
+            cd = cd_prediction_interval(self.yi, self.vi, level=conf,
+                                        hk=bool(kw.get("hk", False)))
+            return PredictResult(
+                pred=float(self.b[0]), se=float(self.se[0]),
+                ci_lb=float(self.ci_lb[0]), ci_ub=float(self.ci_ub[0]),
+                pi_lb=cd["pi_lb"], pi_ub=cd["pi_ub"], pi_dist="cd",
+                ddf=float(self.k - self.p), pi_ddf=cd["df"], level=alpha)
         if newmods is None:
             if not self.int_only:
                 raise ValueError(

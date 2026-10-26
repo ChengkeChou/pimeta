@@ -32,7 +32,6 @@ UNVERIFIED = {
     "nma_dose.csv",
     "nma_timecourse.csv",
     "onestage_slopes.csv",
-    "timecourse.csv",
     "tvhr_piecewise.csv",
     "_nc_common_ref.csv",
     "_nc_random_ref.csv",

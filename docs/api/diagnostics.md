@@ -1,6 +1,6 @@
 # Diagnostics and utilities
 
-*62 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*64 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -23,6 +23,8 @@
 | [`MatregResult`](#matregresult) | matreg |
 | [`profile_rma`](#profile_rma) | profile.rma.uni |
 | [`ProfileResult`](#profileresult) | profile.rma.uni |
+| [`subgroup_evidence`](#subgroup_evidence) | — |
+| [`bayes_factor_normal`](#bayes_factor_normal) | BF10 |
 | [`MissingPolicy`](#missingpolicy) | — |
 | [`complete_case_policy`](#complete_case_policy) | — |
 | [`policy_from_result`](#policy_from_result) | — |
@@ -447,6 +449,59 @@ ProfileResult(tau2: 'list[float]', ll: 'list[float]', beta: 'list[float]', ci_lb
 *Mirrors R's `profile.rma.uni`.*
 
 Result of `profile_rma` (``metafor::profile.rma.uni``).
+
+## `subgroup_evidence`
+
+```python
+subgroup_evidence(est: 'float', se: 'float', *, df: 'float | None' = None, prior_sd: 'float' = 0.5, mcid: 'float | None' = None, level: 'float' = 0.95) -> 'dict'
+```
+
+Everything that can be said about a subgroup difference, in closed form.
+
+**Args**
+
+- `est` — the observed difference between the subgroup effects.
+- `se` — its standard error.
+- `df` — degrees of freedom, when the interval was built with a ``t`` reference. ``None`` uses the normal.
+- `prior_sd` — prior scale for the Bayes factor; see `bayes_factor_normal`.
+- `mcid` — the smallest difference that would matter. When given, the equivalence proportion is reported; when not, it is ``None`` rather than a default nobody chose.
+- `level` — confidence level for the interval, as a proportion or percentage.
+
+**Returns**
+
+Dictionary with ``est``, ``se``, ``df``, ``ci_lb``, ``ci_ub``, ``bf10``, ``bf01``, ``evidence`` (a sentence), ``prior_sd``, ``prob_wrong_sign`` (the posterior mass on the opposite sign to the estimate), and ``prob_equivalence`` (``None`` without ``mcid``).
+
+**Example**
+
+>>> out = subgroup_evidence(0.35, 0.16, mcid=0.2) >>> out["bf10"] > 1 and 0.0 <= out["prob_equivalence"] <= 1.0 True
+
+## `bayes_factor_normal`
+
+```python
+bayes_factor_normal(est: 'float', se: 'float', *, prior_sd: 'float' = 0.5) -> 'float'
+```
+
+*Mirrors R's `BF10`.*
+
+``BF10`` for ``Delta = 0`` against ``Delta ~ N(0, prior_sd^2)``.
+
+**Args**
+
+- `est` — the observed subgroup difference.
+- `se` — its standard error.
+- `prior_sd` — the plausible size of the difference under the alternative.
+
+**Returns**
+
+The Bayes factor. Above 1 supports a difference, below 1 supports equality.
+
+**Raises**
+
+- `ValueError` — a non-positive standard error or prior scale.
+
+**Example**
+
+>>> round(bayes_factor_normal(0.0, 0.2), 3) 0.371 >>> round(bayes_factor_normal(0.4, 0.2), 3) 2.083
 
 ## `MissingPolicy`
 

@@ -91,6 +91,14 @@ ORIGIN: dict[str, dict[str, Any]] = {
         "note": "simulated selection-model fixture used by the RoBMA and "
                 "diagnostics tests",
     },
+    "timecourse.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_timecourse_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "16 simulated studies at 3, 6 and 12 months with a random "
+                "intercept and slope and AR(1) within-study errors; the "
+                "reference numbers come from tools/r_reference/timecourse.R",
+    },
     "_r_senn2013.tsv": {
         "origin": "r-reference",
         "produced_by": "tools/r_reference/netmeta_senn2013.R",
@@ -123,7 +131,6 @@ UNVERIFIED = (
     "nma_dose.csv",
     "nma_timecourse.csv",
     "onestage_slopes.csv",
-    "timecourse.csv",
     "tvhr_piecewise.csv",
     "_nc_common_ref.csv",
     "_nc_random_ref.csv",

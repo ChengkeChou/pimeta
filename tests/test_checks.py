@@ -243,3 +243,73 @@ def test_variance_checks_are_skipped_when_the_result_carries_no_variances():
     diagnosis = ma.diagnose(_stub())
     assert "negative_variance" not in diagnosis.codes()
     assert "zero_variance" not in diagnosis.codes()
+
+
+# --------------------------------------------------------------------------- #
+# designs and likelihood surfaces
+# --------------------------------------------------------------------------- #
+def test_near_rank_deficient_fires_on_a_collinear_design():
+    """The exact case cannot be diagnosed -- `rma` refuses it -- but this can.
+
+    Two moderators that differ by 1e-7 give a full-rank design with a condition
+    number around 1e8: the fit exists, and its coefficients are not separately
+    interpretable.
+    """
+    rng = np.random.default_rng(3)
+    y = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2, 0.35, 0.45])
+    x1 = np.arange(8.0)
+    x2 = x1 + 1e-7 * rng.normal(size=8)
+    fit = ma.rma(y, vi=np.full(8, 0.04), mods=np.column_stack([x1, x2]))
+    assert np.linalg.cond(fit.X) > 1e6
+    assert "near_rank_deficient" in ma.diagnose(fit).codes()
+
+
+def test_near_rank_deficient_is_silent_on_an_ordinary_design():
+    y = np.array([0.1, 0.3, 0.2, 0.5, 0.4, 0.2, 0.35, 0.45])
+    x = np.arange(8.0)
+    fit = ma.rma(y, vi=np.full(8, 0.04), mods=np.column_stack([x, x ** 2]))
+    assert "near_rank_deficient" not in ma.diagnose(fit).codes()
+
+
+def test_near_rank_deficient_is_skipped_without_a_design():
+    assert "near_rank_deficient" not in ma.diagnose(_stub()).codes()
+
+
+def test_flat_likelihood_is_silent_on_a_heterogeneous_fit():
+    yi = np.array([0.10, 0.50, 0.90, 1.30, -0.20, 0.70])
+    fit = ma.rma(yi, vi=np.full(6, 0.0025))
+    assert float(fit.tau2) > 1e-6
+    assert "flat_likelihood" not in ma.diagnose(fit).codes()
+
+
+def test_flat_likelihood_fires_when_the_surface_is_concave_up(monkeypatch):
+    """A curvature that is not negative means the estimate is not a maximum.
+
+    The check is a scalar here because the location coefficients are profiled
+    out, so the whole Hessian is one number. It is exercised with a patched
+    likelihood because a real fit cannot easily be made to stop on a rising
+    surface.
+    """
+    import pimeta.checks as checks
+    import pimeta.pooling as pooling
+
+    calls = {"n": 0}
+
+    def fake_loglik(y, v, X, tau2, method):
+        calls["n"] += 1
+        # concave up in tau2: the log-likelihood rises as tau2 moves away
+        return (float(tau2) - 0.05) ** 2
+
+    monkeypatch.setattr(pooling, "_reml_ml_loglik", fake_loglik)
+    stub = _stub(tau2=0.2, yi=np.array([0.1, 0.2, 0.3, 0.4]),
+                 vi=np.full(4, 0.05), X=np.ones((4, 1)), method="REML")
+    diagnosis = checks.diagnose(stub)
+    assert "flat_likelihood" in diagnosis.codes()
+    assert calls["n"] == 3          # exactly the three evaluations it needs
+
+
+def test_flat_likelihood_is_skipped_at_the_boundary():
+    # tau2 = 0 is the boundary case, covered by tau2_zero, not by curvature
+    stub = _stub(tau2=0.0, yi=np.array([0.1, 0.2, 0.3, 0.4]),
+                 vi=np.full(4, 0.05), X=np.ones((4, 1)), method="REML")
+    assert "flat_likelihood" not in ma.diagnose(stub).codes()

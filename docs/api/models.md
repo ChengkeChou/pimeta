@@ -2092,7 +2092,7 @@ A profile-likelihood interval for one variance component.
 ## `predict_region`
 
 ```python
-predict_region(result, *, level=None, observation=None, test='z', df=None) -> 'PredictionRegion'
+predict_region(result, *, level=None, observation=None, test='t', df=None) -> 'PredictionRegion'
 ```
 
 Joint prediction region for a new study.
@@ -2102,7 +2102,7 @@ Joint prediction region for a new study.
 - `result` — a `RmaMvResult` with a multivariate random term (``random="~ outcome | study"`` with ``struct="UN"`` or similar).
 - `level` — confidence level, accepted as ``95``, ``0.95`` or ``0.05``; defaults to the level the model was fitted with.
 - `observation` — the new study's sampling covariance (``J x J``), when the question is where its *observed* estimates would fall rather than where its true effects would.
-- `test` — ``"z"`` (default) for the asymptotic :math:`\chi^2_J` reference, or ``"t"`` for the Hotelling :math:`F` small-sample one.
+- `test` — ``"t"`` (default) for the Hotelling :math:`F` small-sample reference, or ``"z"`` for the asymptotic :math:`\chi^2_J` one. The default is ``"t"`` because it was measured to be better at every ``k`` -- 0.83 against 0.77 at ``k = 10``, 0.93 against 0.92 at ``k = 20``, 0.95 against 0.94 at ``k = 40`` -- and because a reference that under-covers by 12 points at ``k = 10`` is not a defensible default.  Neither reaches 0.95 at ``k = 10``.
 - `df` — denominator degrees of freedom for ``test="t"``; defaults to ``k - p``.  Ignored by ``test="z"``.
 
 **Returns**
@@ -2116,6 +2116,10 @@ Joint prediction region for a new study.
 Warns:
     RuntimeWarning: with ``test="z"`` and 20 or fewer residual degrees of
         freedom, quoting the measured coverage at small ``k``.
+
+**Note**
+
+The ``F`` reference is exact for a *known* Wishart covariance with ``m - 1`` degrees of freedom.  A meta-analysis estimates the between-study covariance by REML from the same ``k`` studies, so its effective degrees of freedom are fewer than ``k - p``, and the region still under-covers at ``k = 10``.  Matching an exact-Wishart calculation (which suggests a critical value of about 10.0 at ``k = 10``, ``J = 2``) would require the REML information matrix to be inverted for a Satterthwaite correction; until that is measured, the honest statement is the one above.
 
 **Example**
 

@@ -42,6 +42,7 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
+from pimeta.predict_cd import cd_prediction_interval  # noqa: E402
 from pimeta.rma_uni import rma  # noqa: E402
 from pimeta.validation import SCENARIOS, simulate_study  # noqa: E402
 
@@ -74,25 +75,31 @@ def _mcse(p: float, n: int) -> float:
     return float(np.sqrt(max(p * (1.0 - p), 0.0) / n))
 
 
-def run(name: str, *, reps: int, seed: int, nboot: int) -> dict:
+def run(name: str, *, reps: int, seed: int, nboot: int,
+        cd_grid: int = 201, bootstrap: bool = True) -> dict:
     scen = SCENARIOS[name]
     rng = np.random.default_rng(seed)
-    hits = {"plug-in": 0, "t": 0, "bootstrap": 0}
+    keys = ("plug-in", "t", "bootstrap", "cd", "cd-hk")
+    hits = {key: 0 for key in keys}
     for _ in range(reps):
         data = simulate_study(scen, rng)
         fit = rma(data.yi, vi=data.vi)
         target = data.mu_new
-        if fit.ci_lb[0] <= target <= fit.ci_ub[0]:  # keeps the rng in step
-            pass
-        p0 = fit.predict(0.95)
+        p0 = fit.predict(0.95, predtype="default")   # metafor's plug-in interval
         if p0.pi_lb <= target <= p0.pi_ub:
             hits["plug-in"] += 1
         p1 = fit.predict(0.95, predtype="t")
         if p1.pi_lb <= target <= p1.pi_ub:
             hits["t"] += 1
-        lo, hi = bootstrap_pi(data.yi, data.vi, nboot=nboot, rng=rng)
+        lo, hi = bootstrap_pi(data.yi, data.vi, nboot=nboot, rng=rng) \
+            if bootstrap else (np.nan, np.nan)
         if lo <= target <= hi:
             hits["bootstrap"] += 1
+        for key, hk in (("cd", False), ("cd-hk", True)):
+            out = cd_prediction_interval(data.yi, data.vi, level=0.95,
+                                         n_grid=cd_grid, hk=hk)
+            if out["pi_lb"] <= target <= out["pi_ub"]:
+                hits[key] += 1
     return {key: {"estimate": value / reps, "mcse": _mcse(value / reps, reps)}
             for key, value in hits.items()}
 
@@ -103,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=20240101)
     ap.add_argument("--nboot", type=int, default=199)
     ap.add_argument("--scenario", action="append", default=None)
+    ap.add_argument("--skip-bootstrap", action="store_true",
+                    help="omit the parametric bootstrap, which dominates the cost")
     args = ap.parse_args(argv)
 
     names = args.scenario or ["null", "tiny", "unequal"]
@@ -112,13 +121,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(f"{'scenario':10s} {'k':>3s}  {'plug-in':>16s} {'t':>16s} "
-          f"{'bootstrap':>16s}   (reps {args.reps}, nboot {args.nboot}, "
-          f"nominal 0.95)")
+          f"{'bootstrap':>16s} {'cd':>16s} {'cd-hk':>16s}"
+          f"   (reps {args.reps}, nboot {args.nboot}, nominal 0.95)")
     for name in names:
-        out = run(name, reps=args.reps, seed=args.seed, nboot=args.nboot)
+        out = run(name, reps=args.reps, seed=args.seed, nboot=args.nboot,
+                  bootstrap=not args.skip_bootstrap)
         cells = "  ".join(
             f"{out[key]['estimate']:.3f} +/- {out[key]['mcse']:.3f}"
-            for key in ("plug-in", "t", "bootstrap"))
+            for key in ("plug-in", "t", "bootstrap", "cd", "cd-hk"))
         print(f"{name:10s} {SCENARIOS[name].k:3d}  {cells}")
     return 0
 

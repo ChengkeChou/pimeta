@@ -402,11 +402,92 @@ def _check_posterior_equals_prior(fit) -> Diagnostic | None:
                "somewhere it should not be")
 
 
+def _check_near_rank_deficient(fit) -> Diagnostic | None:
+    """A design that is full rank but nearly collinear.
+
+    The *exact* case is not diagnosable: `rma` raises ``ValueError`` when the
+    design matrix is rank deficient, so no fitted object can carry it. The
+    near case is the one that reaches a fit, and it is the one that produces
+    standard errors nobody can interpret. The threshold is a condition number of
+    ``1e6`` on the design matrix itself, which is where double precision starts
+    to lose about six digits in the projection.
+    """
+    design = getattr(fit, "X", None)
+    if design is None or np.size(design) == 0:
+        return None
+    matrix = np.asarray(design, dtype=float)
+    if matrix.ndim != 2 or matrix.shape[1] < 2:
+        return None
+    cond = float(np.linalg.cond(matrix))
+    if not np.isfinite(cond) or cond <= 1e6:
+        return None
+    return Diagnostic(
+        code="near_rank_deficient", category="identifiability",
+        severity="warning",
+        message=f"the design matrix has condition number {cond:.3g}",
+        action="the moderators are nearly collinear: the fit exists, but the "
+               "coefficients and their standard errors are not separately "
+               "interpretable. Drop or combine the offending columns")
+
+
+def _check_flat_likelihood(fit) -> Diagnostic | None:
+    """A heterogeneity estimate that is not a maximum in the curvature sense.
+
+    With the other coefficients profiled out, ``tau2`` is a single parameter, so
+    "the Hessian is not positive definite" reduces to a scalar: the second
+    derivative of the log-likelihood must be negative at the estimate. A
+    non-negative curvature at an interior estimate means the likelihood has no
+    proper maximum there -- the optimiser stopped on a flat or rising surface --
+    and the standard error of ``tau2``, which is computed from that curvature,
+    is meaningless. At ``tau2 = 0`` the curvature test does not apply; that is
+    the boundary case and :func:`_check_tau2_zero` covers it.
+    """
+    tau2 = getattr(fit, "tau2", None)
+    yi = getattr(fit, "yi", None)
+    vi = getattr(fit, "vi", None)
+    if tau2 is None or yi is None or vi is None:
+        return None
+    value = float(np.ravel(np.asarray(tau2, dtype=float))[0])
+    if not np.isfinite(value) or value <= 1e-8:
+        return None                      # boundary, not a failure to identify
+    y = np.asarray(yi, dtype=float).ravel()
+    v = np.asarray(vi, dtype=float).ravel()
+    design = getattr(fit, "X", None)
+    if design is None or y.size < 3:
+        return None
+    X = np.asarray(design, dtype=float)
+    method = str(getattr(fit, "method", "REML")).upper()
+    if method not in ("REML", "ML"):
+        return None
+    from .pooling import _reml_ml_loglik
+
+    step = max(1e-4, 1e-3 * value)
+    try:
+        # `_reml_ml_loglik` returns the log-likelihood itself, not its negative
+        ll0 = float(_reml_ml_loglik(y, v, X, value, method))
+        ll_up = float(_reml_ml_loglik(y, v, X, value + step, method))
+        ll_dn = float(_reml_ml_loglik(y, v, X, max(value - step, 1e-12),
+                                      method))
+    except Exception:                    # noqa: BLE001 - a check must not raise
+        return None
+    curvature = (ll_up - 2.0 * ll0 + ll_dn) / (step ** 2)
+    if not np.isfinite(curvature) or curvature < 0.0:
+        return None
+    return Diagnostic(
+        code="flat_likelihood", category="optimisation", severity="warning",
+        message=f"the log-likelihood is flat or concave-up at tau2 = "
+                f"{value:.4g} (curvature {curvature:+.3g})",
+        action="the heterogeneity estimate is not a maximum of the surface the "
+               "optimiser searched: treat it as unestimated and do not quote "
+               "its standard error")
+
+
 _CHECKS = (_check_non_finite_estimate, _check_negative_variance,
            _check_not_converged, _check_tau2_zero, _check_variance_component,
-           _check_ill_conditioned, _check_boundary_correlation,
-           _check_studies_dropped, _check_zero_weight_study,
-           _check_zero_variance, _check_few_studies,
+           _check_ill_conditioned, _check_near_rank_deficient,
+           _check_boundary_correlation, _check_studies_dropped,
+           _check_zero_weight_study, _check_zero_variance,
+           _check_flat_likelihood, _check_few_studies,
            _check_posterior_equals_prior)
 
 

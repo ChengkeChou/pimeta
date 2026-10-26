@@ -153,6 +153,8 @@ MODULE_TOPICS: dict[str, tuple[str, str]] = {
     "record.schema": ("io", "Input, output and interoperability"),
     "spec": ("io", "Input, output and interoperability"),
     "multiverse": ("io", "Input, output and interoperability"),
+    "predict_cd": ("models", "Models"),
+    "hte": ("diagnostics", "Diagnostics and utilities"),
     "record.store": ("io", "Input, output and interoperability"),
     # S3 generics and reporting
     "s3": ("s3", "S3-style generics and reporting"),

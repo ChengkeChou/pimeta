@@ -33,6 +33,8 @@ REGISTRY: dict[str, str] = {
     "zero_weight_study": "a study contributed no information",
     "negative_variance": "a sampling variance is negative, so the weights are not weights",
     "zero_variance": "a sampling variance is zero: that study is known exactly",
+    "near_rank_deficient": "the design is full rank but nearly collinear",
+    "flat_likelihood": "the likelihood has no proper maximum at the estimate",
     "not_converged": "the optimiser stopped without converging",
     "studies_dropped": "rows were removed before fitting",
     "few_studies": "too few studies for the reference to be nominal",

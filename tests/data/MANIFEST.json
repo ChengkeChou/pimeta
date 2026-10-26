@@ -113,12 +113,13 @@
       "sha256": "1ea8b8d90c2ec78321785a8c176fee4f04e1e306daba93011069db74c6c7f95f"
     },
     "timecourse.csv": {
-      "bytes": 1494,
-      "licence": "unverified",
+      "bytes": 1544,
+      "licence": "MIT",
       "name": "timecourse.csv",
-      "note": "no producing script and no recorded source; confirm before relying on this file as a reference",
-      "origin": "unverified",
-      "sha256": "c9705d318297d25c02ef9763986949ef60484c9dd2dec07b9f5066b798859026"
+      "note": "16 simulated studies at 3, 6 and 12 months with a random intercept and slope and AR(1) within-study errors; the reference numbers come from tools/r_reference/timecourse.R",
+      "origin": "generated",
+      "produced_by": "tools/make_timecourse_fixture.py",
+      "sha256": "3ddbddf9a4357a4083549d22abbad7ceb2217234149acef5b9df4f233225dd6e"
     },
     "tvhr_piecewise.csv": {
       "bytes": 100425,
@@ -138,7 +139,6 @@
     "nma_dose.csv",
     "nma_timecourse.csv",
     "onestage_slopes.csv",
-    "timecourse.csv",
     "tvhr_piecewise.csv"
   ]
 }
