@@ -200,6 +200,17 @@ the entry or the page named.
   so the share of significant specifications is not a probability that the effect
   is real.
 
+- **`sensitivity_table(over=("measure",))`: the effect-size method as a variant.**
+  A fitted result holds analysis-scale effects, so the 2x2 counts that a Peto or
+  Mantel-Haenszel odds ratio needs are gone by the time a result exists; this
+  family therefore cannot be derived from the fit. It takes the alternative fits
+  from the caller, `alternatives={name: (result, reason)}`, and refuses with that
+  explanation when none are supplied rather than inventing a row.
+
+  Each alternative must carry a reason, and a blank one is refused: a different
+  method is a sensitivity analysis only when the estimand is unchanged, and
+  without that sentence the row is a different analysis wearing the same table.
+
 - **`plot_specification_curve`: the curve with the decisions underneath it.** The
   upper panel draws one interval per usable specification, ordered by estimate,
   with the median marked and an optional `mark_default=` circling the primary

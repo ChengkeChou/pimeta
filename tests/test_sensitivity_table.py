@@ -59,7 +59,12 @@ def test_result_records_the_shape_of_the_fit(fit, table):
     assert table.k == fit.k
     assert table.p == fit.p
     assert table.level == pytest.approx(fit.level)
-    assert table.families == list(FAMILIES)
+    # The first three families are computed from the fit; `measure` cannot be,
+    # because the effect-size method lives in the driver, so it is refused and
+    # listed there instead of in `families`.
+    assert table.families == ["tau2", "leave1out", "bias"]
+    assert any(item["family"] == "measure" for item in table.refused)
+    assert set(FAMILIES) == {"tau2", "leave1out", "bias", "measure"}
 
 
 # ---------------------------------------------------------------------- tau2
@@ -258,6 +263,52 @@ def test_methods_argument_restricts_the_tau2_family(fit):
     table = sensitivity_table(fit, over=("tau2",), methods=("DL", "FE"))
     assert [r.variant for r in table.family("tau2")] == ["tau2 = DL",
                                                          "tau2 = FE"]
+
+
+# ----------------------------------------------------------- alternative fits
+
+def test_alternatives_become_rows_of_the_measure_family(fit):
+    other = ma.rma(fit.yi, vi=fit.vi, method="DL")
+    table = sensitivity_table(
+        fit, over=("tau2", "measure"),
+        alternatives={"DL refit": (other, "same estimand, different estimator")})
+    rows = table.family("measure")
+    assert len(rows) == 1
+    assert rows[0].variant == "DL refit"
+    assert rows[0].estimate == pytest.approx(float(other.b[0]))
+    assert rows[0].ci_ub == pytest.approx(float(other.ci_ub[0]))
+    assert rows[0].reason == "same estimand, different estimator"
+    assert "measure" in table.families
+
+
+def test_an_alternative_must_state_why_it_is_an_alternative(fit):
+    other = ma.rma(fit.yi, vi=fit.vi, method="DL")
+    with pytest.raises(ValueError, match="needs a reason"):
+        sensitivity_table(fit, over=("measure",),
+                          alternatives={"DL": (other, "   ")})
+
+
+def test_measure_is_refused_with_the_reason_when_no_alternatives_are_given(fit):
+    table = sensitivity_table(fit, over=("tau2", "measure"))
+    reasons = [r for r in table.refused if r["family"] == "measure"]
+    assert reasons
+    assert "lives in the driver" in reasons[0]["reason"]
+
+
+def test_alternatives_without_asking_for_the_family_are_an_error(fit):
+    other = ma.rma(fit.yi, vi=fit.vi, method="DL")
+    with pytest.raises(ValueError, match="silently ignored"):
+        sensitivity_table(fit, over=("tau2",),
+                          alternatives={"DL": (other, "why")})
+
+
+def test_an_alternative_without_an_estimate_is_refused(fit):
+    class Nothing:
+        pass
+
+    with pytest.raises(TypeError, match="does not expose"):
+        sensitivity_table(fit, over=("measure",),
+                          alternatives={"nothing": (Nothing(), "why")})
 
 
 def test_the_result_is_printable_without_the_internals(fit, table):

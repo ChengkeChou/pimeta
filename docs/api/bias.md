@@ -854,7 +854,7 @@ Baujat plot coordinates (metafor::baujat.rma).
 ## `sensitivity_table`
 
 ```python
-sensitivity_table(fit, *, over=('tau2', 'leave1out', 'bias'), methods=None, level=None) -> 'SensitivityResult'
+sensitivity_table(fit, *, over=('tau2', 'leave1out', 'bias', 'measure'), methods=None, level=None, alternatives=None) -> 'SensitivityResult'
 ```
 
 The same estimand under each assumption that could have been different.
@@ -865,6 +865,7 @@ The same estimand under each assumption that could have been different.
 - `over` — which families to compute; a subset of ``("tau2", "leave1out", "bias")``.  ``"rho"`` is accepted only to be refused with a reason, because a univariate fit has no within-study correlation.
 - `methods` — heterogeneity estimators for the ``tau2`` family; defaults to every entry of ``METHODS`` except the one the fit used.
 - `level` — confidence level; defaults to the fit's own.
+- `alternatives` — ``{name: (result, reason)}`` for the ``measure`` family -- other fits of the *same* estimand by a different effect-size method. They cannot be derived from ``fit`` (the 2x2 counts are gone by the time a result exists), so the caller supplies them and states, in one line each, why the target is unchanged.
 
 **Returns**
 

@@ -310,8 +310,11 @@ defaulting to `"unknown"` rather than to the optimistic label. Multiple
 imputation is deliberately **not** one of the strategies — see the paragraph
 above for why.
 
-Still open: varying the effect-size method, which is a property of the driver
-rather than of the fit.
+Still open: nothing in stage 4's list. The effect-size method is in as the
+`measure` family, which takes the alternative fits from the caller because a
+result cannot re-derive the 2x2 counts a Peto or Mantel-Haenszel estimate needs;
+each alternative must carry a one-line reason saying why the estimand is
+unchanged.
 
 ## Stage 5 — RoBMA
 

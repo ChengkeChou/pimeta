@@ -39,7 +39,8 @@ from .levels import level_to_alpha, level_to_percent
 from .rma_list import RowSlicable
 from .sensitivity import influence
 
-__all__ = ["SensitivityRow", "SensitivityResult", "FAMILIES", "sensitivity_table"]
+__all__ = ["SensitivityRow", "SensitivityResult", "FAMILIES", "AlternativeFit",
+           "sensitivity_table"]
 
 #: Estimators a ``tau2`` row can be built from. ``FE`` is included on purpose:
 #: "what if there were no heterogeneity at all" is a sensitivity question even
@@ -49,7 +50,30 @@ __all__ = ["SensitivityRow", "SensitivityResult", "FAMILIES", "sensitivity_table
 METHODS = ("REML", "DL", "HE", "HS", "SJ", "PM", "ML", "EB", "FE")
 
 #: Families this function knows about.
-FAMILIES = ("tau2", "leave1out", "bias")
+FAMILIES = ("tau2", "leave1out", "bias", "measure")
+
+
+@dataclass(frozen=True)
+class AlternativeFit:
+    """A fit offered as an alternative for the *same* estimand.
+
+    Attributes:
+        result: anything with ``b``, ``se``, ``ci_lb`` and ``ci_ub``.
+        reason: why the alternative estimates the same quantity. Required,
+            because the whole family exists to answer "what if the method had
+            been different" and a different method is only a sensitivity
+            analysis when the target is unchanged.
+    """
+
+    result: Any = field(repr=False)
+    reason: str
+
+    def __post_init__(self) -> None:
+        if not str(self.reason).strip():
+            raise ValueError(
+                "an alternative fit needs a reason: state why it estimates the "
+                "same quantity, or it is a different analysis rather than a "
+                "sensitivity variant of this one")
 
 
 @dataclass
@@ -290,8 +314,47 @@ def _bias_rows(fit, level: float, refused: list[dict[str, str]]
     return out
 
 
-def sensitivity_table(fit, *, over=FAMILIES, methods=None, level=None
-                      ) -> SensitivityResult:
+def _measure_rows(alternatives) -> list[SensitivityRow]:
+    """Rows from fits the caller supplied as alternatives for the same estimand.
+
+    The effect-size method lives in the driver, not in the fit: a fitted
+    ``RmaResult`` holds analysis-scale effects and cannot re-derive the 2x2
+    counts that Peto or Mantel-Haenszel need. So this family cannot be computed
+    from ``fit`` -- the caller supplies the alternative fits and says, in one
+    line each, why they estimate the same quantity.
+    """
+    out: list[SensitivityRow] = []
+    for name, item in alternatives.items():
+        if not isinstance(item, AlternativeFit):
+            if not isinstance(item, (tuple, list)) or len(item) != 2:
+                raise TypeError(
+                    f"alternative {name!r} must be an AlternativeFit or a "
+                    f"(result, reason) pair, not {type(item).__name__}")
+            # A blank reason is a ValueError from AlternativeFit itself and is
+            # left alone: it is a statement about the caller's data, not about
+            # the type of what they passed.
+            item = AlternativeFit(item[0], item[1])
+        alt = item.result
+        try:
+            est = float(np.asarray(alt.b, dtype=float).ravel()[0])
+            se = float(np.asarray(alt.se, dtype=float).ravel()[0])
+            lo = float(np.asarray(alt.ci_lb, dtype=float).ravel()[0])
+            hi = float(np.asarray(alt.ci_ub, dtype=float).ravel()[0])
+        except (AttributeError, IndexError, TypeError) as exc:
+            raise TypeError(
+                f"alternative {name!r} does not expose b/se/ci_lb/ci_ub: {exc}"
+            ) from exc
+        tau2 = getattr(alt, "tau2", None)
+        out.append(SensitivityRow(
+            family="measure", variant=str(name), estimate=est, se=se,
+            ci_lb=lo, ci_ub=hi,
+            tau2=None if tau2 is None else float(tau2),
+            reason=item.reason))
+    return out
+
+
+def sensitivity_table(fit, *, over=FAMILIES, methods=None, level=None,
+                      alternatives=None) -> SensitivityResult:
     """The same estimand under each assumption that could have been different.
 
     Args:
@@ -302,6 +365,11 @@ def sensitivity_table(fit, *, over=FAMILIES, methods=None, level=None
         methods: heterogeneity estimators for the ``tau2`` family; defaults to
             every entry of ``METHODS`` except the one the fit used.
         level: confidence level; defaults to the fit's own.
+        alternatives: ``{name: (result, reason)}`` for the ``measure`` family --
+            other fits of the *same* estimand by a different effect-size method.
+            They cannot be derived from ``fit`` (the 2x2 counts are gone by the
+            time a result exists), so the caller supplies them and states, in one
+            line each, why the target is unchanged.
 
     Returns:
         :class:`SensitivityResult` with a baseline row, one row per variant and
@@ -377,6 +445,19 @@ def sensitivity_table(fit, *, over=FAMILIES, methods=None, level=None
         else:
             rows.extend(_bias_rows(fit, conf, refused))
             computed.append("bias")
+    if "measure" in wanted:
+        if not alternatives:
+            refused.append({
+                "family": "measure",
+                "reason": "the effect-size method lives in the driver, not in "
+                          "the fit: a fitted result holds analysis-scale "
+                          "effects and cannot re-derive the 2x2 counts that "
+                          "Peto or Mantel-Haenszel need. Refit the driver with "
+                          "each measure and pass the results as "
+                          "alternatives={name: (result, reason)}"})
+        else:
+            rows.extend(_measure_rows(alternatives))
+            computed.append("measure")
     if "rho" in wanted:
         refused.append({
             "family": "rho",
@@ -387,6 +468,10 @@ def sensitivity_table(fit, *, over=FAMILIES, methods=None, level=None
         raise ValueError(
             "no family was computed and none was refused; ask for at least "
             f"one of {FAMILIES}")
+    if alternatives and "measure" not in wanted:
+        raise ValueError(
+            "alternatives were supplied but 'measure' is not in 'over'; they "
+            "would be silently ignored")
 
     return SensitivityResult(
         baseline=baseline, rows=rows, refused=refused, families=computed,

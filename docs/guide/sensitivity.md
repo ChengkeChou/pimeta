@@ -41,6 +41,32 @@ from ... to ...` line of each family.
 | `tau2` | the heterogeneity estimator | one per estimator in `METHODS`, excluding the one the fit used |
 | `leave1out` | which study is included | one per study, with its Cook's distance and hat value |
 | `bias` | the publication-bias assumption | limit meta-analysis at three extrapolation points, a step selection model, the RoBMA posterior mean |
+| `measure` | the effect-size method | one per alternative fit the caller supplies |
+
+### The `measure` family needs the caller's help, and says so
+
+A fitted result holds analysis-scale effects. The 2x2 counts that a Peto or
+Mantel-Haenszel odds ratio needs are gone by the time a result exists, so this
+family **cannot be computed from the fit**. Asking for it without supplying the
+alternatives returns a refusal that says exactly that, rather than a row that
+looks computed:
+
+```python
+peto = ma.rma_peto(ai=ai, bi=bi, ci=ci, di=di)
+mh = ma.rma_mh(ai=ai, bi=bi, ci=ci, di=di, measure="OR")
+
+res = ma.sensitivity_table(
+    fit, over=("tau2", "measure"),
+    alternatives={
+        "Peto OR": (peto, "a different estimator of the same odds ratio"),
+        "MH OR": (mh, "a different estimator of the same odds ratio"),
+    })
+```
+
+Each alternative must carry a reason, and a blank one is refused. A different
+method is a *sensitivity* analysis only when the target is unchanged; without
+that sentence, a row in this family is a different analysis wearing the same
+table.
 
 `MP` is absent from `METHODS` because `metafor` treats it as an alias of `PM`;
 a table that lists the same estimator twice looks more thorough than it is. The
