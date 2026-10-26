@@ -94,12 +94,21 @@ the entry or the page named.
 
 ### Fixed
 
-- **Two `k x k` matrices removed from the linear algebra, and a benchmark to keep
-them out.** `_proj` built `P = W - W X (X'WX)^-1 X'W` explicitly to obtain
-`tr(P)`, `tr(P^2)` and `y'Py`, and the ML/REML Fisher-scoring loop built
-`np.eye(k) - X (X'X)^-1 X'` plus a fresh `np.diag(w)` and two `k x k` products per
-iteration. Both are `O(k^2)` in memory and `O(k^2 p)` in time for quantities that
-have closed forms in `p x p` matrices; `pimeta._projection` now supplies them.
+- **`rma` erased the only record of the rows it dropped.** After filtering,
+  `k_all` was set to `k` and `not_na` to `[True] * k`, so a result could not say
+  what it had removed — and the `studies_dropped` diagnostic could never fire on
+  a real fit, only on a stub. The fit now keeps the pre-filter row count and the
+  keep mask, so `k_all` means what `metafor`'s `k.all` means, `not_na` is the
+  same length as the data that was offered, `studies_dropped` fires for real
+  data, and `fit.missing` can name the dropped rows.
+
+- **Two `k x k` matrices removed from the linear algebra, and a benchmark to
+  keep them out.** `_proj` built `P = W - W X (X'WX)^-1 X'W` explicitly to obtain
+  `tr(P)`, `tr(P^2)` and `y'Py`, and the ML/REML Fisher-scoring loop built
+  `np.eye(k) - X (X'X)^-1 X'` plus a fresh `np.diag(w)` and two `k x k` products
+  per iteration. Both are `O(k^2)` in memory and `O(k^2 p)` in time for
+  quantities that have closed forms in `p x p` matrices; `pimeta._projection`
+  now supplies them.
 
   Measured on `rma`, three estimators: 507 ms → 2.3 ms at `k = 2000` for REML,
   389 → 1.7 ms for DL, and `k = 20000` went from `MemoryError` ("unable to

@@ -259,6 +259,19 @@ class RmaResult:
 
         return diagnose(self)
 
+    @property
+    def missing(self):
+        """The missing-data handling this fit performed, as a declaration.
+
+        ``None`` when the result does not carry the counts. Otherwise a
+        :class:`~pimeta.missing_policy.MissingPolicy` saying which strategy ran
+        and how many rows it removed -- the assumption a silent ``dropna``
+        would have left the reader to guess.
+        """
+        from .missing_policy import policy_from_result
+
+        return policy_from_result(self)
+
     def to_dict(self) -> dict:
         from .checks import SCHEMA_VERSION, software_versions
 
@@ -500,6 +513,7 @@ def rma(
         for j in range(mods_arr.shape[1]):
             checked[f"mods[{j}]"] = mods_arr[:, j]
     keep, _dropped = complete_cases(checked, context="studies", warn=warn_missing)
+    n_input = int(keep.size)
     if not keep.all():
         yi = yi[keep]
         vi = vi[keep]
@@ -509,7 +523,13 @@ def rma(
             slab = [s for s, ok in zip(slab, keep) if ok]
 
     k = len(yi)
-    not_na = [True] * k
+    # `not_na` and `k_all` describe the data that was *offered*, not the rows
+    # that survived: R's `na.action` reports the same thing, and without it a
+    # result cannot say what it dropped. This used to be `[True] * k` and
+    # `k_all = k`, which erased the only record of the drop and left the
+    # `studies_dropped` diagnostic unable to fire on a real fit.
+    not_na = [bool(flag) for flag in keep]
+    k_all = n_input
 
     if mods_arr is None:
         if not add_intercept:
@@ -694,7 +714,7 @@ def rma(
         k=k,
         k_f=k,
         k_eff=k,
-        k_all=k,
+        k_all=k_all,
         p=p,
         p_eff=p,
         parms=parms,

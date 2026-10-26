@@ -159,6 +159,23 @@ def test_studies_dropped_fires_when_the_fit_covers_less_than_the_review():
     assert diagnosis.items[0].severity == "warning"
 
 
+def test_studies_dropped_fires_on_a_real_fit_that_dropped_a_row():
+    """It could not, until ``rma`` started recording what it removed.
+
+    ``k_all`` used to be set to ``k`` and ``not_na`` to ``[True] * k`` after the
+    rows were filtered, so the only evidence of the drop was erased before the
+    result existed and this check could never fire outside a stub. The fit now
+    keeps the pre-filter count and the keep mask.
+    """
+    with pytest.warns(ma.MissingDataWarning):
+        fit = ma.rma([0.1, float("nan"), 0.3, 0.4],
+                     vi=[0.04, 0.05, 0.06, 0.07])
+    assert fit.k == 3 and fit.k_all == 4
+    assert "studies_dropped" in ma.diagnose(fit).codes()
+    policy = fit.missing
+    assert policy is not None and policy.dropped == (1,)
+
+
 def test_studies_dropped_is_silent_when_nothing_was_dropped():
     assert "studies_dropped" not in ma.diagnose(_stub(k=6, k_all=6)).codes()
 

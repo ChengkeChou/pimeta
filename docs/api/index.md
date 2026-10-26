@@ -1,6 +1,6 @@
 # API reference
 
-All 534 public names in `pimeta.__all__`, generated from the source docstrings.
+All 538 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -367,6 +367,9 @@ All 534 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`MatregResult`](diagnostics.md#matregresult) | Diagnostics and utilities | matreg |
 | [`profile_rma`](diagnostics.md#profile_rma) | Diagnostics and utilities | profile.rma.uni |
 | [`ProfileResult`](diagnostics.md#profileresult) | Diagnostics and utilities | profile.rma.uni |
+| [`MissingPolicy`](diagnostics.md#missingpolicy) | Diagnostics and utilities | — |
+| [`complete_case_policy`](diagnostics.md#complete_case_policy) | Diagnostics and utilities | — |
+| [`policy_from_result`](diagnostics.md#policy_from_result) | Diagnostics and utilities | — |
 | [`bldiag`](diagnostics.md#bldiag) | Diagnostics and utilities | bldiag |
 | [`blsplit`](diagnostics.md#blsplit) | Diagnostics and utilities | blsplit |
 | [`vec2mat`](diagnostics.md#vec2mat) | Diagnostics and utilities | vec2mat |
@@ -538,3 +541,4 @@ All 534 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`NETMETA_DEFAULTS`](s3.md#netmeta_defaults) | S3-style generics and reporting | — |
 | [`diagnose`](misc.md#diagnose) | Other | — |
 | [`Diagnostic`](misc.md#diagnostic) | Other | — |
+| [`STRATEGIES`](misc.md#strategies) | Other | — |

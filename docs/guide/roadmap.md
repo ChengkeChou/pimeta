@@ -301,9 +301,17 @@ fit is refused with a reason rather than attempted.
 `leave1out`, `bias`), each with a one-line reason per row and a `refused` list
 that is part of the result; see [Sensitivity analyses](sensitivity.md).
 `"rho"` is accepted only to be refused for a univariate fit, because the
-assumption does not exist there. Still open: varying the effect-size method,
-which is a property of the driver rather than of the fit, and the declared
-missing-data policy.
+assumption does not exist there.
+
+The missing-data half is in `ma.MissingPolicy`: every fit declares its strategy
+(`complete_case`, `available_case` or `likelihood`), how many rows it used and
+which it dropped, and the assumption that strategy needs, with `mechanism`
+defaulting to `"unknown"` rather than to the optimistic label. Multiple
+imputation is deliberately **not** one of the strategies — see the paragraph
+above for why.
+
+Still open: varying the effect-size method, which is a property of the driver
+rather than of the fit.
 
 ## Stage 5 — RoBMA
 

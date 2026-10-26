@@ -155,6 +155,12 @@ from .metaprop import MetapropResult, metaprop
 from .metarate import MetarateResult, metarate
 from .metareg import MetaregResult, metareg
 from .missing import MissingDataWarning, complete_cases, is_missing
+from .missing_policy import (
+    STRATEGIES,
+    MissingPolicy,
+    complete_case_policy,
+    policy_from_result,
+)
 from .multiverse import MultiverseResult, multiverse
 from .mv import (
     ConfintMvResult,
@@ -914,6 +920,9 @@ __all__ = [
     "AnalysisSpec", "Decision", "Specification", "RunOutcome", "execute",
     # stability across that grid
     "multiverse", "MultiverseResult",
+    # declared missing-data handling
+    "MissingPolicy", "STRATEGIES", "complete_case_policy",
+    "policy_from_result",
     # multivariate reporting layer
     "shared_control_corr", "tau_cor", "TauCorResult",
     "rho_sensitivity", "RhoSensitivityResult",

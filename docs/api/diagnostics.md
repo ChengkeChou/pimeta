@@ -1,6 +1,6 @@
 # Diagnostics and utilities
 
-*59 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*62 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -23,6 +23,9 @@
 | [`MatregResult`](#matregresult) | matreg |
 | [`profile_rma`](#profile_rma) | profile.rma.uni |
 | [`ProfileResult`](#profileresult) | profile.rma.uni |
+| [`MissingPolicy`](#missingpolicy) | — |
+| [`complete_case_policy`](#complete_case_policy) | — |
+| [`policy_from_result`](#policy_from_result) | — |
 | [`bldiag`](#bldiag) | bldiag |
 | [`blsplit`](#blsplit) | blsplit |
 | [`vec2mat`](#vec2mat) | vec2mat |
@@ -444,6 +447,54 @@ ProfileResult(tau2: 'list[float]', ll: 'list[float]', beta: 'list[float]', ci_lb
 *Mirrors R's `profile.rma.uni`.*
 
 Result of `profile_rma` (``metafor::profile.rma.uni``).
+
+## `MissingPolicy`
+
+```python
+MissingPolicy(strategy: 'str', n_total: 'int', n_used: 'int', dropped: 'tuple[int, ...]' = (), mechanism: 'str' = 'unknown', note: 'str' = '') -> None
+```
+
+What a fit did about missing values, and what that assumes.
+
+**Attributes**
+
+- `strategy` — one of `STRATEGIES`.
+- `n_total` — rows offered to the model.
+- `n_used` — rows that entered it.
+- `dropped` — 0-based indices of the rows that did not, in input order.
+- `mechanism` — what the analyst is willing to assume -- ``"MCAR"``, ``"MAR"``, ``"MNAR"`` or ``"unknown"``. The default is ``"unknown"`` because that is the truthful label when nothing was said, and a policy that claims MCAR without evidence is worse than one that admits it does not know.
+- `note` — anything else worth carrying, e.g. which columns were affected.
+
+## `complete_case_policy`
+
+```python
+complete_case_policy(columns: 'Mapping[str, Any]', *, mechanism: 'str' = 'unknown', warn: 'bool' = False, context: 'str' = 'rows') -> 'MissingPolicy'
+```
+
+Declare the complete-case handling of ``columns`` without re-deriving it.
+
+**Args**
+
+- `columns` — ``{name: sequence}`` as passed to `missing.complete_cases`.
+- `mechanism` — the missingness assumption to record.
+- `warn` — forward to `missing.complete_cases`; off by default because the policy object is the declaration and a warning would duplicate it.
+- `context` — noun used in that warning.
+
+**Returns**
+
+The `MissingPolicy` describing what complete-case handling did.
+
+## `policy_from_result`
+
+```python
+policy_from_result(result: 'Any') -> 'MissingPolicy | None'
+```
+
+Read the handling a fitted result already did, when it recorded one.
+
+Returns ``None`` rather than guessing when the result does not carry the
+counts: a made-up policy is worse than an absent one, because it would be
+printed next to a fit as if it had been observed.
 
 ## `bldiag`
 

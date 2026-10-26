@@ -1,11 +1,12 @@
 # Other
 
-*2 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*3 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
 | [`diagnose`](#diagnose) | — |
 | [`Diagnostic`](#diagnostic) | — |
+| [`STRATEGIES`](#strategies) | — |
 
 ## `diagnose`
 
@@ -44,3 +45,7 @@ One thing worth knowing about a fit.
 - `severity` — ``error``, ``warning`` or ``info``.
 - `message` — what was found, with the numbers that show it.
 - `action` — what a user should do about it, or why there is nothing to do.
+
+## `STRATEGIES`
+
+*Mapping (`dict`) with 3 keys:* `complete_case`, `available_case`, `likelihood`
