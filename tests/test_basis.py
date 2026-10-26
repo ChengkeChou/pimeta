@@ -309,7 +309,9 @@ def test_wald_test_says_what_it_needs():
 def test_the_predicted_curve_matches_r():
     fit = _bcg_fit()
     basis = ma.rcs(YEAR0, knots=KNOTS, name=TERM)
-    curve = ma.predict_curve(fit, basis, grid=GRID)
+    # `predtype="default"` because this test reproduces R's plug-in interval;
+    # the package default is `t`, which covers better at small k.
+    curve = ma.predict_curve(fit, basis, grid=GRID, predtype="default")
     assert curve.fit == pytest.approx(R_PRED, rel=1e-10)
     assert curve.se == pytest.approx(R_PRED_SE, rel=1e-9)
     assert curve.ci_lb == pytest.approx(R_PRED_CI_LB, rel=1e-9)

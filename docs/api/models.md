@@ -196,7 +196,7 @@ CI for tau^2 / tau / I^2 / H^2 (mirrors ``metafor::confint``).
 ## `predict_rma`
 
 ```python
-predict_rma(est: 'float', se: 'float', tau2: 'float', k: 'int', p: 'int' = 1, parms: 'int | None' = None, level: 'float' = 0.05, predtype: 'str' = 'default', test: 'str' = 'z', newvi: 'float' = 0.0, transf: 'Callable[..., float] | None' = None, targs=None) -> 'PredictResult'
+predict_rma(est: 'float', se: 'float', tau2: 'float', k: 'int', p: 'int' = 1, parms: 'int | None' = None, level: 'float' = 0.05, predtype: 'str' = 't', test: 'str' = 'z', newvi: 'float' = 0.0, transf: 'Callable[..., float] | None' = None, targs=None) -> 'PredictResult'
 ```
 
 *Mirrors R's `predict.rma`.*
@@ -207,13 +207,16 @@ Replicates ``predict.rma.uni`` for the ``k.new = 1`` (intercept-only) case.
 ``est``/``se``/``tau2`` are on the analysis scale (log scale for ratio
 types); ``level`` is the alpha level (0.05 -> 95%).
 
-``predtype`` controls the prediction interval reference distribution, exactly
-as in metafor:
+``predtype`` controls the prediction interval reference distribution. The
+names are metafor's, but the **default is not**: it is ``"t"``, because the
+plug-in interval metafor defaults to is measurably too narrow at small ``k``,
+and an interval that misses its nominal level is not a defensible default.
 
-- ``"default"`` — uses the CI reference (normal for ``test="z"``).
+- ``"t"`` (default) — ``crit = qt(level/2, df = k - p)``.
+- ``"default"`` — metafor's plug-in: uses the CI reference (normal for
+  ``test="z"``). Kept for reproducing R exactly, and for nothing else.
 - ``"simple"``  — ``crit = qnorm``, ``pi.se = sqrt(tau2 + newvi)`` (drops ``se``).
 - ``"riley"``   — ``crit = qt(level/2, df = k - parms)``  (Riley et al. 2011).
-- ``"t"``       — ``crit = qt(level/2, df = k - p)``.
 
 ``parms`` defaults to ``p + 1`` (rma.uni counts one extra parameter for
 tau^2). ``test`` mirrors metafor's ``test`` (``"z"`` default, or
@@ -221,13 +224,17 @@ tau^2). ``test`` mirrors metafor's ``test`` (``"z"`` default, or
 
 **Measured coverage.** The prediction interval contains ``sqrt(se^2 +
 tau2)``, which treats ``tau2`` as known; over 2000 replications per
-scenario against the true effect of a new study, the default covered
-0.882 +/- 0.007 at ``k = 20`` and 0.804 +/- 0.014 at ``k = 5`` against a
+scenario against the true effect of a new study, metafor's default covered
+0.882 +/- 0.007 at ``k = 20`` and 0.804 +/- 0.009 at ``k = 5`` against a
 nominal 0.95. ``predtype="t"`` covered 0.899 and 0.894 at the same
 settings: never worse, and materially better when ``k`` is small. Neither
 reaches nominal, because the residual is the uncertainty in ``tau2``, which
 no plug-in variance includes. ``tools/coverage_pi.py`` reproduces the
 table, including a parametric bootstrap that does not beat ``t``.
+
+The default is therefore ``"t"``. This is a deliberate departure from the
+reference implementation: matching R verifies the arithmetic, it is not a
+reason to ship the interval with the worse coverage.
 
 ## `PredictResult`
 
@@ -1189,7 +1196,7 @@ whenever the model has it.
 ## `predict_curve`
 
 ```python
-predict_curve(result, basis: 'Basis', grid=None, at: 'dict | None' = None, level: 'float | None' = None) -> 'CurveResult'
+predict_curve(result, basis: 'Basis', grid=None, at: 'dict | None' = None, level: 'float | None' = None, predtype: 'str' = 't') -> 'CurveResult'
 ```
 
 Evaluate a fitted basis term over a grid, with bands.
@@ -1205,6 +1212,7 @@ holding the *other* moderators at fixed values.
 - `grid` — values of the moderator to evaluate at. Defaults to 100 points spanning the observed range.
 - `at` — values for the other moderators, by coefficient name. Anything not given is held at 0, which is the model's reference point.
 - `level` — confidence level; defaults to the level of the fit.
+- `predtype` — reference distribution for the prediction band, passed to ``predict``. Defaults to ``"t"`` like the rest of the package; use ``"default"`` to reproduce metafor's plug-in band.
 
 **Returns**
 

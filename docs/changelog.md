@@ -12,22 +12,26 @@ Everything this package currently cannot do, in one place, with the reason. Each
 one is the outcome of a decision rather than an oversight, and the detail is in
 the entry or the page named.
 
-- **RoBMA (Bayesian model averaging over selection models) is not
-  implemented.** Its continuous core now is — `bayes_copas` gives the posterior
-  of the Copas selection model, with an independent NUTS check — so what is
-  missing is the model *set* (no bias / PET / PEESE / selection with each of
-  several weight functions × fixed / random effects) and the discrete moves
-  between them. The reference implementation now runs — `RoBMA` 4.0.0 on JAGS
-  4.3.2 inside an Ubuntu 22.04 WSL2 distribution — but not on Windows, and the
-  reason is worth recording: no Windows JAGS can be linked. conda-forge's
-  `m2w64-jags` 4.3.0 depends on `m2w64-gcc-libs`, `m2w64-openblas` and
-  `msys2-conda-epoch` and was built in December 2020, so it is an **msvcrt**
-  build, while every R from 4.2 onwards is **UCRT**; `r-rjags` has no conda-forge
-  build at all. What remains is the implementation and its verification. Once a
-  model set can be averaged over it has to be checked, and shipping it on the
-  strength of "the sampler is fine" is the one thing this package does not do.
-  Exact quadrature can check the arithmetic of any model set it is given; only
-  the reference can say which set it used, which is what the environment is for.
+- **RoBMA: the ensemble is implemented; one of its two pathways lacks an R
+  check.** `robma()` enumerates the 36-model PSMA space (9 bias models × 2 effect
+  indicators × 2 heterogeneity indicators) and integrates each marginal
+  likelihood by Gauss–Legendre quadrature, so the model posterior is exact up to
+  quadrature error rather than up to Monte Carlo error. The default is the three
+  Gaussian bias models (`none`, `PET`, `PEESE`) because those are the ones whose
+  numbers agree with `RoBMA` 4.0.0 to three decimals; the six Vevea–Hedges step
+  functions run too, either named or as a `step_weight_function`, and estimate
+  their weights.
+
+  What is missing is a *comparison*, not the functionality: the reference
+  implementation's fixed-weight and free-weight pathways disagree about the
+  orientation of the selection kernel, so only the fixed-weight pathway can be
+  checked against it. Matching one of two mutually inconsistent answers would be
+  a port, not a verification. The way to settle it is a simulation from a known
+  selection process — generate data under known parameters and check the
+  posterior recovers them — which is a study, not a patch. The reference runs in
+  WSL (`RoBMA` 4.0.0, JAGS 4.3.2, Ubuntu 22.04); it cannot run natively on
+  Windows because no Windows JAGS can be linked (conda-forge's `m2w64-jags`
+  4.3.0 is an **msvcrt** build, every R from 4.2 is **UCRT**).
 - **Dynamic heterogeneity is implemented for a parametric scale only.** The
   pooled effect and :math:`\tau^2` may each be constant, linear or quadratic in
   a continuous index, and both estimators are validated. A **non-parametric**
@@ -93,6 +97,31 @@ the entry or the page named.
   future patient.
 
 ### Fixed
+
+- **`rma_mv` could return a REML boundary solution where the maximum is
+  interior.** For an unstructured covariance (`struct="UN"`) the L-BFGS-B
+  search can stop with one variance component pinned at zero and the other
+  interior. On the regenerated bivariate fixture it returned
+  `Sigma = [[0, 0], [0, 0.1003]]`, while a univariate fit of the same first
+  metric estimated `tau2 = 0.0241` and metafor estimated
+  `[[0.0240, -0.0361], [-0.0361, 0.0799]]`; ML on the same data found the
+  interior point, so the likelihood was fine and the search was not. A solution
+  with at least one parameter on its lower bound and at least one interior is
+  the signature of that stall, and only those fits now pay for the Nelder-Mead
+  fallback that `gen` components already had. After the fix pimeta's REML
+  agrees with metafor to 1e-9 on that fixture.
+
+  The bug was found by rebuilding a fixture from a documented simulation, which
+  is the argument for doing that rather than keeping data of unknown lineage.
+
+- **RoBMA's step functions could be named but not used.** `BIAS_PRIOR_WEIGHTS`
+  lists the six Vevea–Hedges step functions of the default ensemble, so
+  `bias_models=("none", "one-sided: 0.025, 0.05")` passed validation and was then
+  handed to the fitter, which only knows `none`/`PET`/`PEESE` — the call died
+  with `ValueError: unknown bias model` **after** the name had been accepted, and
+  the documented `NotImplementedError` was never raised because nothing
+  implemented it. Names are now resolved to the `WeightFunction` they denote, so
+  the two routes agree to 1e-12 and all 36 models of the ensemble run.
 
 - **`few_studies` fired on results that estimate no heterogeneity.** The check
   read `k` alone, so a heterogeneity test, a `matreg` table or a rankogram with
@@ -209,6 +238,18 @@ the entry or the page named.
   the interval each reports really is the 95% one.
 
 ### Added
+
+- **`tests/data/prediction_joint.csv` is now regenerable from a documented
+  simulation.** `tools/make_prediction_joint_fixture.py` fixes the seed and
+  states the data-generating process (bivariate normal on logit-AUC and the
+  calibration slope with a negative between-study correlation, Hanley-McNeil
+  sampling error, known slope standard errors).
+  `tools/r_reference/prediction_joint.R` recomputes every number in
+  `tests/test_prediction_joint.py` from those bytes, and it was validated by
+  reproducing the *previous* constants exactly before the fixture was rebuilt.
+  `tests/test_data_manifest.py` runs each generator's `--check`, so a fixture
+  that drifts from its script fails the suite rather than ageing quietly.
+  The manifest's `unverified` list is down from nine files to eight.
 
 - **`ma.specification_report(mv)`: the whole grid as one table, failures
   included.** `mv.curve()` is the subset that worked, so a report assembled from
@@ -1461,6 +1502,17 @@ the entry or the page named.
   machinery were all already present.
 
 ### Changed
+
+- **Breaking: the prediction interval defaults to `predtype="t"`, not to
+  metafor's plug-in interval.** Measured over 2000 replications per scenario
+  against the true effect of a new study, the plug-in interval covers 0.882 at
+  `k = 20` and 0.804 at `k = 5` against a nominal 0.95; the t reference covers
+  0.899 and 0.894. An interval that misses its level by twelve points at `k = 5`
+  is not a defensible default, and "the reference does it this way" is a
+  statement about the reference rather than about the interval. `predtype`
+  keeps every value it had, including `"default"` for reproducing R exactly —
+  what changed is which one you get without asking. `RmaResult.predict` and the
+  `s3` wrapper follow the same default.
 
 - **Breaking: `IpdCurveResult.diagnostics()` is now a property returning
   `Diagnosis`, and the numbers moved to `IpdCurveResult.identifiability()`.**

@@ -277,7 +277,7 @@ def confint(x, level=0.95, type="QP", transf=None):
 
 
 @singledispatch
-def predict(x, newmods=None, level=0.95, predtype="default"):
+def predict(x, newmods=None, level=0.95, predtype="t"):
     """``predict`` — predicted effect(s) for new moderator values."""
     from .pooling import predict_rma
     b = np.asarray(_first(x, "b", "beta"), dtype=float)

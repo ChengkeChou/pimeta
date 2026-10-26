@@ -206,7 +206,7 @@ H^2   = 2.5793
 I^2   = 61.23%
 tau   = 0.302779
 estimate: 0.4914  95% CI: [0.2498, 0.7329]
-prediction interval: [-0.1494, 1.1321]
+prediction interval: [-0.2481, 1.2309]
 tau^2 CI: {'tau2': 0.091675, 'ci_lb': 0.011901, 'ci_ub': 0.465019, 'level': 0.95}
 ```
 

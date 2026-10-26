@@ -74,6 +74,16 @@ ORIGIN: dict[str, dict[str, Any]] = {
         "note": "simulated arm-level network for the Bayesian NMA; checked "
                 "against tools/quadrature_nma_bayes.py and multinma",
     },
+    "prediction_joint.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_prediction_joint_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "18 simulated accuracy studies with a C-statistic and a "
+                "calibration slope; the generator fixes the seed and documents "
+                "the data-generating process, and the reference numbers in "
+                "tests/test_prediction_joint.py come from "
+                "tools/r_reference/prediction_joint.R on exactly these bytes",
+    },
     "robma.csv": {
         "origin": "generated",
         "produced_by": "tools/make_robma_fixture.py",
@@ -113,7 +123,6 @@ UNVERIFIED = (
     "nma_dose.csv",
     "nma_timecourse.csv",
     "onestage_slopes.csv",
-    "prediction_joint.csv",
     "timecourse.csv",
     "tvhr_piecewise.csv",
     "_nc_common_ref.csv",

@@ -582,7 +582,7 @@ are read off `RoBMA` 4.0.0 rather than from its papers, which differ.
 
 - `yi` — observed effects, or a fitted model whose ``.yi``/``.vi`` are used.
 - `sei` — their standard errors.
-- `bias_models` — which bias models to include, by name or by a `WeightFunction`. Defaults to ``("none", "PET", "PEESE")``, the three whose numbers agree with the reference to three decimals; a step function is accepted and its weights are estimated, but see the note on orientation in the module documentation — the reference's own fixed-weight and free-weight pathways disagree about it, so only the fixed-weight comparison is available as a check.
+- `bias_models` — which bias models to include, by name or by a `WeightFunction`. Defaults to ``("none", "PET", "PEESE")``, the three whose numbers agree with the reference to three decimals. The six step functions of the default ensemble can be named (see ``BIAS_PRIOR_WEIGHTS``) or constructed with `step_weight_function`; their weights are estimated. Only the *fixed*-weight pathway has an R comparison, because the reference's own fixed-weight and free-weight pathways disagree about the orientation; see the module documentation.
 - `prior` — overrides for ``mu_sd``, ``tau_sd``, ``pet_scale``, ``peese_scale``.
 - `level` — credibility level in percent (``0.95`` and ``95`` both mean 95%).
 - `grid` — quadrature nodes per axis: ``tau`` and ``beta``. The effect is integrated analytically and has no grid.
@@ -593,8 +593,7 @@ are read off `RoBMA` 4.0.0 rather than from its papers, which differ.
 
 **Raises**
 
-- `ValueError` — fewer than three studies, mismatched lengths, non-positive standard errors, or an unknown key in ``prior``/``grid``.
-- `NotImplementedError` — when a step selection function is requested.
+- `ValueError` — fewer than three studies, mismatched lengths, non-positive standard errors, an unknown bias-model name, or an unknown key in ``prior``/``grid``.
 
 **Example**
 

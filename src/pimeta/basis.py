@@ -633,7 +633,8 @@ class CurveResult:
 
 
 def predict_curve(result, basis: Basis, grid=None, at: dict | None = None,
-                  level: float | None = None) -> CurveResult:
+                  level: float | None = None,
+                  predtype: str = "t") -> CurveResult:
     """Evaluate a fitted basis term over a grid, with bands.
 
     This is a thin wrapper around ``result.predict(newmods=...)``: the only
@@ -649,6 +650,9 @@ def predict_curve(result, basis: Basis, grid=None, at: dict | None = None,
         at: values for the other moderators, by coefficient name. Anything not
             given is held at 0, which is the model's reference point.
         level: confidence level; defaults to the level of the fit.
+        predtype: reference distribution for the prediction band, passed to
+            ``predict``. Defaults to ``"t"`` like the rest of the package; use
+            ``"default"`` to reproduce metafor's plug-in band.
 
     Returns:
         :class:`CurveResult`.
@@ -700,7 +704,7 @@ def predict_curve(result, basis: Basis, grid=None, at: dict | None = None,
         if name in held:
             newmods[:, j] = float(held[name])
 
-    preds = result.predict(newmods=newmods, level=level)
+    preds = result.predict(newmods=newmods, level=level, predtype=predtype)
     if not isinstance(preds, list):
         preds = [preds]
 

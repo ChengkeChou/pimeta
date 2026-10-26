@@ -757,7 +757,10 @@ def test_confint_ht_with_moderators_is_rejected():
 
 
 def test_predict_newmods_matches_r():
-    pr = _ci_fit().predict(newmods=[2, 6])
+    # `predtype="default"` is stated rather than assumed: the default is `t`
+    # now, and this test's whole point is that R's plug-in interval is
+    # reproducible on request.
+    pr = _ci_fit().predict(newmods=[2, 6], predtype="default")
     assert isinstance(pr, list) and len(pr) == 2
     assert pr[0].pred == pytest.approx(0.10651328682849051, abs=1e-12)
     assert pr[0].se == pytest.approx(0.10714918265841189, abs=1e-12)

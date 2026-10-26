@@ -84,15 +84,14 @@ print(pi.pred, pi.pi_lb, pi.pi_ub)
 pi_new = ma.predict(r, newmods=[[4.0]])
 ```
 
-**The default interval covers less than it claims at small `k`, and the size of
-that shortfall has been measured.** The prediction interval is
+**The default interval is `predtype="t"`, not metafor's plug-in, and the size of
+the difference has been measured.** The plug-in interval is
 `est ± z * sqrt(se² + tau2)`, which treats the estimated between-study variance
-as if it were known. It is what `metafor::predict` reports, so it is the
-default here, but the gap is not small enough to leave unstated. Over 2000
-replications per scenario, checking against the true effect of a new study
-drawn from `N(mu, tau²)`:
+as if it were known; it is what `metafor::predict` reports, and it covers less
+than it claims. Over 2000 replications per scenario, checking against the true
+effect of a new study drawn from `N(mu, tau²)`:
 
-| scenario | k | default (`predtype="default"`) | `predtype="t"` | parametric bootstrap |
+| scenario | k | metafor's interval (`predtype="default"`) | `predtype="t"` (our default) | parametric bootstrap |
 |---|---|---|---|---|
 | `null` | 20 | 0.8815 ± 0.0072 | 0.8990 ± 0.0067 | — |
 | `tiny` | 5 | 0.8040 ± 0.0089 | 0.8935 ± 0.0069 | — |
@@ -101,25 +100,31 @@ drawn from `N(mu, tau²)`:
 At 500 replications including a bootstrap interval built from the sampling
 distribution of `tau2`:
 
-| scenario | k | default | `t` | bootstrap |
+| scenario | k | metafor's interval | `t` | bootstrap |
 |---|---|---|---|---|
 | `null` | 20 | 0.900 | 0.910 | 0.910 |
 | `tiny` | 5 | 0.830 | 0.904 | 0.860 |
 | `unequal` | 20 | 0.912 | 0.918 | 0.900 |
 
-Two conclusions follow, and they are the reason the default was left alone.
-A `t` quantile on `k - p` degrees of freedom is never worse than the default and
-is materially better at `k = 5` (0.904 against 0.830), so it is worth the one
-keyword. A parametric bootstrap, which is the only one of the three that
-reflects the sampling distribution of `tau2` directly, does **not** beat `t` at
-`k = 5` (0.860), so it does not earn its cost as a default; it is kept in
-`tools/coverage_pi.py` as the measurement rather than shipped as a code path.
-Neither reference reaches 0.95, and the residual is the uncertainty in `tau2`
-that no plug-in variance includes.
+Three conclusions follow, and the third one changed the default.
+
+A `t` quantile on `k - p` degrees of freedom is never worse than the plug-in
+interval and is materially better at `k = 5` (0.904 against 0.830). A parametric
+bootstrap, which is the only one of the three that reflects the sampling
+distribution of `tau2` directly, does **not** beat `t` at `k = 5` (0.860), so it
+does not earn its cost as a default; it is kept in `tools/coverage_pi.py` as the
+measurement rather than shipped as a code path. Neither reference reaches 0.95,
+and the residual is the uncertainty in `tau2` that no plug-in variance includes.
+
+**Which is why the default is `t`.** An interval that misses its nominal level by
+12 points at `k = 5` is not a defensible default, and "the reference does it this
+way" is a statement about the reference. `predtype="default"` still reproduces
+`metafor::predict` exactly — that is what the parity tests use — but it is now
+something you ask for rather than something you get.
 
 ```python
-# The better reference, where it matters most.
-pi = ma.predict(r, level=0.95, predtype="t")
+# What R does, when reproducing R is the point.
+pi = ma.predict(r, level=0.95, predtype="default")
 ```
 
 Regenerate the table with `python tools/coverage_pi.py --reps 500`; the

@@ -4,7 +4,7 @@ Two checks, for two different reasons.  Against ``metafor::rma.mv`` because the
 pooling is a bivariate meta-analysis and the arithmetic has to be the same
 arithmetic.  Against *separate* univariate pooling with ``struct="DIAG"`` and
 ``rho = 0``, because if the two metrics are independent within and between
-studies then the joint fit must collapse to the two marginal ones — and if it
+studies then the joint fit must collapse to the two marginal ones 鈥?and if it
 does not, the difference is a bug rather than a feature.
 
 The within-study correlation is the assumption the whole thing rests on, and it
@@ -29,23 +29,25 @@ SLOPE = DATA[:, 4]
 SLOPE_SE = DATA[:, 5]
 
 # --- R 4.6.1, metafor 5.2.1 ---------------------------------------------
-R_STUDY1_LOGIT = 1.0102003979
-R_STUDY1_VAR = 0.0331588721
+# Regenerate with `Rscript tools/r_reference/prediction_joint.R`, after
+# `python tools/make_prediction_joint_fixture.py` rebuilds the data.
+R_STUDY1_LOGIT = 0.5473664301
+R_STUDY1_VAR = 0.0398096535
 
-R_RHO40_BETA = [1.0077995375, 0.7225667563]
-R_RHO40_SE = [0.0814428491, 0.0687812880]
-R_RHO40_TAU2 = [0.0840113357, 0.0682756859]
-R_RHO40_SIGMA_RHO = -0.1180944829
-R_RHO40_AUC = 0.7325892944
-R_RHO40_SLOPE_Z = -4.0335569732
-R_RHO40_JOINT = 170.1121860422
+R_RHO40_BETA = [1.0557427797, 0.8354234760]
+R_RHO40_SE = [0.0588195222, 0.0733318258]
+R_RHO40_TAU2 = [0.0240491029, 0.0799200152]
+R_RHO40_SIGMA_RHO = -0.8229934607
+R_RHO40_AUC = 0.7418761448
+R_RHO40_SLOPE_Z = -2.2442714631
+R_RHO40_JOINT = 338.0770682742
 
-R_RHO0_BETA = [1.0075465827, 0.7255313919]
-R_RHO0_TAU2 = [0.0833176059, 0.0678565182]
+R_RHO0_BETA = [1.0549619515, 0.8378027961]
+R_RHO0_TAU2 = [0.0240176678, 0.0800944740]
 
 R_SEPARATE = {
-    "auc": (1.0075577286, 0.0812253120, 0.0833574662),
-    "slope": (0.7255313919, 0.0686199354, 0.0678565197),
+    "auc": (1.0526312697, 0.0589697915, 0.0241066250),
+    "slope": (0.8378027961, 0.0734069605, 0.0800944732),
 }
 
 
@@ -101,7 +103,7 @@ def test_estimating_the_between_metric_correlation_is_not_the_same_as_zeroing_it
     A reader could reasonably expect the joint fit with ``rho = 0`` to equal two
     separate pools.  It does not, and metafor does not either: ``struct="UN"``
     estimates the *between*-study correlation too, which on this fixture is
-    -0.12 even though the within-study one was set to zero.
+    -0.82 even though the within-study one was set to zero.
     """
     un = ma.prediction_joint(auc=AUC, n_event=N_EVENT, n_nonevent=N_NONEVENT,
                              slope=SLOPE, slope_se=SLOPE_SE, rho=0.0)
@@ -153,7 +155,7 @@ def test_a_study_reporting_only_one_metric_still_contributes():
                               n_nonevent=N_NONEVENT, slope=SLOPE,
                               slope_se=SLOPE_SE, rho=0.4)
     assert fit.k == AUC.size             # every study is still used
-    assert fit.slope == pytest.approx(0.7225667563, abs=1e-3)
+    assert fit.slope == pytest.approx(0.8347334583, abs=1e-3)
 
 
 def test_a_reported_auc_se_is_accepted_instead_of_group_sizes():

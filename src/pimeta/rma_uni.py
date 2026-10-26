@@ -332,6 +332,11 @@ class RmaResult:
         ``predict(fit, newmods = ...)`` does: ``newmods`` must *not* include an
         intercept column (one is prepended).  ``level`` is the confidence
         level (0.95 -> 95%).
+
+        The prediction interval uses ``predtype="t"``, which covers better at
+        small ``k`` than the plug-in interval metafor uses; pass
+        ``predtype="default"`` to reproduce R exactly.  See
+        :func:`pimeta.predict_rma` for the measurements.
         """
         conf = self.level if level is None else level
         alpha = 1.0 - conf

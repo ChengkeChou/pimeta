@@ -2,7 +2,7 @@
 
 Three kinds of check, in the order they matter:
 
-* the model space is the one the reference builds — 3 bias models crossed with
+* the model space is the one the reference builds 閳?3 bias models crossed with
   the effect and heterogeneity indicators, with the prior weights the reference
   records;
 * the quadrature is accurate, judged by halving and doubling the grid rather
@@ -268,3 +268,46 @@ def test_str_reports_the_governing_model(fit):
     assert "P(mu = 0 | data)" in text
     assert "Publication bias" in text
     assert "most probable model" in text
+
+# --------------------------------------------------------------------------- #
+# every bias model of the ensemble is reachable
+# --------------------------------------------------------------------------- #
+def test_a_step_function_can_be_named_or_passed_as_an_object():
+    """The name route used to validate and then fail: `unknown bias model`.
+
+    `BIAS_PRIOR_WEIGHTS` lists the six step functions, so a name passed
+    validation and was then handed to `_fit_model`, which only knows
+    none/PET/PEESE. The names are now resolved where the two representations
+    meet, and the two routes have to produce the same fit.
+    """
+    yi = np.array([0.51, 0.30, 0.44, 0.62, 0.28])
+    sei = np.array([0.15, 0.12, 0.18, 0.20, 0.14])
+    wf = ma.step_weight_function(side="one-sided", steps=(0.025, 0.05))
+    by_name = ma.robma(yi, sei, bias_models=("none", "PET", "PEESE", wf.name))
+    by_object = ma.robma(yi, sei, bias_models=("none", "PET", "PEESE", wf))
+    assert len(by_name.models) == len(by_object.models) == 4 * 2 * 2
+    assert by_name.mu["mean"] == pytest.approx(by_object.mu["mean"], rel=1e-12)
+    assert by_name.bias_models == by_object.bias_models
+
+
+def test_the_full_nine_model_ensemble_runs():
+    # 9 bias models x 2 effect indicators x 2 heterogeneity indicators = 36.
+    # This is RoBMA's PSMA ensemble; the default is the three Gaussian models
+    # because those are the ones with an exact R comparison.
+    yi = np.array([0.51, 0.30, 0.44, 0.62, 0.28])
+    sei = np.array([0.15, 0.12, 0.18, 0.20, 0.14])
+    names = ("none", "PET", "PEESE") + tuple(
+        wf.name for wf in ma.robma.__globals__["DEFAULT_STEP_FUNCTIONS"])
+    fit = ma.robma(yi, sei, bias_models=names)
+    assert len(fit.models) == 36
+    assert len(fit.bias_models) == 9
+    prior = sum(m["prior_prob"] for m in fit.models)
+    assert prior == pytest.approx(1.0, rel=1e-10)
+    assert sum(m["post_prob"] for m in fit.models) == pytest.approx(1.0, rel=1e-10)
+
+
+def test_an_unknown_bias_model_is_still_refused():
+    yi = np.array([0.51, 0.30, 0.44])
+    sei = np.array([0.15, 0.12, 0.18])
+    with pytest.raises(ValueError, match="unknown bias model"):
+        ma.robma(yi, sei, bias_models=("none", "no-such-model"))

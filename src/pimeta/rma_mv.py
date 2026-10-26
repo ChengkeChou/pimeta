@@ -1445,7 +1445,25 @@ def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
     # the degenerate (rho = -1) boundary where L-BFGS-B stalls in a poor local
     # optimum.  metafor's nlminb traverses this ridge; Nelder-Mead is the most
     # reliable scipy fallback and is only needed when a GEN term is present.
-    if any(c.kind == "gen" for c in components):
+    #
+    # The same stall happens to a UN covariance, and it is worse there: the
+    # optimiser can stop with one variance component *at zero* and the other
+    # interior, which is a boundary point rather than a maximum.  Measured on a
+    # two-metric fixture (tests/data/prediction_joint.csv, regenerated
+    # 2026-10-26): REML returned Sigma = [[0, 0], [0, 0.1003]] while the
+    # univariate fit of the same first metric estimated tau2 = 0.0241, and
+    # metafor estimated [[0.0240, -0.0361], [-0.0361, 0.0799]]. ML on the same
+    # data found the interior point, so the likelihood is fine and the search
+    # was not.  A solution with at least one parameter on its lower bound and at
+    # least one interior is the signature of that stall, and only those fits pay
+    # for the fallback.
+    stalled = False
+    if any(c.kind == "un" for c in components):
+        lo = np.array([b[0] if b[0] is not None else -np.inf for b in bounds])
+        at_lo = np.isclose(np.asarray(opt.x, dtype=float), lo, atol=1e-10)
+        stalled = bool(at_lo.any() and not at_lo.all())
+
+    if stalled or any(c.kind == "gen" for c in components):
         opt_nm = minimize(
             obj, init, method="Nelder-Mead",
             options={"xatol": 1e-10, "fatol": 1e-12,

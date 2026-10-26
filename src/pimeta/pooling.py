@@ -632,7 +632,7 @@ def predict_rma(
     p: int = 1,
     parms: int | None = None,
     level: float = 0.05,
-    predtype: str = "default",
+    predtype: str = "t",
     test: str = "z",
     newvi: float = 0.0,
     transf: Callable[..., float] | None = None,
@@ -644,13 +644,16 @@ def predict_rma(
     ``est``/``se``/``tau2`` are on the analysis scale (log scale for ratio
     types); ``level`` is the alpha level (0.05 -> 95%).
 
-    ``predtype`` controls the prediction interval reference distribution, exactly
-    as in metafor:
+    ``predtype`` controls the prediction interval reference distribution. The
+    names are metafor's, but the **default is not**: it is ``"t"``, because the
+    plug-in interval metafor defaults to is measurably too narrow at small ``k``,
+    and an interval that misses its nominal level is not a defensible default.
 
-    - ``"default"`` — uses the CI reference (normal for ``test="z"``).
+    - ``"t"`` (default) — ``crit = qt(level/2, df = k - p)``.
+    - ``"default"`` — metafor's plug-in: uses the CI reference (normal for
+      ``test="z"``). Kept for reproducing R exactly, and for nothing else.
     - ``"simple"``  — ``crit = qnorm``, ``pi.se = sqrt(tau2 + newvi)`` (drops ``se``).
     - ``"riley"``   — ``crit = qt(level/2, df = k - parms)``  (Riley et al. 2011).
-    - ``"t"``       — ``crit = qt(level/2, df = k - p)``.
 
     ``parms`` defaults to ``p + 1`` (rma.uni counts one extra parameter for
     tau^2). ``test`` mirrors metafor's ``test`` (``"z"`` default, or
@@ -658,13 +661,17 @@ def predict_rma(
 
     **Measured coverage.** The prediction interval contains ``sqrt(se^2 +
     tau2)``, which treats ``tau2`` as known; over 2000 replications per
-    scenario against the true effect of a new study, the default covered
-    0.882 +/- 0.007 at ``k = 20`` and 0.804 +/- 0.014 at ``k = 5`` against a
+    scenario against the true effect of a new study, metafor's default covered
+    0.882 +/- 0.007 at ``k = 20`` and 0.804 +/- 0.009 at ``k = 5`` against a
     nominal 0.95. ``predtype="t"`` covered 0.899 and 0.894 at the same
     settings: never worse, and materially better when ``k`` is small. Neither
     reaches nominal, because the residual is the uncertainty in ``tau2``, which
     no plug-in variance includes. ``tools/coverage_pi.py`` reproduces the
     table, including a parametric bootstrap that does not beat ``t``.
+
+    The default is therefore ``"t"``. This is a deliberate departure from the
+    reference implementation: matching R verifies the arithmetic, it is not a
+    reason to ship the interval with the worse coverage.
     """
     predtype = predtype.lower()
     if predtype not in ("default", "simple", "riley", "t"):

@@ -827,11 +827,13 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
         sei: their standard errors.
         bias_models: which bias models to include, by name or by a
             :class:`WeightFunction`. Defaults to ``("none", "PET", "PEESE")``,
-            the three whose numbers agree with the reference to three decimals;
-            a step function is accepted and its weights are estimated, but see
-            the note on orientation in the module documentation — the reference's
-            own fixed-weight and free-weight pathways disagree about it, so only
-            the fixed-weight comparison is available as a check.
+            the three whose numbers agree with the reference to three decimals.
+            The six step functions of the default ensemble can be named (see
+            ``BIAS_PRIOR_WEIGHTS``) or constructed with
+            :func:`step_weight_function`; their weights are estimated. Only the
+            *fixed*-weight pathway has an R comparison, because the reference's
+            own fixed-weight and free-weight pathways disagree about the
+            orientation; see the module documentation.
         prior: overrides for ``mu_sd``, ``tau_sd``, ``pet_scale``,
             ``peese_scale``.
         level: credibility level in percent (``0.95`` and ``95`` both mean 95%).
@@ -843,8 +845,8 @@ def robma(yi, sei=None, *, bias_models=None, prior=None, level: float = 95.0,
 
     Raises:
         ValueError: fewer than three studies, mismatched lengths, non-positive
-            standard errors, or an unknown key in ``prior``/``grid``.
-        NotImplementedError: when a step selection function is requested.
+            standard errors, an unknown bias-model name, or an unknown key in
+            ``prior``/``grid``.
 
     Example:
         >>> fit = ma.robma(yi, sei=sei)
@@ -1021,9 +1023,18 @@ def _bias_weight(label: str) -> float:
 
 
 def _normalise_bias_models(bias_models) -> tuple:
-    """Validate the requested bias models and return them in canonical order."""
+    """Validate the requested bias models and return them in canonical order.
+
+    A step function may be named (one of the six in the default ensemble) or
+    passed as a :class:`WeightFunction`. The name route used to validate against
+    ``BIAS_PRIOR_WEIGHTS`` and then hand the plain string to ``_fit_model``,
+    which only knows ``none``/``PET``/``PEESE`` -- so every advertised step name
+    raised ``ValueError: unknown bias model``. The names are resolved to their
+    functions here, which is where the two representations should have met.
+    """
     if bias_models is None:
         return ("none", "PET", "PEESE")
+    by_name = {wf.name: wf for wf in DEFAULT_STEP_FUNCTIONS}
     requested: list = []
     seen: set[str] = set()
     for item in bias_models:
@@ -1045,7 +1056,7 @@ def _normalise_bias_models(bias_models) -> tuple:
                 f"unknown bias model {item!r}; known are "
                 f"{', '.join(sorted(BIAS_PRIOR_WEIGHTS))}")
         seen.add(label)
-        requested.append(item)
+        requested.append(by_name.get(item, item))
     if not requested:
         raise ValueError("'bias_models' must name at least one model")
     order = list(BIAS_PRIOR_WEIGHTS)
