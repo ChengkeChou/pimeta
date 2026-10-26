@@ -430,7 +430,11 @@ produced it (`save_record(..., specification=outcome.id)`), in the object, the i
 or a mapping, and attaching one leaves the analysis fingerprint untouched. See
 [Reproducible analyses](reproducibility.md#declaring-the-decisions-analysisspec).
 Still open: the report object that renders a specification's results as one
-table.
+table. **Done since:** `ma.specification_report(mv)` renders every specification
+of a grid — including the ones that failed and the ones excluded by their own
+diagnostics — as one Markdown table in grid order, with the caveats attached
+below it. It adds no statistics; it renders the numbers that exist and refuses to
+show a number for a specification whose fit called it an error.
 
 ## Stage 7 — multiverse
 

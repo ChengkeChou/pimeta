@@ -31,6 +31,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -38,7 +39,8 @@ import numpy as np
 from .checks import Diagnosis, Diagnostic
 from .spec import AnalysisSpec, RunOutcome, Specification, execute
 
-__all__ = ["MultiverseResult", "multiverse", "DEFAULT_EXTRACT"]
+__all__ = ["MultiverseResult", "multiverse", "DEFAULT_EXTRACT",
+           "SpecificationReport", "specification_report"]
 
 
 def DEFAULT_EXTRACT(result: Any) -> tuple[float, float, float]:
@@ -388,3 +390,129 @@ def multiverse(
         ci_lb=ci_lb, ci_ub=ci_ub, ids=ids, failed=failed,
         flagged=flagged,
         considered=len(outcomes), decisions=spec.names)
+
+
+# --------------------------------------------------------------------------- #
+# the report
+# --------------------------------------------------------------------------- #
+#: The caveats that travel with any multiverse table. Not configurable: a report
+#: without them is the thing this module exists to prevent.
+NOTES = (
+    "The specifications are not independent experiments: they share the same "
+    "studies. The share whose interval excludes zero is a frequency over "
+    "analyses, not a probability that the effect is real.",
+    "The variance shares are a one-way decomposition, so an interaction between "
+    "two decisions is left unattributed and the shares sum to less than one.",
+    "A specification that failed or was excluded is listed with its status. "
+    "Reading only the rows that produced a number is the largest silent bias in "
+    "a published multiverse.",
+)
+
+
+@dataclass(frozen=True)
+class SpecificationReport:
+    """Every specification of a grid, with its status and, where it has one, its number.
+
+    The table is the point: ``mv.curve()`` is already the subset that worked, so
+    a reader who pastes it into a paper has removed the failures by copying. This
+    object renders all of them, in grid order, with the status beside the number.
+    """
+
+    rows: list[dict[str, Any]]
+    counts: dict[str, int]
+    title: str = ""
+    provenance: str = ""
+    notes: tuple[str, ...] = NOTES
+
+    @property
+    def markdown(self) -> str:
+        """The table, the counts and the caveats, as Markdown."""
+        out: list[str] = []
+        if self.title:
+            out += [f"# {self.title}", ""]
+        if self.provenance:
+            out += [self.provenance, ""]
+        out += ["| specification | choices | estimate | 95% interval | status |",
+                "|---|---|---|---|---|"]
+        out += ["| " + " | ".join(self._cells(row)) + " |" for row in self.rows]
+        out += ["",
+                f"{self.counts['run']} of {self.counts['considered']} "
+                f"specifications ran: {self.counts['usable']} usable, "
+                f"{self.counts['failed']} failed, {self.counts['flagged']} "
+                f"flagged ({self.excluded} excluded by their own diagnostics).",
+                "", "**What this table does not say**", ""]
+        out += [f"- {note}" for note in self.notes]
+        return "\n".join(out) + "\n"
+
+    @property
+    def excluded(self) -> int:
+        return sum(1 for row in self.rows if row["status"] == "excluded")
+
+    def _cells(self, row: dict[str, Any]) -> list[str]:
+        choices = ", ".join(f"{k}={v}" for k, v in row["choices"].items())
+        if row["status"] == "failed":
+            return [row["id"][:12], choices, "—", "—", f"failed: {row['error']}"]
+        if row["status"] == "excluded":
+            codes = ", ".join(row["codes"])
+            return [row["id"][:12], choices, "—", "—", f"excluded: {codes}"]
+        status = "ok" if not row["codes"] else "ok (" + ", ".join(row["codes"]) + ")"
+        return [row["id"][:12], choices, f"{row['estimate']:+.4f}",
+                f"{row['ci_lb']:+.4f} to {row['ci_ub']:+.4f}", status]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"title": self.title, "counts": dict(self.counts),
+                "provenance": self.provenance,
+                "rows": [dict(r) for r in self.rows], "notes": list(self.notes)}
+
+    def save(self, path: str | Path) -> Path:
+        """Write the Markdown to ``path`` and return the path."""
+        target = Path(path)
+        target.write_text(self.markdown, encoding="utf-8")
+        return target
+
+    def __str__(self) -> str:
+        return self.markdown
+
+    def __len__(self) -> int:
+        return len(self.rows)
+
+
+def specification_report(mv: MultiverseResult, *, title: str = "",
+                         provenance: str = "") -> SpecificationReport:
+    """Render every specification of ``mv`` as one table, failures included.
+
+    Args:
+        mv: the result of :func:`multiverse`.
+        title: an optional heading; omitted when empty.
+        provenance: an optional line naming the data and the date, so a pasted
+            table can be traced to a run.
+
+    Returns:
+        :class:`SpecificationReport`; its ``markdown`` property is the table.
+
+    The rows are in grid order, not ordered by estimate: the table audits the
+    grid, and sorting it by the answer would re-introduce the selection it exists
+    to expose. ``mv.curve()`` is the sorted view.
+    """
+    usable = {mid: i for i, mid in enumerate(mv.ids)}
+    failed = {row["id"]: row for row in mv.failed}
+    flagged = {row["id"]: row for row in mv.flagged}
+
+    rows: list[dict[str, Any]] = []
+    for outcome in mv.outcomes:
+        mid = outcome.id
+        codes = list(flagged[mid]["codes"]) if mid in flagged else []
+        base = {"id": mid, "choices": dict(outcome.choices), "codes": codes}
+        if mid in failed:
+            rows.append({**base, "status": "failed",
+                         "error": failed[mid]["error"]})
+        elif mid in flagged and flagged[mid]["excluded"]:
+            rows.append({**base, "status": "excluded"})
+        else:
+            index = usable[mid]
+            rows.append({**base, "status": "ok",
+                         "estimate": mv.estimates[index],
+                         "ci_lb": mv.ci_lb[index], "ci_ub": mv.ci_ub[index]})
+
+    return SpecificationReport(rows=rows, counts=mv.counts(), title=title,
+                               provenance=provenance)

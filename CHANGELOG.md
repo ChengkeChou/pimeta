@@ -210,6 +210,16 @@ the entry or the page named.
 
 ### Added
 
+- **`ma.specification_report(mv)`: the whole grid as one table, failures
+  included.** `mv.curve()` is the subset that worked, so a report assembled from
+  it by hand drops exactly the specifications that broke — the largest silent bias
+  in a published multiverse. The report lists every specification in grid order
+  with its status: `ok` (plus any warning codes), `failed: <exception>`, or
+  `excluded: <codes>` with the number withheld, because a fit that called its own
+  estimate an error should not have that estimate in a table someone will quote.
+  The three caveats from the multiverse module travel with the table rather than
+  living in a guide. `.markdown`, `.to_dict()` and `.save()` for export.
+
 - **`docs/reference/field-map.md`: the three-way table between pimeta and
   metafor.** Same name and same statistic; same statistic under a different name;
   absent on either side. The category that matters is the second one — a field

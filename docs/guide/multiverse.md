@@ -170,6 +170,30 @@ def slope(result):
 mv = ma.multiverse(spec, run, extract=slope)
 ```
 
+## The report
+
+`ma.specification_report` renders the whole grid as one table: every
+specification, in grid order, with its status beside its number.
+
+```python
+report = ma.specification_report(mv, title="Pooled effect",
+                                 provenance="BCG trials, run 2026-10-26")
+print(report.markdown)      # or report.save("specifications.md")
+```
+
+Rows in grid order rather than ordered by estimate, because the table audits the
+grid: sorting by the answer would re-introduce the selection the module exists to
+expose. A specification that failed keeps its row and shows the exception; one
+that was excluded for an error-severity diagnostic shows its codes and **not** its
+number, so a reader cannot quote a figure the fit disowned. The three caveats from
+the top of this page travel with the table, because they are the part that gets
+lost when a table is pasted somewhere else.
+
+On a dataset where the between-study variance is estimated at zero, the table is
+worth reading literally: every specification then gives the same estimate, and the
+absence of movement is a fact about the data rather than a demonstration of
+robustness. Each row carries `tau2_zero` for exactly that reason.
+
 ## See also
 
 - [Sensitivity analyses](sensitivity.md) — one assumption at a time, no grid

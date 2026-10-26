@@ -1,6 +1,6 @@
 # API reference
 
-All 540 public names in `pimeta.__all__`, generated from the source docstrings.
+All 542 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -448,6 +448,8 @@ All 540 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`execute`](io.md#execute) | Input, output and interoperability | — |
 | [`multiverse`](io.md#multiverse) | Input, output and interoperability | — |
 | [`MultiverseResult`](io.md#multiverseresult) | Input, output and interoperability | — |
+| [`specification_report`](io.md#specification_report) | Input, output and interoperability | — |
+| [`SpecificationReport`](io.md#specificationreport) | Input, output and interoperability | — |
 | [`read_rm5`](io.md#read_rm5) | Input, output and interoperability | read.rm5 |
 | [`read_cdir`](io.md#read_cdir) | Input, output and interoperability | read.cdir |
 | [`read_mtv`](io.md#read_mtv) | Input, output and interoperability | read.mtv |

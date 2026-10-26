@@ -1,6 +1,6 @@
 # Input, output and interoperability
 
-*44 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*46 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
@@ -11,6 +11,8 @@
 | [`execute`](#execute) | — |
 | [`multiverse`](#multiverse) | — |
 | [`MultiverseResult`](#multiverseresult) | — |
+| [`specification_report`](#specification_report) | — |
+| [`SpecificationReport`](#specificationreport) | — |
 | [`read_rm5`](#read_rm5) | read.rm5 |
 | [`read_cdir`](#read_cdir) | read.cdir |
 | [`read_mtv`](#read_mtv) | read.mtv |
@@ -156,6 +158,40 @@ MultiverseResult(outcomes: 'list[RunOutcome]', choices: 'list[dict[str, Any]]', 
 ```
 
 What the declared analyses did, including the ones that failed.
+
+## `specification_report`
+
+```python
+specification_report(mv: 'MultiverseResult', *, title: 'str' = '', provenance: 'str' = '') -> 'SpecificationReport'
+```
+
+Render every specification of ``mv`` as one table, failures included.
+
+**Args**
+
+- `mv` — the result of `multiverse`.
+- `title` — an optional heading; omitted when empty.
+- `provenance` — an optional line naming the data and the date, so a pasted table can be traced to a run.
+
+**Returns**
+
+`SpecificationReport`; its ``markdown`` property is the table.
+
+The rows are in grid order, not ordered by estimate: the table audits the
+grid, and sorting it by the answer would re-introduce the selection it exists
+to expose. ``mv.curve()`` is the sorted view.
+
+## `SpecificationReport`
+
+```python
+SpecificationReport(rows: 'list[dict[str, Any]]', counts: 'dict[str, int]', title: 'str' = '', provenance: 'str' = '', notes: 'tuple[str, ...]' = ('The specifications are not independent experiments: they share the same studies. The share whose interval excludes zero is a frequency over analyses, not a probability that the effect is real.', 'The variance shares are a one-way decomposition, so an interaction between two decisions is left unattributed and the shares sum to less than one.', 'A specification that failed or was excluded is listed with its status. Reading only the rows that produced a number is the largest silent bias in a published multiverse.')) -> None
+```
+
+Every specification of a grid, with its status and, where it has one, its number.
+
+The table is the point: ``mv.curve()`` is already the subset that worked, so
+a reader who pastes it into a paper has removed the failures by copying. This
+object renders all of them, in grid order, with the status beside the number.
 
 ## `read_rm5`
 

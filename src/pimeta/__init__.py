@@ -161,7 +161,12 @@ from .missing_policy import (
     complete_case_policy,
     policy_from_result,
 )
-from .multiverse import MultiverseResult, multiverse
+from .multiverse import (
+    MultiverseResult,
+    SpecificationReport,
+    multiverse,
+    specification_report,
+)
 from .mv import (
     ConfintMvResult,
     PredictionRegion,
@@ -922,6 +927,7 @@ __all__ = [
     "AnalysisSpec", "Decision", "Specification", "RunOutcome", "execute",
     # stability across that grid
     "multiverse", "MultiverseResult",
+    "specification_report", "SpecificationReport",
     # declared missing-data handling
     "MissingPolicy", "STRATEGIES", "complete_case_policy",
     "policy_from_result",
