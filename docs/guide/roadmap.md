@@ -376,10 +376,12 @@ replayed, and each result names the specification that produced it.
 **Status.** `ma.AnalysisSpec` is in, with `Decision` (a value list, a reason per
 value, a declared default), fingerprint-derived specification ids, a file format
 that records its own size, and `ma.execute` which keeps failures as outcomes
-instead of dropping them. See
+instead of dropping them. A saved record can name the specification that
+produced it (`save_record(..., specification=outcome.id)`), in the object, the id
+or a mapping, and attaching one leaves the analysis fingerprint untouched. See
 [Reproducible analyses](reproducibility.md#declaring-the-decisions-analysisspec).
-Still open: wiring a `Specification` into `pimeta.record` so a saved fit carries
-the id of the specification that produced it, and the report object.
+Still open: the report object that renders a specification's results as one
+table.
 
 ## Stage 7 — multiverse
 

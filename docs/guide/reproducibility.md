@@ -382,6 +382,29 @@ Each outcome also carries the diagnostic codes of its fit
 (`outcome.diagnostics`), so "usable" and "warned" are different columns rather
 than the same one.
 
+### Recording which specification produced a fit
+
+A saved record can name the specification behind it, which is what makes a
+grid's results traceable one fit at a time:
+
+```python
+from pimeta.record import save_record, load_record
+
+outcome = outcomes[3]
+save_record("m3.json", outcome.result, data=df, mode="bundle",
+            function="rma", specification=outcome.id)
+
+load_record("m3.json").specification
+# {'id': 'sha256:4f9c...', 'choices': {'method': 'DL', 'test': 'knha'}}
+```
+
+The object, its id string and a plain `{"id": ..., "choices": ...}` mapping are
+all accepted, so the record layer does not depend on `pimeta.spec` and a script
+that only kept the id can still write a correct record. Attaching a
+specification **does not change the analysis fingerprint** — the choices are
+already in `settings` whenever they can move a number — so records that verified
+before still verify afterwards.
+
 ## Practical advice
 
 1. **Save one record per model, in the repository that holds the paper.** A

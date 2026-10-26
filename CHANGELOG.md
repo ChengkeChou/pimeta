@@ -191,6 +191,21 @@ have closed forms in `p x p` matrices; `pimeta._projection` now supplies them.
   so the share of significant specifications is not a probability that the effect
   is real.
 
+- **A record can name the specification that produced it.** `build_record` and
+  `save_record` take `specification=`, which accepts the `Specification`, its id
+  string, or a plain `{"id": ..., "choices": ...}` mapping, and writes it into
+  the `分析配置` block; `AnalysisRecord.specification` reads it back.
+
+  This is the link that makes a grid auditable: given one of `M` fits, the record
+  says which of the declared analyses it is. The record layer does not import
+  `pimeta.spec`, so the format does not depend on that module and a script that
+  kept only the id can still write a correct record.
+
+  Attaching a specification does **not** change the analysis fingerprint — the
+  choices are already in `settings` whenever they can move a number — so records
+  written before the feature still verify. There is a test for that, because the
+  alternative was to discover it on a stored archive.
+
 - **`AnalysisSpec`: the decisions written down before the results are looked
   at.** A value list per decision, a one-line statistical reason per value, and a
   declared default. A one-valued "decision" is refused, because that is the

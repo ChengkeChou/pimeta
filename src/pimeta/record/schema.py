@@ -282,6 +282,18 @@ class AnalysisRecord:
     schema: str = RECORD_SCHEMA
     created_utc: str = field(default_factory=_now)
 
+    @property
+    def specification(self) -> dict | None:
+        """The specification that produced this fit, when one was recorded.
+
+        ``None`` means the analysis was not part of a declared grid, which is
+        most analyses. A dict means it was, and that the caller can say which
+        of ``M`` specifications these numbers came from -- the thing stage 6
+        asks for and the only way a multiverse's results can be traced back.
+        """
+        block = self.analysis.get("specification")
+        return None if block is None else dict(block)
+
     # -- serialisation ----------------------------------------------------- #
     def to_dict(self) -> dict:
         """The record as a plain dict, ready to serialise."""
@@ -606,6 +618,33 @@ def compare_results(
 # --------------------------------------------------------------------------- #
 # builder
 # --------------------------------------------------------------------------- #
+def _specification_payload(specification: Any) -> dict | None:
+    """Normalise a specification, its id, or a mapping, to the recorded form.
+
+    Accepting all three keeps the record layer independent of :mod:`pimeta.spec`:
+    a caller with the object gets the choices written down for free, and a
+    caller replaying an old script can pass the id it already has.
+    """
+    if specification is None:
+        return None
+    if isinstance(specification, str):
+        return {"id": specification}
+    if isinstance(specification, Mapping):
+        payload: dict[str, Any] = {"id": str(specification.get("id", ""))}
+        choices = specification.get("choices")
+        if choices is not None:
+            payload["choices"] = {str(k): v for k, v in dict(choices).items()}
+        return payload
+    as_dict = getattr(specification, "as_dict", None)
+    spec_id = getattr(specification, "id", None)
+    if callable(as_dict) and spec_id:
+        return {"id": str(spec_id),
+                "choices": {str(k): v for k, v in as_dict().items()}}
+    raise TypeError(
+        "specification must be a Specification, its id string, or a mapping "
+        f"with 'id'; got {type(specification).__name__}")
+
+
 def build_record(
     result: Any,
     *,
@@ -621,6 +660,7 @@ def build_record(
     process: Mapping[str, Any] | None = None,
     diagnostics: Mapping[str, Any] | None = None,
     seed: int | None = None,
+    specification: Any | None = None,
 ) -> AnalysisRecord:
     """Wrap a fitted result in an :class:`AnalysisRecord`.
 
@@ -651,6 +691,12 @@ def build_record(
         process: extra ``运算过程`` entries (iterations, convergence, timings).
         diagnostics: extra ``结果与诊断`` entries.
         seed: random seed in force, recorded in the environment block.
+        specification: the ``Specification`` (or its ``id``, or a mapping with
+            ``id`` and ``choices``) that produced this fit, written into the
+            ``分析配置`` block. It is provenance rather than a fingerprinted
+            setting: the choices are already in ``settings`` when they affect a
+            number, so the digest does not change when a specification is
+            attached to an existing record.
 
     Returns:
         The populated record.
@@ -727,6 +773,9 @@ def build_record(
     if call_payload:
         analysis_block["call"] = call_payload
         analysis_block["pass_data"] = bool(pass_data)
+    spec_payload = _specification_payload(specification)
+    if spec_payload is not None:
+        analysis_block["specification"] = spec_payload
 
     process_block = _process_from(result)
     process_block.update(process or {})

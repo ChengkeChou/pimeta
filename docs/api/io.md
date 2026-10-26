@@ -289,7 +289,7 @@ One analysis, fully described.
 ## `build_record`
 
 ```python
-build_record(result: 'Any', *, kind: 'str | None' = None, data: 'Any' = None, mode: 'str' = 'digest', columns: 'Sequence[str] | None' = None, analysis_columns: 'Sequence[str] | None' = None, settings: 'Mapping[str, Any] | None' = None, function: 'str | None' = None, call: 'Mapping[str, Any] | None' = None, pass_data: 'bool | None' = None, process: 'Mapping[str, Any] | None' = None, diagnostics: 'Mapping[str, Any] | None' = None, seed: 'int | None' = None) -> 'AnalysisRecord'
+build_record(result: 'Any', *, kind: 'str | None' = None, data: 'Any' = None, mode: 'str' = 'digest', columns: 'Sequence[str] | None' = None, analysis_columns: 'Sequence[str] | None' = None, settings: 'Mapping[str, Any] | None' = None, function: 'str | None' = None, call: 'Mapping[str, Any] | None' = None, pass_data: 'bool | None' = None, process: 'Mapping[str, Any] | None' = None, diagnostics: 'Mapping[str, Any] | None' = None, seed: 'int | None' = None, specification: 'Any | None' = None) -> 'AnalysisRecord'
 ```
 
 Wrap a fitted result in an `AnalysisRecord`.
@@ -309,6 +309,7 @@ Wrap a fitted result in an `AnalysisRecord`.
 - `process` — extra ``运算过程`` entries (iterations, convergence, timings).
 - `diagnostics` — extra ``结果与诊断`` entries.
 - `seed` — random seed in force, recorded in the environment block.
+- `specification` — the ``Specification`` (or its ``id``, or a mapping with ``id`` and ``choices``) that produced this fit, written into the ``分析配置`` block. It is provenance rather than a fingerprinted setting: the choices are already in ``settings`` when they affect a number, so the digest does not change when a specification is attached to an existing record.
 
 **Returns**
 
