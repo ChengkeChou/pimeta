@@ -6,6 +6,35 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- `predict_region(..., test="bootstrap", simulate=..., n_boot=..., seed=...)`:
+  a critical value calibrated by re-simulating **and refitting** the model. The
+  chi-square and Hotelling references treat `Sigma` as known, so both under-cover
+  at small `k` (0.830 against a nominal 0.95 at `k = 10`, 100 replications).
+  Measured through the shipped function, 199 replicates per fit: **0.910** at
+  `k = 10` and **0.970** at `k = 20`, against 0.830 and 0.940 for the closed-form
+  references. A second run with 99 replicates gave 0.940 and 0.970, so the gain
+  at `k = 10` is 5 to 8 points rather than a fix, and `k = 20` over-covers
+  slightly. The pivot replays the coverage event inside the bootstrap — a fresh
+  draw of the true effect against the replicate's centre — because using the
+  fitted centre instead collapses the pivot to the sampling variance of the mean
+  (0.007–0.2) and produces a far too narrow region; that mistake is written next
+  to the code. The cutoff is data-dependent by design, which is why the default
+  is still `test="t"`. `simulate` is required because a fitted result does not
+  carry the sampling covariances a simulation needs, and guessing them would
+  turn a calibration study into a different study.
+- `rma_mv(..., lkj_eta=...)`: an LKJ penalty on every estimated correlation
+  matrix, added to the likelihood as `-(eta - 1) log det R`. `0` (default) is
+  metafor's unpenalised fit and `1` is exactly neutral; `2` mildly prefers
+  independence and costs a great deal at the boundary. Measured on the IPD
+  reference cohort: the share of fits with a variance component or correlation
+  on its boundary falls from **73% to 50%** (47% at `eta = 4`) and the band's
+  edge coverage rises from 0.733 to 0.750 with the other four covariates
+  unchanged. It is a penalty and not a prior: the interval is still a Wald
+  interval and does not carry the penalty as information, which is why the gain
+  is small rather than decisive. `ipd_two_stage_curve` forwards it.
+
 ### Fixed
 
 - `rve.robust(..., clubSandwich=True, vcov="CR2")` no longer refuses a fit whose

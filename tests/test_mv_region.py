@@ -255,3 +255,86 @@ def test_the_record_and_the_text(fit):
     text = str(region)
     assert "joint prediction region" in text
     assert "wider than per-outcome intervals" in text
+
+
+# --------------------------------------------------------------------------- #
+# the bootstrap-calibrated reference
+# --------------------------------------------------------------------------- #
+def _small_fit(k=10, seed=0):
+    """k studies, two correlated outcomes, and a closure that can refit."""
+    rng = np.random.default_rng(seed)
+    mu = np.array([0.30, -0.20])
+    sigma = np.array([[0.06, 0.03], [0.03, 0.09]])
+    theta = rng.multivariate_normal(mu, sigma, k)
+    vi = rng.uniform(0.01, 0.03, (k, 2))
+    V = np.zeros((2 * k, 2 * k))
+    for i in range(k):
+        blk = np.array([[vi[i, 0], 0.5 * np.sqrt(vi[i, 0] * vi[i, 1])],
+                        [0.5 * np.sqrt(vi[i, 0] * vi[i, 1]), vi[i, 1]]])
+        V[2 * i:2 * i + 2, 2 * i:2 * i + 2] = blk
+    X = np.zeros((2 * k, 2))
+    X[np.arange(2 * k), np.tile([0, 1], k)] = 1.0
+    data = {"coef": list(np.tile([0, 1], k)),
+            "study": [f"s{i}" for i in range(k) for _ in range(2)]}
+    yi = theta.ravel() + rng.normal(0.0, 1.0, 2 * k) * np.sqrt(
+        np.diag(V).reshape(-1))
+    fit = ma.rma_mv(yi, V=V, mods=X, data=data, random="~ coef | study",
+                    struct="UN", intercept=False)
+    sd = np.sqrt(np.diag(V).reshape(k, 2))
+    reg = ma.predict_region(fit)
+
+    def simulate(gen):
+        centre = np.asarray(reg.center, dtype=float).ravel()
+        between = np.asarray(reg.cov, dtype=float) - np.asarray(fit.vb,
+                                                               dtype=float)
+        between = 0.5 * (between + between.T)
+        theta_new = gen.multivariate_normal(centre, between, k)
+        y_new = theta_new + gen.normal(0.0, 1.0, (k, 2)) * sd
+        return ma.rma_mv(y_new.ravel(), V=V, mods=X, data=data,
+                         random="~ coef | study", struct="UN",
+                         intercept=False)
+
+    return fit, simulate
+
+
+def test_the_bootstrap_reference_carries_the_uncertainty_of_sigma():
+    """At k = 10 the calibrated cutoff must be wider than the chi-square one.
+
+    The chi-square reference treats Sigma-hat as known; it under-covers (0.86
+    against 0.95 at k = 10 over 100 replications).  The bootstrap re-estimates
+    Sigma in every replicate, so the cutoff it needs is larger.
+    """
+    fit, simulate = _small_fit()
+    z = ma.predict_region(fit, test="z")
+    boot = ma.predict_region(fit, test="bootstrap", simulate=simulate,
+                             n_boot=40, seed=1)
+    assert boot.crit > z.crit
+    assert np.isfinite(boot.crit)
+    assert boot.test == "bootstrap"
+    assert "bootstrap" in str(boot)
+
+
+def test_the_bootstrap_critical_value_is_reproducible_from_its_seed():
+    fit, simulate = _small_fit()
+    first = ma.predict_region(fit, test="bootstrap", simulate=simulate,
+                              n_boot=25, seed=7)
+    again = ma.predict_region(fit, test="bootstrap", simulate=simulate,
+                              n_boot=25, seed=7)
+    other = ma.predict_region(fit, test="bootstrap", simulate=simulate,
+                              n_boot=25, seed=8)
+    assert first.crit == pytest.approx(again.crit, rel=1e-12)
+    assert first.crit != pytest.approx(other.crit, rel=1e-12)
+
+
+def test_the_bootstrap_reference_needs_a_simulator_and_enough_replicates():
+    fit, simulate = _small_fit()
+    with pytest.raises(ValueError, match="needs 'simulate'"):
+        ma.predict_region(fit, test="bootstrap")
+    with pytest.raises(ValueError, match="at least 20 replicates"):
+        ma.predict_region(fit, test="bootstrap", simulate=simulate, n_boot=5)
+
+
+def test_an_unknown_reference_is_still_refused():
+    fit, _ = _small_fit()
+    with pytest.raises(ValueError, match="unknown test"):
+        ma.predict_region(fit, test="delta")

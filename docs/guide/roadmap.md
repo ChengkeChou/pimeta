@@ -35,7 +35,7 @@ What is genuinely open:
 | Non-parametric scale for `tau_trend` (spline or Gaussian process) | **spline implemented**: orthonormal bending basis, one wiggliness hyperparameter estimated by Laplace marginal likelihood, `edf` folded into the Knapp–Hartung df, cross-checked against CmdStan on a bump fixture (`tools/r_reference/tau2t_spline.R`); a Gaussian-process prior is not implemented |
 | HTE — formal inference on treatment-effect modification | skeleton only |
 | IPD curve band | model-based 0.816–0.884; per-point Satterthwaite df gives 0.944–0.996 except at the edge of the covariate range (0.740 at `x = 65`). The two obvious fixes were measured and both fail there: CR2 is worse everywhere (0.583 at the edge) and `struct="HCS"` leaves it at 0.733 with a higher boundary rate |
-| Joint prediction region | 0.767 at `k = 10` under chi-square, 0.827 under Hotelling and **0.903** under Kenward–Roger degrees of freedom; 0.903 is not 0.95 because a prediction region also carries the uncertainty of `Sigma` inside the ellipse |
+| Joint prediction region | 0.767 at `k = 10` under chi-square, 0.827 under Hotelling, **0.903** under Kenward–Roger degrees of freedom, and **0.910** under `test="bootstrap"` (199 replicates per fit, 100 replications; 0.940 in a second run at 99 replicates) against a nominal 0.95. The bootstrap is the only one that carries the uncertainty of `Sigma`; it is opt-in because its cutoff is data-dependent |
 | Time-varying hazard ratio interval | `contrast_trend()` avoids the `rho = 1` boundary entirely for a linear trend; the joint model reports the spread across structures instead of one number |
 
 The last three are the reason stage 3 is not optional infrastructure. They are

@@ -37,6 +37,12 @@ Reported per ``k``:
 Usage::
 
     python tools/coverage_predict_region.py --reps 300
+    python tools/coverage_predict_region.py --reps 100 --k 10 20 --boot 199
+
+``--boot`` adds a column for ``predict_region(test="bootstrap")``: the cutoff
+is calibrated by re-simulating *and refitting* in every replicate, which is the
+only one of the three references that carries the uncertainty of the estimated
+between-study covariance.  It costs ``n_boot`` refits per fit.
 """
 
 from __future__ import annotations
@@ -69,12 +75,11 @@ def one_fit(rng, k, mu=MU, sigma=SIGMA):
         big[2 * i:2 * i + 2, 2 * i:2 * i + 2] = V[i]
     X = np.zeros((2 * k, 2))
     X[np.arange(2 * k), np.tile([0, 1], k)] = 1.0
-    fit = ma.rma_mv(yi.ravel(), V=big, mods=X,
-                    data={"coef": list(np.tile([0, 1], k)),
-                          "study": [f"s{i}" for i in range(k)
-                                    for _ in range(2)]},
+    data = {"coef": list(np.tile([0, 1], k)),
+            "study": [f"s{i}" for i in range(k) for _ in range(2)]}
+    fit = ma.rma_mv(yi.ravel(), V=big, mods=X, data=data,
                     random="~ coef | study", struct="UN", intercept=False)
-    return fit, rng.multivariate_normal(mu, sigma)
+    return fit, rng.multivariate_normal(mu, sigma), big, X, data
 
 
 def _mean(x):
@@ -85,15 +90,46 @@ def _se(p, n):
     return float(np.sqrt(p * (1.0 - p) / n))
 
 
-def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
+def bootstrap_critical(fit, V, mods, data, *, level, n_boot, rng, k):
+    """Critical value from the shipped code path, not a copy of it.
+
+    The simulator closes over the design, so the library only has to do the
+    calibration arithmetic: draw a new study's true effect from the fitted
+    model, refit the replicate, and measure the distance in the replicate's
+    metric.  Keeping one implementation is what makes the numbers in the
+    docstring a measurement of the function a user calls.
+    """
+    reg = ma.predict_region(fit, level=level)
+    centre = np.asarray(reg.center, dtype=float).ravel()
+    sigma = np.asarray(reg.cov, dtype=float) - np.asarray(fit.vb, dtype=float)
+    sigma = 0.5 * (sigma + sigma.T)
+    sd = np.sqrt(np.diag(V).reshape(k, 2))
+
+    def simulate(gen):
+        theta = gen.multivariate_normal(centre, sigma, k)
+        yi = theta + gen.normal(0.0, 1.0, (k, 2)) * sd
+        return ma.rma_mv(yi.ravel(), V=V, mods=mods, data=data,
+                         random="~ coef | study", struct="UN", intercept=False)
+
+    try:
+        region = ma.predict_region(fit, level=level, test="bootstrap",
+                                   simulate=simulate, n_boot=n_boot,
+                                   seed=int(rng.integers(2 ** 32)))
+    except ValueError:
+        return float("nan")
+    return float(region.crit)
+
+
+def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
     print(f"J = {MU.size} outcomes, nominal coverage {level:.2f}, "
           f"{reps} replications per k")
     print(f"true mu = {MU.tolist()}, true Sigma = {SIGMA.tolist()}")
     print("the F reference is the Hotelling one, m = k - p")
     print()
-    print(f"{'k':>5}{'chi2':>8}{'MC se':>8}{'F':>8}{'MC se':>8}"
+    print(f"{ 'k':>5}{'chi2':>8}{'MC se':>8}{'F':>8}{'MC se':>8}"
           f"{'KR':>8}{'MC se':>8}{'KR fail':>9}"
-          f"{'marginal':>10}{'boundary':>10}{'chi2|ok':>9}{'F|ok':>8}")
+          f"{'marginal':>10}{'boundary':>10}{'chi2|ok':>9}{'F|ok':>8}"
+          + (f"{'boot':>8}" if n_boot else ""))
     z = stats.norm.ppf(0.5 + 0.5 * level)
     rows = []
     for k in k_list:
@@ -102,10 +138,11 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
         hit_f = np.zeros(reps, dtype=bool)
         hit_kr = np.zeros(reps, dtype=bool)
         kr_bad = np.zeros(reps, dtype=bool)
+        hit_boot = np.zeros(reps, dtype=bool)
         marg = np.zeros(reps, dtype=bool)
         bad = np.zeros(reps, dtype=bool)
         for r in range(reps):
-            fit, fresh = one_fit(rng, k)
+            fit, fresh, V_big, X_big, data_big = one_fit(rng, k)
             reg = ma.predict_region(fit, level=level)
             d = reg.distance(fresh)
             tst = ma.predict_region(fit, level=level, test="t")
@@ -119,6 +156,11 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
             marg[r] = bool(np.all(
                 np.abs(fresh - reg.center) <= z * np.sqrt(np.diag(reg.cov))))
             bad[r] = bool(np.any(np.asarray(fit.sigma2, dtype=float) <= 1e-10))
+            if n_boot:
+                crit = bootstrap_critical(fit, V_big, X_big, data_big,
+                                          level=level, n_boot=n_boot,
+                                          rng=rng, k=k)
+                hit_boot[r] = bool(np.isfinite(crit) and d <= crit)
         pz, pf, pm = hit_z.mean(), hit_f.mean(), marg.mean()
         okz, okf = hit_z[~bad], hit_f[~bad]
         usable = ~kr_bad
@@ -127,7 +169,8 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL):
               f"{pkr:8.3f}{_se(pkr, int(usable.sum())):8.3f}"
               f"{kr_bad.mean():9.3f}"
               f"{pm:10.3f}{bad.mean():10.3f}"
-              f"{_mean(okz):9.3f}{_mean(okf):8.3f}")
+              f"{_mean(okz):9.3f}{_mean(okf):8.3f}"
+              + (f"{hit_boot.mean():8.3f}" if n_boot else ""))
         rows.append((k, pz, pf, pm, pkr))
     print()
     print("marginal is the coverage of two per-outcome z intervals: it "
@@ -146,8 +189,11 @@ def main(argv=None):
     parser.add_argument("--reps", type=int, default=150)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--k", type=int, nargs="+", default=[10, 20, 40, 80])
+    parser.add_argument("--boot", type=int, default=0,
+                        help="parametric-bootstrap replicates per fit (0 = off); "
+                             "carries the uncertainty of the estimated Sigma")
     args = parser.parse_args(argv)
-    run(args.reps, tuple(args.k), args.seed)
+    run(args.reps, tuple(args.k), args.seed, n_boot=args.boot)
     return 0
 
 

@@ -165,12 +165,18 @@ class IpdCurveResult:
                 So per-point degrees of freedom fix the left edge and the
                 middle, where a single reference is too narrow, at the price of
                 being conservative in the middle.  They do **not** fix the
-                right edge: at x = 65 only a few studies carry the contrast and
-                the CR1 sandwich itself is the thing that is wrong there, not
-                only the reference distribution it is compared against.  A
-                third of these fits put the between-study covariance on a
-                boundary, which is the mechanism behind that; ``struct="HCS"``
-                or fewer basis columns is the response, not a different df.
+                right edge: at x = 65 only a few studies carry the contrast.
+                Two explanations for that were measured on 60 replications with
+                the same seeds rather than assumed, and both fail: the
+                bias-reduced CR2 sandwich gives 0.867/0.983/0.967/0.850/0.583
+                (worse everywhere, worst at the edge), and ``struct="HCS"``
+                leaves the edge at 0.733 while raising the boundary rate from
+                73% to 98%.  An **LKJ penalty** on the correlations
+                (``lkj_eta=2``) halves the boundary rate, 73% to 50%, and lifts
+                the edge to 0.750 with the other four covariates unchanged; it
+                is a penalty rather than a prior, so the gain is small rather
+                than decisive, and fewer basis columns remains the one lever
+                that actually trades the interaction for the edge.
 
         Returns:
             :class:`IpdCurve` with a confidence band for the average curve and
@@ -387,7 +393,10 @@ class IpdCurveResult:
         if n_vc and self.k < 3 * n_vc:
             notes.append(
                 f"{self.k} studies for {n_vc} variance parameters; consider "
-                "struct='HCS' (a common correlation) or fewer basis columns")
+                "lkj_eta=2 (measured to halve the boundary rate) or fewer "
+                "basis columns.  struct='HCS' was measured and does not help: "
+                "it leaves the edge coverage at 0.733 and raises the boundary "
+                "rate to 98%")
         return {
             "k": self.k,
             "n_variance_parameters": n_vc,
@@ -493,7 +502,8 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
                         family: str = "binomial",
                         covariates=None, method: str = "REML",
                         level: float = 0.95, test: str = "z",
-                        min_events: int = 1) -> IpdCurveResult:
+                        min_events: int = 1,
+                        lkj_eta: float = 0.0) -> IpdCurveResult:
     """Pool a treatment-by-covariate spline jointly across studies.
 
     Args:
@@ -679,7 +689,7 @@ def ipd_two_stage_curve(y, *, study, treat, covariate, basis=None,
     fit = rma_mv(stacked, V=V, mods=X_one, data=data,
                  random="~ coef | study", struct=struct, intercept=False,
                  method=method, level=level_to_percent(level), test=test,
-                 cluster=study_labels)
+                 cluster=study_labels, lkj_eta=lkj_eta)
 
     coef = [float(v) for v in fit.beta]
     vcov = np.asarray(fit.vb, dtype=float)

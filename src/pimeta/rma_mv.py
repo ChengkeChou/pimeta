@@ -1208,6 +1208,7 @@ def rma_mv(
     slab=None,
     cluster=None,
     warn_missing: bool = True,
+    lkj_eta: float = 0.0,
 ) -> RmaMvResult:
     """Fit a multilevel / multivariate random-effects model (``metafor::rma.mv``).
 
@@ -1246,6 +1247,16 @@ def rma_mv(
         cluster: optional clustering variable, kept for the diagnostics.
         warn_missing: emit a warning naming the studies dropped because a
             value is missing (R's ``na.action`` drops them silently).
+        lkj_eta: strength of an LKJ penalty on every estimated correlation
+            matrix, :math:`p(R) \\propto \\det(R)^{\\eta - 1}`, added to the
+            likelihood as :math:`-(\\eta - 1)\\log\\det R`.  ``0`` (default)
+            is metafor's unpenalised fit.  ``\\eta = 2`` mildly prefers
+            independence and, more to the point, costs nothing at the boundary
+            and a great deal there: with a dozen studies the unpenalised
+            estimate sits on :math:`\\pm 1` in most fits, and a region built
+            from a singular :math:`\\Sigma` is built from nothing.  It is a
+            penalty, not a prior — the interval is still a Wald interval and
+            does not carry the penalty as if it were information.
     """
     Y = np.asarray(yi, dtype=float).reshape(-1, 1)
     k = Y.shape[0]
@@ -1300,6 +1311,10 @@ def rma_mv(
     if method not in ("REML", "ML"):
         raise ValueError("method must be 'REML' or 'ML'")
 
+    lkj_eta = float(lkj_eta)
+    if not np.isfinite(lkj_eta) or lkj_eta < 0.0:
+        raise ValueError("'lkj_eta' must be finite and non-negative")
+
     # --- random-effects components ---------------------------------------
     components = _build_components(
         _parse_random_components(random, struct), data, k, rho=rho)
@@ -1326,6 +1341,7 @@ def rma_mv(
     def obj(params):
         D_list = []
         offset = 0
+        penalty = 0.0
         for c in components:
             piece = params[offset : offset + c.n_params]
             offset += c.n_params
@@ -1340,8 +1356,16 @@ def rma_mv(
                 if lam <= 1e-6:
                     return 1e5 + 1e7 * (1e-6 - lam) ** 2
                 return 1e5
+            if lkj_eta > 1.0 and getattr(c, "kind", None) == "un":
+                corr = c.corr_matrix(piece)
+                sign, logdet = np.linalg.slogdet(corr)
+                if sign <= 0 or not np.isfinite(logdet):
+                    return 1e5
+                # -log p(R) for p(R) ∝ det(R)^(eta - 1); at eta = 1 it is a
+                # constant and the fit is the unpenalised one
+                penalty += -(lkj_eta - 1.0) * float(logdet)
             D_list.append(c.make_D(piece))
-        return _mv_loglik(D_list, Y, V, X, method)
+        return _mv_loglik(D_list, Y, V, X, method) + penalty
 
     if sigma2 is not None:
         # Variance components given by the user.  ``NaN`` entries stay free
