@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .metaprop import _asin2p
 from .metarate import _asin2ir
 from .missing import MissingDataWarning as _MissingDataWarning
@@ -311,6 +312,7 @@ def _hetcalc(y, v, method_tau: str, level: float) -> dict:
 # result object
 # ---------------------------------------------------------------------------
 @dataclass
+@attach_diagnostics
 class MetagenResult:
     """``meta::metagen`` result (all numeric fields on the analysis scale)."""
 

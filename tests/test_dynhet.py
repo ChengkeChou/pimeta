@@ -579,8 +579,10 @@ def test_a_spline_scale_needs_enough_studies_and_the_polynomial_mean():
     y, v, t, _ = _spline_fixture()
     with pytest.raises(ValueError, match="needs at least"):
         tau_trend(y[:6], v[:6], t[:6], tau="spline")
-    with pytest.raises(ValueError, match="scale only"):
+    with pytest.raises(ValueError, match="variance only"):
         tau_trend(y, v, t, mu="spline")
+    with pytest.raises(ValueError, match="variance only"):
+        tau_trend(y, v, t, mu="gp")
     # a 3-knot spline has one bending column and needs fewer studies; ten
     # studies cannot pin the wiggliness, so the span warning fires and is
     # expected here

@@ -79,6 +79,7 @@ nav:
       - Interoperability: guide/interop.md
       - Reproducible analyses: guide/reproducibility.md
       - Command line: guide/cli.md
+      - Releasing: guide/releasing.md
   - Reference:
       - API conventions: reference/api-conventions.md
       - Differences from R: reference/differences.md

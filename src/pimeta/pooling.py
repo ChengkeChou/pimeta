@@ -92,6 +92,37 @@ class PooledResult:
     pi_upper: float | None = None
 
 
+def attach_tau2(cls):
+    """Add ``tau2``, read off the random-effects pooling, to a result class.
+
+    Used as a class decorator, after ``@dataclass``::
+
+        @dataclass
+        @attach_tau2
+        @attach_diagnostics
+        class SomeResult:
+            ...
+
+    ``meta``'s objects carry ``$tau2``; the RevMan-shaped results here keep it
+    on the nested ``PooledResult`` as ``random.tau2``, which is R's own layout
+    but one hop away from anything that wants to look at it. The diagnostics
+    are the first consumer with that need — ``few_studies`` is about identifying
+    the between-study variance, and it cannot ask whether one was estimated
+    through a nested attribute without being written for each family.
+
+    A fixed-effect-only fit has ``random is None`` and reports ``None``: no
+    heterogeneity was estimated, so there is nothing to report.
+    """
+
+    def tau2(self) -> float | None:
+        """The between-study variance, or ``None`` for a fixed-effect fit."""
+        return None if self.random is None else self.random.tau2
+
+    cls.tau2 = property(tau2)
+    return cls
+
+
+
 def _is_ratio(effect_type: str) -> bool:
     return effect_type in RATIO_TYPES
 

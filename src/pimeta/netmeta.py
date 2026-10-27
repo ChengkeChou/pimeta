@@ -2167,6 +2167,7 @@ def netmeta(
 # --------------------------------------------------------------------------- #
 
 @dataclass
+@attach_diagnostics
 class NetmetaregResult:
     """Result of :func:`netmetareg` (``netmeta::netmetareg``)."""
 

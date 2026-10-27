@@ -14,8 +14,9 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .metaprop import _pool_dict
-from .pooling import PooledResult, pool_yv
+from .pooling import PooledResult, attach_tau2, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -23,6 +24,8 @@ _SM = {"ZCOR", "COR"}
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetacorResult:
     """Correlation meta-analysis result (fixed + random, correlation scale)."""
 

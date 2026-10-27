@@ -33,6 +33,8 @@ from typing import Any
 
 import numpy as np
 
+from .checks import attach_diagnostics
+
 __all__ = [
     "IpdResult",
     "StudyFit",
@@ -197,6 +199,7 @@ class StudyFit:
 
 
 @dataclass
+@attach_diagnostics
 class IpdResult:
     """A pooled individual-participant analysis.
 

@@ -111,8 +111,12 @@ from .parallel import map_ordered
 
 __all__ = ["BayesTauTrendResult", "TauTrendResult", "bayes_tau_trend", "tau_trend"]
 
-_KINDS = ("none", "linear", "quadratic", "spline")
+_KINDS = ("none", "linear", "quadratic", "spline", "gp")
 _TERMS = ("intrcpt", "time", "time^2")
+
+#: the two kinds whose scale coefficients are penalised, and so have no fixed
+#: ``q`` to form a Wald statistic from
+_PENALISED_KINDS = ("spline", "gp")
 
 #: smallest number of studies a spline scale is allowed to be fitted to.  The
 #: spline adds ``n_knots - 2`` bending columns on top of the two scale
@@ -154,6 +158,10 @@ def _design(time: np.ndarray, kind: str, centre: float) -> np.ndarray:
         raise ValueError(
             "a spline scale is evaluated through its fitted basis, not through "
             "_design; call tau_trend(tau='spline') and use its predict()")
+    if kind == "gp":
+        raise ValueError(
+            "a GP scale is evaluated through its fitted basis, not through "
+            "_design; call tau_trend(tau='gp') and use its predict()")
     raise ValueError(f"unknown model {kind!r}; choose from {', '.join(_KINDS)}")
 
 
@@ -234,7 +242,7 @@ def _spline_basis(time: np.ndarray, centre: float,
 
 
 def _names(kind: str, scale: bool) -> list[str]:
-    if kind == "spline":
+    if kind in _PENALISED_KINDS:
         # the bending names need the column count, which the fitted basis
         # supplies; this static fallback is only used before a fit exists
         terms = ["alpha.intrcpt", "alpha.time"] if scale else list(_TERMS[:2])
@@ -439,6 +447,48 @@ def _gamma_information(y, v, X, Z, alpha, method: str,
     return info
 
 
+def _laplace_marginal(y, v, X, Z, point, method: str,
+                      precision: np.ndarray) -> float:
+    """-2 times the Laplace-approximated marginal log-likelihood.
+
+    ``point`` is the conditional mode for the penalty whose bending-block
+    precision is ``precision``, and the value is
+
+    .. math::
+
+        -2\\left[\\ell(\\hat\\alpha) - \\tfrac12\\hat\\alpha'\\Omega\\hat\\alpha
+        \\right] - \\log\\det\\Omega + \\log\\det(J + \\Omega),
+
+    the first two terms being the penalised likelihood at the mode, the third
+    the prior normalisation and the fourth the Laplace volume.  Writing it once
+    and passing :math:`\\Omega` in is what lets a ridge penalty (a P-spline) and
+    a Gaussian-process prior share an estimator: the spline passes
+    :math:`\\Omega = \\lambda I`, the GP passes the inverse of its covariance,
+    which is not a multiple of the identity.
+
+    Profiling any of this over the hyperparameters instead would not work: the
+    penalty is smallest at :math:`\\gamma = 0`, so the penalised objective
+    improves monotonically as the prior becomes infinitely tight and every fit
+    would report the linear scale.  The normalisation and the volume are the two
+    terms that make a loose prior cost something.
+    """
+    m = int(precision.shape[0])
+    out = _profile(y, v, X, Z, point, method)
+    if out is None:                                      # pragma: no cover
+        return np.inf
+    loglik = float(out[-1])
+    bend = np.asarray(point[-m:], dtype=float)
+    ridge = 0.5 * float(bend @ precision @ bend)
+    info = _gamma_information(y, v, X, Z, point, method, m)
+    if not np.all(np.isfinite(info)):                    # pragma: no cover
+        return np.inf
+    sign, logdet = np.linalg.slogdet(info + precision)
+    sign_prior, logdet_prior = np.linalg.slogdet(precision)
+    if sign <= 0 or sign_prior <= 0:                     # pragma: no cover
+        return np.inf
+    return (2.0 * (-loglik + ridge) - float(logdet_prior) + float(logdet))
+
+
 def _fit_spline(y, v, X, time, basis: _SplineBasis, method: str,
                 max_iter: int, tol: float) -> dict:
     """Fit the scale with a spline and one wiggliness hyperparameter.
@@ -496,19 +546,7 @@ def _fit_spline(y, v, X, time, basis: _SplineBasis, method: str,
         """-2 times the Laplace-approximated marginal log-likelihood."""
         lam = math.exp(-2.0 * float(s))
         point = solve_for(lam, from_alpha)
-        out = _profile(y, v, X, Z, point, method)
-        if out is None:                                  # pragma: no cover
-            return np.inf, point
-        loglik = float(out[-1])
-        ridge = 0.5 * lam * float(point @ pen @ point)
-        info = _gamma_information(y, v, X, Z, point, method, m)
-        if not np.all(np.isfinite(info)):                # pragma: no cover
-            return np.inf, point
-        sign, logdet = np.linalg.slogdet(info + lam * np.eye(m))
-        if sign <= 0:                                    # pragma: no cover
-            return np.inf, point
-        value = 2.0 * (-loglik + ridge - 0.5 * m * math.log(lam)
-                       + 0.5 * float(logdet))
+        value = _laplace_marginal(y, v, X, Z, point, method, lam * np.eye(m))
         return float(value), point
 
     # sigma_s on a log grid from 1e-3 (indistinguishable from linear) to 30:
@@ -550,10 +588,198 @@ def _fit_spline(y, v, X, time, basis: _SplineBasis, method: str,
     grad = _grad_penalised(alpha, y, v, X, Z, method, lam, pen)
     return {"alpha": alpha, "tau2": tau2, "w": w, "beta": beta,
             "resid": resid, "rss": rss, "vcov": vcov, "loglik": loglik,
-            "sigma_s": sigma_s, "edf": edf, "lam": lam, "Z": Z,
+            "sigma_s": sigma_s, "edf": edf, "Z": Z,
+            "pen": lam * _penalty_matrix(m),
             "laplace_deviance": float(dev),
             "converged": bool(np.max(np.abs(grad)) < 1e-3),
             "n_iter": int(getattr(res, "nfev", 0))}
+
+
+def _gp_precision(basis: _SplineBasis, time, length_scale: float,
+                  jitter: float = 1e-8) -> np.ndarray:
+    """Prior precision of the bending coefficients under a squared-exponential GP.
+
+    The bending function is :math:`\\gamma(t) = B(t)'\\alpha`.  Putting a GP
+    prior on the *function*, :math:`\\gamma \\sim N(0, \\sigma^2 K)` with
+    :math:`K_{ij} = \\exp(-(t_i - t_j)^2 / (2\\ell^2)) \\ + \\delta_{ij}`, implies
+    a Gaussian prior on the coefficients,
+
+    .. math::
+
+        \\alpha \\sim N\\!\\left(0, \\ \\sigma^2 (B'KB)\\right), \\qquad
+        \\Omega = (B'KB)^{-1} / \\sigma^2,
+
+    the marginal (not the conditional) transform: the coefficients are only ever
+    seen through :math:`B\\alpha`, so the prior on them is what the prior on the
+    function induces.  The covariance is evaluated at the observed times, where
+    the basis is orthonormal by construction.
+
+    Both limits are then the right ones, and they are what
+    ``tests/test_dynamichet_gp.py`` checks:
+
+    * :math:`\\ell \\to 0` makes :math:`K \\to I`, so :math:`B'KB = I` and
+      :math:`\\Omega = I/\\sigma^2` — a ridge penalty, i.e. **exactly the
+      P-spline** in :func:`_fit_spline`.  The GP therefore contains the spline
+      rather than replacing it, and the two agree to numerical precision at a
+      short length scale.
+    * :math:`\\ell \\to \\infty` makes :math:`K` nearly constant, and the
+      constant vector is orthogonal to every bending column
+      (:math:`B'\\mathbf{1} = 0` is what the projection in
+      :class:`_SplineBasis` enforces), so :math:`B'KB \\to \\delta I`: the
+      precision blows up and :math:`\\gamma \\to 0`, a constant scale.  The
+      jitter is what carries that limit instead of a singular matrix.
+
+    An earlier version used :math:`B'KB` itself as the precision, which is its
+    own inverse only at a short length scale; at a long one it is nearly zero,
+    so it *unpenalised* the fit and the length scale had almost no effect on the
+    answer.  That is the kind of mistake a plot of edf against :math:`\\ell`
+    finds and a single fit does not.
+    """
+    times = np.asarray(time, dtype=float).ravel()
+    span = max(float(np.ptp(times)), 1e-12)
+    u = (times - float(np.min(times))) / span
+    ell = max(float(length_scale), 1e-6)
+    K = np.exp(-0.5 * ((u[:, None] - u[None, :]) / ell) ** 2)
+    K = K + float(jitter) * np.eye(u.size)
+    B = basis.bending(times)
+    return np.linalg.inv(B.T @ K @ B)
+
+
+def _fit_gp(y, v, X, time, basis: _SplineBasis, method: str, max_iter: int,
+            tol: float, length_scale: float | None = None) -> dict:
+    """Fit the scale with a Gaussian-process prior and two hyperparameters.
+
+    Identical machinery to :func:`_fit_spline` with one change: the ridge
+    penalty :math:`\\lambda I` becomes the inverse GP covariance from
+    :func:`_gp_precision`, so the shrink is by *distance in time* rather than by
+    coefficient index.  A spline basis coefficient says nothing on its own — the
+    columns are orthonormal, so shrinking them equally is a statement about the
+    basis, not about the function — whereas the GP prior says that
+    :math:`\\log\\tau^2(t)` is smoother than the knot spacing, which is a
+    statement about the thing a reader interprets.
+
+    Two hyperparameters instead of one: the length scale :math:`\\ell` and the
+    marginal SD :math:`\\sigma_{GP}`.  :math:`\\sigma_{GP}` is the analogue of
+    the spline's :math:`\\sigma_s` and is estimated the same way, by the Laplace
+    marginal likelihood of :func:`_laplace_marginal`; :math:`\\ell` is searched
+    on a coarse grid first because the marginal likelihood in
+    :math:`\\ell` has no useful derivative (each evaluation re-solves the
+    conditional mode) and only a few points are needed to locate its basin.
+
+    Args:
+        length_scale: fix :math:`\\ell` instead of estimating it, as a fraction
+            of the observed span of ``time``.  ``None`` estimates it.
+
+    Returns:
+        As :func:`_fit_spline`, with ``length_scale`` and ``sigma_gp`` in place
+        of ``sigma_s``, and ``pen`` carrying the GP precision (not a scalar).
+    """
+    Z = basis.matrix(np.asarray(time, dtype=float))
+    q = Z.shape[1]
+    m = basis.n_bend
+    linear_fit = _fit_alpha(y, v, X, _design(time, "linear", basis.centre),
+                            method, max_iter, tol)
+    start = np.zeros(q)
+    start[:2] = linear_fit["alpha"][:2]
+    if not np.isfinite(start[0]):                        # pragma: no cover
+        start[0] = math.log(max(float(np.var(y)), 1e-3))
+
+    def solve_for(precision: np.ndarray, from_alpha: np.ndarray) -> np.ndarray:
+        pen = np.zeros((q, q))
+        pen[2:, 2:] = precision
+        bounds = [(-18.0, 7.0), (-50.0, 50.0)] + [(-50.0, 50.0)] * m
+        res = optimize.minimize(
+            _neg_penalised, from_alpha, args=(y, v, X, Z, method, 1.0, pen),
+            jac=_grad_penalised, method="L-BFGS-B", bounds=bounds,
+            options={"maxiter": int(max_iter), "gtol": float(tol)})
+        if not np.all(np.isfinite(res.x)):               # pragma: no cover
+            return from_alpha
+        return res.x
+
+    def deviance(log_len: float, log_sigma: float,
+                 from_alpha: np.ndarray) -> tuple[float, np.ndarray]:
+        precision = _gp_precision(basis, time, math.exp(log_len))
+        precision = precision / math.exp(2.0 * log_sigma)
+        point = solve_for(precision, from_alpha)
+        value = _laplace_marginal(y, v, X, Z, point, method, precision)
+        return float(value), point
+
+    # coarse grid: the length scale from a four-hundredth of the span (a GP that
+    # is effectively the P-spline) up to four times the span (a scale that is
+    # linear or flat in t); the SD from 0.01 to 50, which spans any scale
+    # function a meta-analysis can plausibly have
+    grid_len = np.linspace(math.log(0.0025), math.log(4.0), 7)
+    grid_sigma = np.linspace(math.log(0.01), math.log(50.0), 5)
+    point = start.copy()
+    best = (np.inf, 0.0, 0.0)
+    for trial_len in grid_len:
+        for trial_sigma in grid_sigma:
+            value, point = deviance(float(trial_len), float(trial_sigma), point)
+            if value < best[0]:
+                best = (value, float(trial_len), float(trial_sigma))
+    log_len, log_sigma = float(best[1]), float(best[2])
+
+    if length_scale is not None:
+        log_len = math.log(max(float(length_scale), 1e-4))
+        values = [deviance(log_len, float(s), start)[0] for s in grid_sigma]
+        log_sigma = float(grid_sigma[int(np.argmin(values))])
+        best = (values[int(np.argmin(values))], log_len, log_sigma)
+
+    # refine each hyperparameter in turn at the other's current value: the
+    # surface is smooth along each direction, the two are correlated, and two
+    # alternating 1-D searches cost a fraction of a joint 2-D one
+    lo_len, hi_len = math.log(1e-4), math.log(10.0)
+    lo_sigma, hi_sigma = math.log(1e-3), math.log(60.0)
+
+    def best_sigma(fixed_len: float, from_point) -> tuple[float, float]:
+        res = optimize.minimize_scalar(
+            lambda s: deviance(fixed_len, float(s), from_point)[0],
+            bounds=(lo_sigma, hi_sigma), method="bounded",
+            options={"xatol": 1e-3})
+        return float(res.x), float(res.fun)
+
+    def best_length(fixed_sigma: float, from_point) -> tuple[float, float]:
+        res = optimize.minimize_scalar(
+            lambda s: deviance(float(s), fixed_sigma, from_point)[0],
+            bounds=(lo_len, hi_len), method="bounded",
+            options={"xatol": 1e-3})
+        return float(res.x), float(res.fun)
+
+    for _ in range(2):
+        value_sigma, deviance_sigma = best_sigma(log_len, point)
+        if np.isfinite(deviance_sigma):
+            log_sigma, best = value_sigma, (deviance_sigma, log_len, value_sigma)
+        if length_scale is not None:
+            continue
+        value_len, deviance_len = best_length(log_sigma, point)
+        if np.isfinite(deviance_len) and deviance_len <= best[0]:
+            log_len, best = value_len, (deviance_len, value_len, log_sigma)
+
+    dev, alpha = deviance(log_len, log_sigma, point)
+    precision = (_gp_precision(basis, time, math.exp(log_len))
+                 / math.exp(2.0 * log_sigma))
+    out = _profile(y, v, X, Z, alpha, method)
+    assert out is not None
+    tau2, w, beta, resid, rss, vcov, loglik = out
+
+    info_alpha = _gamma_information(y, v, X, Z, alpha, method, m)
+    edf = float(m)
+    try:
+        solved = np.linalg.solve(info_alpha + precision, info_alpha)
+        edf = float(np.clip(np.trace(solved), 0.0, float(m)))
+    except np.linalg.LinAlgError:                        # pragma: no cover
+        edf = float(m)
+    pen = np.zeros((q, q))
+    pen[2:, 2:] = precision
+    grad = _grad_penalised(alpha, y, v, X, Z, method, 1.0, pen)
+    return {"alpha": alpha, "tau2": tau2, "w": w, "beta": beta,
+            "resid": resid, "rss": rss, "vcov": vcov, "loglik": loglik,
+            "sigma_gp": float(math.exp(log_sigma)),
+            "length_scale": float(math.exp(log_len)),
+            "edf": edf, "Z": Z, "pen": pen,
+            "laplace_deviance": float(dev),
+            "converged": bool(np.max(np.abs(grad)) < 1e-3),
+            "n_iter": 0}
 
 
 def _observed_information(y, v, X, Z, beta, alpha, method: str) -> np.ndarray:
@@ -661,14 +887,23 @@ class TauTrendResult:
     rss: float
     converged: bool
     kind: str = "frequentist"
-    #: knot vector of a spline scale, ``None`` for the polynomial scales
+    #: knot vector of a spline or GP scale, ``None`` for the polynomial scales
     knots: np.ndarray | None = None
     #: fitted wiggliness hyperparameter of a spline scale
     sigma_s: float | None = None
-    #: effective degrees of freedom the spline's bending block spends
+    #: effective degrees of freedom the penalised bending block spends
     edf: float | None = None
+    #: fitted length scale of a GP scale, as a fraction of the observed span
+    length_scale: float | None = None
+    #: fitted marginal SD of the GP scale
+    sigma_gp: float | None = None
     _basis: _SplineBasis | None = field(default=None, repr=False)
     _refit: Callable[[], dict] | None = field(default=None, repr=False)
+
+    @property
+    def _penalised(self) -> bool:
+        """Whether the scale spends an estimated rather than a fixed df."""
+        return self.tau_kind in _PENALISED_KINDS
 
     # -- names and degrees of freedom -------------------------------------- #
     @property
@@ -677,7 +912,7 @@ class TauTrendResult:
 
     @property
     def names_alpha(self) -> list[str]:
-        if self.tau_kind == "spline" and self._basis is not None:
+        if self._penalised and self._basis is not None:
             return self._basis.names
         return _names(self.tau_kind, scale=True)
 
@@ -690,9 +925,9 @@ class TauTrendResult:
     def df_alpha(self) -> int | None:
         if self.test not in ("knha", "t"):
             return None
-        if self.tau_kind == "spline" and self.edf is not None:
-            # the spline spends edf of its bending degrees of freedom, so the
-            # scale df is k minus two coefficients minus that, not k - q
+        if self._penalised and self.edf is not None:
+            # the penalised block spends edf of its bending degrees of freedom,
+            # so the scale df is k minus two coefficients minus that, not k - q
             return max(int(round(self.k - 2.0 - float(self.edf))), 1)
         return self.k - self.q
 
@@ -748,14 +983,14 @@ class TauTrendResult:
         if self.q == 1:
             raise ValueError(
                 "this fit has a constant scale: there is no scale slope to test")
-        if self.tau_kind == "spline":
+        if self.tau_kind in _PENALISED_KINDS:
             r = 1.0 + float(self.edf or 0.0)
         else:
             r = float(self.q - 1)
         if method == "wald":
-            if self.tau_kind == "spline":
+            if self.tau_kind in _PENALISED_KINDS:
                 raise ValueError(
-                    "a penalised spline has no fixed number of scale "
+                    "a penalised scale has no fixed number of scale "
                     "coefficients to form a Wald statistic from: the shape it "
                     "spends is estimated.  Use method='lrt' (degrees of "
                     "freedom = 1 + edf) or 'bootstrap'")
@@ -826,9 +1061,9 @@ class TauTrendResult:
         lvl = self.level if level is None else 1.0 - level_to_alpha(level)
         t = np.atleast_1d(np.asarray(time, dtype=float))
         X = _design(t, self.mu_kind, self.time_centre)
-        if self.tau_kind == "spline":
+        if self._penalised:
             if self._basis is None:                     # pragma: no cover
-                raise RuntimeError("this spline fit carries no basis")
+                raise RuntimeError("this penalised fit carries no basis")
             Z = self._basis.matrix(t)
         else:
             Z = _design(t, self.tau_kind, self.time_centre)
@@ -879,8 +1114,12 @@ class TauTrendResult:
         }
         if self.knots is not None:
             out["knots"] = [float(v) for v in self.knots]
-            out["sigma_s"] = float(self.sigma_s or 0.0)
             out["edf"] = float(self.edf or 0.0)
+        if self.sigma_s is not None:
+            out["sigma_s"] = float(self.sigma_s)
+        if self.length_scale is not None:
+            out["length_scale"] = float(self.length_scale)
+            out["sigma_gp"] = float(self.sigma_gp or 0.0)
         return out
 
     def __str__(self) -> str:
@@ -905,7 +1144,8 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
               method: str = "REML", test: str = "knha", se: str = "gls",
               level=0.95, max_iter: int = 500, tol: float = 1e-10,
               max_ratio: float = 100.0, knots=None,
-              n_knots: int = 4) -> TauTrendResult:
+              n_knots: int = 4,
+              length_scale: float | None = None) -> TauTrendResult:
     """Fit :math:`y_i \\sim N(x_i'\\beta,\\ v_i + \\exp(z_i'\\alpha))`.
 
     Args:
@@ -916,14 +1156,20 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
             time and ``alpha[1]`` is per unit of the original scale.
         mu: shape of the mean, ``"none"``, ``"linear"`` or ``"quadratic"``.
         tau: shape of :math:`\\log\\tau^2`, ``"none"``, ``"linear"``,
-            ``"quadratic"`` or ``"spline"``.  ``"none"`` gives a
+            ``"quadratic"``, ``"spline"`` or ``"gp"``.  ``"none"`` gives a
             constant :math:`\\tau^2`, which makes the fit an ordinary
             random-effects model with moderators.  ``"spline"`` puts a
             restricted cubic spline on the log scale, orthogonalised against
             ``[1, t]`` and shrunk by one wiggliness hyperparameter
             :math:`\\sigma_s` — see :class:`TauTrendResult` for what is
             reported and why a spline is not allowed to spend ``nk - 2`` free
-            coefficients.
+            coefficients.  ``"gp"`` puts the same basis under a
+            squared-exponential Gaussian-process prior: the shrink is then by
+            distance in time rather than by coefficient index, at the cost of a
+            second hyperparameter (the length scale).  The two are not
+            interchangeable and neither is a default for the other — the spline
+            is the safer choice when the times are unevenly spaced, because its
+            penalty knows nothing about the gaps.
         method: ``"REML"`` (default) or ``"ML"``.
         test: ``"knha"`` (default), ``"t"`` or ``"z"``.  Knapp–Hartung scales
             the location variance by :math:`RSS/(k-p)` and refers the location
@@ -941,10 +1187,17 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
             simulation with a constant :math:`\\tau^2 = 0.02` the estimate was
             :math:`\\alpha_1 = 10.2`, a 27 000-fold change, which ``metafor``
             reports just as happily.  Set to ``inf`` to silence it.
-        knots: explicit knot positions for ``tau="spline"``; the default is
-            :func:`pimeta.default_knots` on the centred time.
-        n_knots: number of knots for ``tau="spline"``, 4 by default (two
-            bending columns).
+        knots: explicit knot positions for ``tau="spline"`` or ``tau="gp"``;
+            the default is :func:`pimeta.default_knots` on the centred time.
+        n_knots: number of knots for ``tau="spline"`` or ``tau="gp"``, 4 by
+            default (two bending columns).
+        length_scale: fix the length scale of a ``tau="gp"`` scale instead of
+            estimating it, as a fraction of the observed span of ``time``.
+            ``None`` (the default) estimates it, together with the marginal SD,
+            by the Laplace marginal likelihood — which is what a reader with no
+            opinion about the smoothness should use.  Fixing it is for a
+            sensitivity analysis and for the test that pins the direction of
+            the limit.
 
     Returns:
         :class:`TauTrendResult`.
@@ -959,11 +1212,12 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
         if kind not in _KINDS:
             raise ValueError(
                 f"unknown {name} model {kind!r}; choose from {', '.join(_KINDS)}")
-    if mu == "spline":
+    if mu in _PENALISED_KINDS:
         raise ValueError(
-            "a spline is available for the scale only: the mean model is "
-            "'none', 'linear' or 'quadratic'.  A spline mean belongs in "
-            "tau_trend's caller (fit the mean with ma.rma(mods=...) first)")
+            f"a penalised ({mu}) scale is available for the variance only: the "
+            "mean model is 'none', 'linear' or 'quadratic'.  A smooth mean "
+            "belongs in tau_trend's caller (fit the mean with ma.rma(mods=...) "
+            "first)")
     if method not in ("ML", "REML"):
         raise ValueError("'method' must be 'ML' or 'REML'")
     if test not in ("z", "knha", "t"):
@@ -981,16 +1235,20 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
     X = _design(t, mu, centre)
     k, p = y.size, X.shape[1]
     basis = None
-    if tau == "spline":
+    if tau in _PENALISED_KINDS:
         basis = _spline_basis(t, centre, knots=knots, n_knots=n_knots)
         m = basis.n_bend
         if k < p + m + _SPLINE_MIN_EXTRA:
             raise ValueError(
-                f"a {n_knots}-knot spline scale needs at least "
+                f"a {n_knots}-knot {tau} scale needs at least "
                 f"{p + m + _SPLINE_MIN_EXTRA} studies with {p} location "
                 f"coefficients; this fit has {k}.  Use tau='linear', or fewer "
                 "knots")
-        fit = _fit_spline(y, v, X, t, basis, method, max_iter, tol)
+        if tau == "gp":
+            fit = _fit_gp(y, v, X, t, basis, method, max_iter, tol,
+                          length_scale=length_scale)
+        else:
+            fit = _fit_spline(y, v, X, t, basis, method, max_iter, tol)
         Z = fit["Z"]
     else:
         Z = _design(t, tau, centre)
@@ -1003,11 +1261,11 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
 
     info = _observed_information(y, v, X, Z, fit["beta"], fit["alpha"], method)
     if basis is not None:
-        # the penalised information, not the plain one: with a ridge penalty
+        # the penalised information, not the plain one: with a prior covariance
         # the covariance of the scale coefficients is the Bayesian posterior
-        # covariance (J + lambda P)^-1, which is what a P-spline reports
+        # covariance (J + Omega)^-1, which is what a penalised fit reports
         penalised = info.copy()
-        penalised[p:, p:] += float(fit["lam"]) * _penalty_matrix(basis.n_bend)
+        penalised[p:, p:] += np.asarray(fit["pen"], dtype=float)
         info = penalised
     try:
         vcov = np.linalg.inv(info)
@@ -1072,8 +1330,10 @@ def tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
         loglik=float(fit["loglik"]), k=k, p=p, q=q, rss=float(fit["rss"]),
         converged=bool(fit["converged"]),
         knots=None if basis is None else basis.knots.copy(),
-        sigma_s=None if basis is None else float(fit["sigma_s"]),
+        sigma_s=None if basis is None else fit.get("sigma_s"),
         edf=None if basis is None else float(fit["edf"]),
+        length_scale=fit.get("length_scale"),
+        sigma_gp=fit.get("sigma_gp"),
         _basis=basis, _refit=_refit)
 
 
@@ -1223,11 +1483,11 @@ def bayes_tau_trend(yi, vi, time, *, mu: str = "linear", tau: str = "linear",
         if kind not in _KINDS:
             raise ValueError(
                 f"unknown {name} model {kind!r}; choose from {', '.join(_KINDS)}")
-    if tau == "spline" or mu == "spline":
+    if tau in _PENALISED_KINDS or mu in _PENALISED_KINDS:
         raise ValueError(
-            "the sampler covers the polynomial scale models only: a spline "
-            "scale adds a wiggliness hyperparameter that this sampler is not "
-            "written for.  Use tau_trend(tau='spline') (penalised REML), or "
+            "the sampler covers the polynomial scale models only: a penalised "
+            "scale adds hyperparameters that this sampler is not written for.  "
+            f"Use tau_trend(tau={tau!r}) (penalised REML), or "
             "the Stan reference in tools/r_reference/tau2t_spline.stan, which "
             "fits exactly this model with a weakly informative prior")
     cfg = dict(_MCMC_DEFAULTS)

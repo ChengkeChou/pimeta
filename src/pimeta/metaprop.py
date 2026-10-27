@@ -26,7 +26,8 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
-from .pooling import PooledResult, pool_yv
+from .checks import attach_diagnostics
+from .pooling import PooledResult, attach_tau2, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -34,6 +35,8 @@ _SM = {"PFT", "PAS", "PLN", "PLOGIT", "PRAW"}
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetapropResult:
     """Proportion meta-analysis result (fixed + random, proportion scale)."""
 

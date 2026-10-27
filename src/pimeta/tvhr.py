@@ -80,6 +80,8 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
+
 if TYPE_CHECKING:  # pragma: no cover - import cycle at runtime
     from .rma_mv import RmaMvResult
 
@@ -208,6 +210,7 @@ def poisson_irls(y, X, offset=None, max_iter=200, tol=1e-10):
 
 
 @dataclass
+@attach_diagnostics
 class PiecewiseResult:
     """Interval-specific hazard ratios pooled across studies.
 

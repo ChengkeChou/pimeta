@@ -15,8 +15,9 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .metaprop import _pool_dict
-from .pooling import PooledResult, pool_yv
+from .pooling import PooledResult, attach_tau2, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -24,6 +25,8 @@ _SM = {"MRAW", "MLN"}
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetameanResult:
     """Single-arm mean meta-analysis result (fixed + random, mean scale)."""
 

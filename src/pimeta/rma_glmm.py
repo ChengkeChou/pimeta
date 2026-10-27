@@ -28,6 +28,7 @@ import numpy as np
 from scipy import optimize, stats
 from scipy.special import expit, gammaln, xlogy
 
+from .checks import attach_diagnostics
 from .escalc import escalc
 
 # --------------------------------------------------------------------------- #
@@ -560,6 +561,7 @@ def _fit_stats(ll, dev, parms, k_eff):
 # result container
 # --------------------------------------------------------------------------- #
 @dataclass
+@attach_diagnostics
 class RmaGlmmResult:
     """Fitted ``rma.glmm`` model, mirroring the R ``$`` field set."""
 

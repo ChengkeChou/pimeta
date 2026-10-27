@@ -46,6 +46,8 @@ from scipy import stats
 from scipy.linalg import cho_solve
 from scipy.optimize import minimize
 
+from .checks import attach_diagnostics
+
 __all__ = ["OneStageResult", "ipd_one_stage"]
 
 
@@ -59,6 +61,7 @@ def _label(value) -> str:
 
 
 @dataclass
+@attach_diagnostics
 class OneStageResult:
     """A one-stage individual-participant model.
 

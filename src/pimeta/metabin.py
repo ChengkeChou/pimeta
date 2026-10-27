@@ -22,9 +22,10 @@ from typing import Any
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .data_compat import resolve
 from .escalc import escalc
-from .pooling import PooledResult, _back_transform, pool_yv
+from .pooling import PooledResult, _back_transform, attach_tau2, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -35,6 +36,8 @@ _SM = {"RR", "OR", "RD", "AS"}
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetabResult:
     """Binary meta-analysis result: fixed + random pooled effects."""
 

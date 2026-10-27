@@ -40,6 +40,7 @@ import numpy as np
 from scipy import stats
 from scipy.optimize import minimize
 
+from ..checks import attach_diagnostics
 from ..levels import level_to_percent
 from .design import TreatmentNetwork
 
@@ -47,6 +48,7 @@ __all__ = ["IpdNmaResult", "ipd_nma"]
 
 
 @dataclass
+@attach_diagnostics
 class IpdNmaResult:
     """A one-stage IPD network meta-analysis.
 

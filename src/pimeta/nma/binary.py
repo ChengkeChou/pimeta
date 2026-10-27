@@ -27,10 +27,12 @@ from dataclasses import dataclass, field
 import numpy as np
 from scipy import stats
 
+from ..checks import attach_diagnostics
 from .core import _cochran_q, _dl_tau2
 
 
 @dataclass
+@attach_diagnostics
 class NetmetabinResult:
     """Binary network meta-analysis (netmeta::netmetabin), common-effects.
 

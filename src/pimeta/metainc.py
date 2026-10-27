@@ -20,8 +20,9 @@ from dataclasses import dataclass, replace
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .metaprop import _pool_dict
-from .pooling import PooledResult, pool_yv
+from .pooling import PooledResult, attach_tau2, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
 
@@ -30,6 +31,8 @@ _METHODS = {"MH", "Cochran", "Inverse"}
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetaincResult:
     """Incidence-rate meta-analysis result (fixed + random).
 

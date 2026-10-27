@@ -27,6 +27,7 @@ from dataclasses import dataclass
 import numpy as np
 from scipy import stats
 
+from .checks import attach_diagnostics
 from .pooling import PooledResult, pool_yv
 
 Z_975 = stats.norm.ppf(0.975)
@@ -36,6 +37,7 @@ _METHOD_INCR = {"only0", "all", "if0all", "user"}
 
 
 @dataclass
+@attach_diagnostics
 class MetarateResult:
     """Incidence-rate meta-analysis result (fixed + random, rate scale)."""
 

@@ -4,6 +4,62 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] — 2026-10-27
+
+The content of 1.1.0 plus the coverage baselines. 1.1.0 was tagged on the remote against an earlier build and is left in place rather than moved, so this is the tag that names the published artefact.
+
+### Added
+
+- tests/reference/coverage_ipd_band.json and
+  tests/reference/coverage_predict_region.json: every coverage figure
+  the docstrings quote is now data, and tests/test_coverage_baselines.py
+  holds the prose to it. The findings are asserted as inequalities on the
+  baseline — the bootstrap beats both closed-form references at k = 10, the
+  LKJ penalty halves the boundary rate and lifts the edge, CR2 is worse at
+  the edge, struct="HCS" raises the boundary rate — and every rate the
+  docstrings print has to appear in the baseline. Two claims about
+  struct="HCS" had survived for weeks unmeasured, one of them in a
+  runtime note a user sees; a number in a docstring is a claim, and now it
+  is a checked one.
+- tests/test_coverage_reproduction.py: a small (12-replication) re-run
+  of both harnesses in the default suite, so the baseline is not only
+  consistent with the prose but still reproducible by the shipped code.
+  The full measurements stay in tools/.
+- docs/guide/releasing.md: the release as a procedure — version, changelog
+  section, build, a fresh-venv install that has to reproduce a pinned
+  number, tag, upload — including what to do when a tag already exists on
+  the remote and points somewhere else.
+- `diagnostics` on seventeen more result classes (`IpdResult`,
+  `IpdNmaResult`, `OneStageResult`, `RmaGlmmResult`, `NetmetabinResult`,
+  `NetmetaregResult`, `PiecewiseResult`, and the RevMan-shaped `Metab*`,
+  `Metacont*`, `Metacor*`, `Metagen*`, `Metainc*`, `Metamean*`,
+  `Metaprop*`, `Metarate*` results): twenty-nine of the eighty-six result
+  classes now carry the property, and `tests/test_diagnostics_rollout.py`
+  pins both the decorated set and the classes deliberately left out, with
+  the reason for each. Two storage bugs had to be fixed to get there. A
+  piecewise fit stores one `k` per interval, so `int(k)` raised `TypeError`
+  from inside a property documented never to raise; the study-count checks
+  now read a scalar or decline. The RevMan-shaped results keep `tau2` on
+  the nested `PooledResult`, as R does, so `few_studies` could not see that
+  any heterogeneity had been estimated; `attach_tau2` flattens it.
+- `tau_trend(tau="gp")`: the spline's bending basis under a
+  squared-exponential Gaussian-process prior, with the length scale and the
+  marginal SD estimated by the Laplace marginal likelihood. The two limits
+  are what make it worth having and both are measured: a short length scale
+  reproduces the penalised spline (on the spline fixture the fits agree to
+  about 1e-5, effective df 1.5329 either way), and a long one collapses the
+  bending block to zero so the scale becomes linear (edf 0.02). Fixing the
+  length scale is exposed for sensitivity analysis. A Wald test is refused
+  for the same reason it is for the spline — a penalised scale has no fixed
+  `q` — and the likelihood-ratio reference uses `1 + edf`.
+
+### Fixed
+
+- The tab characters an earlier edit wrote into this section's file paths —
+  the file said `ests/reference/...`, which is not a path. Nothing
+  functional: 1.1.1 differs from 1.1.0 in the version string, the tag, and
+  the tests, documentation and two new options above.
+
 ## [1.1.0] — 2026-10-27
 
 ### Added
@@ -2767,5 +2823,6 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.0
 [1.0.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.1

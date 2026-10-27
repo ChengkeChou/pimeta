@@ -9,13 +9,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .checks import attach_diagnostics
 from .data_compat import resolve
 from .escalc import escalc
 from .metabin import _result_dict
-from .pooling import PooledResult, pool_yv
+from .pooling import PooledResult, attach_tau2, pool_yv
 
 
 @dataclass
+@attach_tau2
+@attach_diagnostics
 class MetacontResult:
     """Continuous meta-analysis result: fixed + random pooled effects."""
 

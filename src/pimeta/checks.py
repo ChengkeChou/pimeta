@@ -314,6 +314,27 @@ def _check_not_converged(fit) -> Diagnostic | None:
                "non-converged fit is a failed search, not a wide interval")
 
 
+def _count(value) -> int | None:
+    """An attribute as a study count, or ``None`` when it is not one.
+
+    ``k`` is an int on most results and a *list* on a few: a piecewise fit
+    stores one count per interval, because different intervals are informed by
+    different studies. Reading that with ``int()`` raised ``TypeError`` from
+    inside a property that promises never to raise, which is how this helper
+    came to exist. A value that is not exactly one non-negative number is not a
+    study count, and the check that needed it declines rather than guessing.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        array = np.asarray(value, dtype=float).ravel()
+    except (TypeError, ValueError):
+        return None
+    if array.size != 1 or not np.isfinite(array[0]) or array[0] < 0.0:
+        return None
+    return int(array[0])
+
+
 def _check_studies_dropped(fit) -> Diagnostic | None:
     """Studies removed before fitting, which changes what the estimate covers.
 
@@ -321,14 +342,14 @@ def _check_studies_dropped(fit) -> Diagnostic | None:
     a record, so an exported result says how many studies it actually used
     instead of leaving that to whoever read the console.
     """
-    k_all = getattr(fit, "k_all", None)
-    k = getattr(fit, "k", None)
-    if k_all is None or k is None or int(k_all) <= int(k):
+    k_all = _count(getattr(fit, "k_all", None))
+    k = _count(getattr(fit, "k", None))
+    if k_all is None or k is None or k_all <= k:
         return None
-    dropped = int(k_all) - int(k)
+    dropped = k_all - k
     return Diagnostic(
         code="studies_dropped", category="data", severity="warning",
-        message=f"{dropped} of {int(k_all)} studies were dropped before "
+        message=f"{dropped} of {k_all} studies were dropped before "
                 "fitting",
         action="the estimate covers the remaining studies only; report which "
                "were dropped and why, because a result that silently covers "
@@ -346,16 +367,23 @@ def _check_few_studies(fit) -> Diagnostic | None:
 
     A Bayesian fit stores the parameter as ``tau`` rather than ``tau2``, and it
     estimates the same thing, so both count.
+
+    The study count is read from ``k``; a one-stage fit stores it as
+    ``studies`` (the number of groups), because it has no per-study rows of its
+    own. Both go through :func:`_count`, so a class whose ``k`` is a per-interval
+    list -- ``piecewise_exp`` -- declines instead of raising.
     """
     if (getattr(fit, "tau2", None) is None
             and getattr(fit, "tau", None) is None):
         return None
-    k = getattr(fit, "k", None)
-    if k is None or int(k) >= 5:
+    k = _count(getattr(fit, "k", None))
+    if k is None:
+        k = _count(getattr(fit, "studies", None))
+    if k is None or k >= 5:
         return None
     return Diagnostic(
         code="few_studies", category="identifiability", severity="warning",
-        message=f"only {int(k)} studies: a between-study variance estimated "
+        message=f"only {k} studies: a between-study variance estimated "
                 "from so few is barely identified",
         action="treat the heterogeneity estimate as a guess, prefer a "
                "fixed-effect analysis or a prior on tau, and do not read the "
