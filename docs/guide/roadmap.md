@@ -174,14 +174,18 @@ Partly done, and the honest accounting is more useful than the plan.
 | | |
 |---|---|
 | result classes | **13 of 114** carry `.diagnostics` |
-| codes | **12**, each pinned in `tests/test_diagnostic_registry.py` |
-| codes from the table above that do **not** exist | rank-deficient design, disconnected network, differing optima, non-PD Hessian, iteration limit, duplicated study, effect size inconsistent with its SE, extrapolation, unverified prediction coverage |
+| codes | **16** per-fit checks, plus 3 grid-level codes in `multiverse.py`; each pinned in `tests/test_diagnostic_registry.py` |
+| codes from the table above that do **not** exist | disconnected network, duplicated study, effect size inconsistent with its SE, extrapolation, unverified prediction coverage |
 
 Two of those are not missing, they are **not diagnosable at fit time**: `rma`
 raises on a rank-deficient design and `netmeta` raises on a disconnected network,
 so no fitted object can ever carry those states. A code that can never fire is
 worse than no code — `studies_dropped` was one for months — so they belong in the
 documentation of what the constructor refuses, not in the diagnostics module.
+The iteration limit and the possibility of more than one optimum were on this
+list until `max_iter_reached` and `multi_modal_likelihood` landed; they are the
+two that needed the heterogeneity search to report on itself rather than on the
+surface it stopped on.
 
 The rollout is deliberately curated. `attach_diagnostics` makes the property one
 line, and it is applied only where each check is *true* of the family: firing
