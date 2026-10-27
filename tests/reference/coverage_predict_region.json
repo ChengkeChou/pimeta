@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "what": "Coverage of the joint prediction region for a new study's true effects, two correlated outcomes, nominal 0.95. Measured with tools/coverage_predict_region.py; the numbers here are the ones predict_region's docstring quotes.",
+  "harness": "tools/coverage_predict_region.py",
+  "nominal": 0.95,
+  "runs": {
+    "main": {
+      "replications": 100,
+      "n_boot": 199,
+      "k": {
+        "10": {"chi2": 0.83, "f": 0.83, "kr": 0.956, "kr_fail": 0.09,
+               "bootstrap": 0.91, "marginal": 0.79},
+        "20": {"chi2": 0.94, "f": 0.94, "kr": 0.94, "kr_fail": 0.0,
+               "bootstrap": 0.97, "marginal": 0.86}
+      }
+    },
+    "second": {
+      "replications": 100,
+      "n_boot": 99,
+      "k": {
+        "10": {"chi2": 0.86, "f": 0.86, "kr": 0.916, "bootstrap": 0.94},
+        "20": {"chi2": 0.91, "f": 0.91, "kr": 0.91, "bootstrap": 0.97}
+      },
+      "note": "the same harness with a different number of bootstrap replicates; the spread between the two runs is the Monte Carlo error at 100 replications, not a change in the method"
+    },
+    "older_300": {
+      "replications": 300,
+      "k": {
+        "10": {"chi2": 0.767, "f": 0.827, "marginal": 0.777},
+        "20": {"chi2": 0.917, "f": 0.93, "marginal": 0.897},
+        "40": {"chi2": 0.937, "f": 0.947, "marginal": 0.91},
+        "80": {"chi2": 0.94, "f": 0.94, "marginal": 0.897}
+      },
+      "note": "the measurement the test= argument's docstring quotes"
+    }
+  }
+}

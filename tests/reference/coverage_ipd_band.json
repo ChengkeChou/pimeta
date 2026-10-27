@@ -1,0 +1,95 @@
+{
+  "schema": 1,
+  "what": "Coverage of the 95% confidence band from ipd_two_stage_curve, five covariates 45/50/55/60/65, twelve studies, known quadratic truth. Measured with tools/coverage_ipd_curve.py. Two campaigns are recorded because the docstring quotes both: a 250-replication table of reference distributions, and a 60-replication head-to-head of covariance structures run later.",
+  "harness": "tools/coverage_ipd_curve.py",
+  "nominal": 0.95,
+  "replications": 250,
+  "table": {
+    "model_t": [
+      0.816,
+      0.884,
+      0.836,
+      0.86,
+      0.74
+    ],
+    "robust_min_df": [
+      0.864,
+      0.972,
+      0.976,
+      0.9,
+      0.628
+    ],
+    "robust_point_df": [
+      0.944,
+      0.996,
+      0.984,
+      0.92,
+      0.74
+    ]
+  },
+  "comparisons": {
+    "replications": 60,
+    "seed0": 0,
+    "runs": {
+      "cr1_un": {
+        "config": "robust=True, df='point', struct='UN'",
+        "coverage": [
+          0.933,
+          0.983,
+          1.0,
+          0.9,
+          0.733
+        ],
+        "boundary_share": 0.7333333333333333,
+        "note": "the shipped default, at the lower replication count used for the comparisons"
+      },
+      "cr2_un": {
+        "config": "robust=True, df='point', CR2 sandwich",
+        "coverage": [
+          0.867,
+          0.983,
+          0.967,
+          0.85,
+          0.583
+        ],
+        "note": "measured and rejected: worse at every covariate and worst at the edge, because a study's marginal block already carries the between-study variance"
+      },
+      "cr1_hcs": {
+        "config": "robust=True, df='point', struct='HCS'",
+        "coverage": [
+          0.917,
+          0.983,
+          1.0,
+          0.9,
+          0.733
+        ],
+        "boundary_share": 0.9833333333333333,
+        "note": "measured and rejected: nothing at the edge, and the boundary rate rises from 73% to 98%"
+      },
+      "cr1_lkj2_un": {
+        "config": "robust=True, df='point', struct='UN', lkj_eta=2",
+        "coverage": [
+          0.917,
+          0.983,
+          1.0,
+          0.9,
+          0.75
+        ],
+        "boundary_share": 0.5,
+        "note": "the one change that helps: the boundary rate is halved and the edge rises to 0.750"
+      },
+      "cr1_lkj4_un": {
+        "config": "robust=True, df='point', struct='UN', lkj_eta=4",
+        "coverage": [
+          0.917,
+          0.983,
+          1.0,
+          0.9,
+          0.75
+        ],
+        "boundary_share": 0.4666666666666667,
+        "note": "no further gain in coverage over eta = 2"
+      }
+    }
+  }
+}
