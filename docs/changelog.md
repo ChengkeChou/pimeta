@@ -6,6 +6,27 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- `rve.robust(..., clubSandwich=True, vcov="CR2")` no longer refuses a fit whose
+  study-level marginal block is not positive definite. The CR2 factor needs a
+  square root of that block and the code used a Cholesky factorisation, which
+  raises on an indefinite matrix — so the bias-reduced sandwich was unavailable
+  in exactly the fits that need it most, the ones with a variance component
+  estimated on its boundary. The factorisation is now a symmetric root with a
+  floored spectrum: identical to the Cholesky construction for a positive
+  definite block, and a defined surrogate otherwise (`rve._symmetric_root`,
+  tested against the exact change the floor introduces).
+- The IPD curve documentation no longer recommends `struct="HCS"` for the band
+  at the edge of the covariate range. That was never measured and it is wrong:
+  on the reference cohort `"HCS"` leaves the edge coverage at 0.733 like
+  `"UN"` and raises the share of boundary fits from 73% to 98%. CR2 was
+  measured on the same replications and is worse at every covariate
+  (0.867/0.983/0.967/0.850/0.583 against 0.933/0.983/1.000/0.900/0.733), so it
+  is not offered as a band setting either — the reason, a study's marginal
+  block already carrying the between-study variance, is written next to the
+  numbers.
+
 ### Added
 
 - Two diagnostics that report on the *search* rather than on the surface it

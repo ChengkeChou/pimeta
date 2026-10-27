@@ -163,11 +163,26 @@ how much each study contributes to the contrast there (`curve(robust=True)` now
 does this by default; `df="min"` keeps the old single reference), fixes the left
 edge and the middle — at the price of being conservative in the middle — and
 does **not** fix the right edge. At `x = 65` only two or three studies carry the
-contrast, and the thing that is wrong there is the CR1 sandwich itself, not the
-reference distribution it is compared against; 34% of those fits put the
-between-study covariance on a boundary. The honest reading is "better, not
-calibrated"; the edge of the range needs more studies or `struct="HCS"`, not a
-different quantile.
+contrast.
+
+Two candidate explanations for that were measured on 60 replications with the
+same seeds, and both are wrong:
+
+| at x = 45 / 50 / 55 / 60 / 65 | coverage |
+|---|---|
+| CR1 + per-point df | 0.933 / 0.983 / 1.000 / 0.900 / **0.733** |
+| CR2 (Bell–McCaffrey) + per-point df | 0.867 / 0.983 / 0.967 / 0.850 / **0.583** |
+| `struct="HCS"`, CR1 + per-point df | 0.917 / 0.983 / 1.000 / 0.900 / **0.733** |
+
+The bias-reduced sandwich is **worse everywhere** and worst at the edge: a
+study's marginal block already contains the between-study variance, so shrinking
+its residual by its leverage removes variance the two-stage model has already
+accounted for. The common-correlation structure leaves the edge at 0.733 and
+makes the boundary rate *worse* (98% of fits against 73%), because with four
+knots it is the scale parameters that hit the boundary, not the correlation
+structure. What remains is fewer basis columns — a modelling decision that buys
+the edge with the interaction — and the honest reading: better, not calibrated,
+and say so where it is not.
 
 The prediction band is wider and therefore over-covers under CR1 (0.98 to 1.00)
 while reaching 0.88 to 0.94 model-based. `test="t"` changes nothing (44 residual

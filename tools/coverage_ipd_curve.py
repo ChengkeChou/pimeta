@@ -117,7 +117,8 @@ def main(argv=None):
     parser.add_argument("--test", default="z",
                         help="reference distribution: z, t, knha or adhoc")
     parser.add_argument("--robust", action="store_true",
-                        help="CR2 sandwich with Satterthwaite degrees of freedom")
+                        help="cluster-robust sandwich with Satterthwaite degrees "
+                             "of freedom")
     args = parser.parse_args(argv)
     return run(args.reps, args.seed, args.test, args.robust)
 

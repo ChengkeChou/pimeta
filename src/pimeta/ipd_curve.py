@@ -256,13 +256,16 @@ class IpdCurveResult:
     def _robust_vcov(self):
         """CR1 sandwich with ``k - p`` degrees of freedom.
 
-        CR2 would be the better small-sample correction, but it needs a
-        Cholesky factor of every study's 4x4 marginal block, and those blocks
-        come from a logistic first stage whose coefficient covariance is not
-        reliably positive definite — ``robust(..., clubSandwich=True)`` raises
-        on the reference cohort.  CR1 needs no factorisation, and pairing it
-        with a t reference on ``k - p`` clusters is the standard robust
-        small-sample interval.
+        CR2 is *available* — :func:`pimeta.rve.robust` with
+        ``clubSandwich=True`` runs even when a study's marginal block is not
+        positive definite, because the factorisation falls back to a symmetric
+        root with floored eigenvalues — but it is **not** what this band uses,
+        and the reason is a measurement rather than a preference: on the
+        reference cohort CR2 gives 0.867/0.983/0.967/0.850/0.583 coverage
+        against CR1's 0.933/0.983/1.000/0.900/0.733, worse at every covariate
+        and worst at the edge.  A study's marginal block already contains the
+        between-study variance, so shrinking its residual by its leverage
+        removes variance the model has already accounted for.
         """
         from .rve import robust as _robust
 

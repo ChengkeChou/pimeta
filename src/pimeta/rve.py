@@ -155,8 +155,26 @@ def _block_diag(blocks: list[np.ndarray]) -> np.ndarray:
 def _sym_matrix_power(A: np.ndarray, power: float) -> np.ndarray:
     """Symmetric matrix power via eigendecomposition (clubSandwich ``matrix_power``)."""
     evals, evecs = np.linalg.eigh(A)
-    evals_p = np.where(evals > 1e-12, evals**power, 0.0)
+    with np.errstate(invalid="ignore"):
+        evals_p = np.where(evals > 1e-12, evals**power, 0.0)
     return (evecs * evals_p) @ evecs.T
+
+
+def _symmetric_root(A: np.ndarray, floor: float = 1e-10) -> np.ndarray:
+    """Symmetric square root with eigenvalues floored at ``floor``.
+
+    ``cholesky`` is the right factorisation when ``A`` is positive definite and
+    the wrong tool when it is not: a cluster's marginal block comes from a
+    first-stage fit whose coefficient covariance need not be PD, and Cholesky
+    then raises ``LinAlgError`` rather than returning the matrix that the CR2
+    construction needs.  The symmetric root is the same matrix for a PD input
+    (up to the sign of the eigenvectors, which cancels in ``R A R'``) and a
+    defined surrogate when the input has a small negative eigenvalue from
+    rounding or from an estimated-at-the-boundary variance component.
+    """
+    evals, evecs = np.linalg.eigh((A + A.T) / 2.0)
+    root = np.sqrt(np.clip(evals, floor, None))
+    return (evecs * root) @ evecs.T
 
 
 def _cr_vcov(view: _View, cluster: np.ndarray, cr_type: str):
@@ -187,9 +205,14 @@ def _cr_vcov(view: _View, cluster: np.ndarray, cr_type: str):
         Hj = Xj @ B @ XWj                    # n_j x n_j leverage
         IHj = np.eye(nj) - Hj
         if cr_type == "CR2":
-            L = np.linalg.cholesky(Mj)       # lower; R (upper) = L.T
-            Gj = L.T @ IHj @ Mj @ L
-            Aj = L @ _sym_matrix_power(Gj, -0.5) @ L.T
+            # the symmetric root, not ``cholesky``: a first-stage block that is
+            # not positive definite (a variance component estimated on its
+            # boundary) makes Cholesky raise and the whole CR2 sandwich
+            # unavailable, which is exactly the case where the small-sample
+            # correction matters most
+            R = _symmetric_root(Mj)          # R R' = Mj
+            Gj = R @ IHj @ Mj @ R
+            Aj = R @ _sym_matrix_power(Gj, -0.5) @ R
         elif cr_type == "CR3":
             Aj = np.linalg.inv(IHj)
         else:

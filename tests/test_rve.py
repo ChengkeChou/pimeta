@@ -146,3 +146,65 @@ def test_the_old_import_path_still_works():
     from pimeta.rma_mv import robust as via_rma_mv
 
     assert via_rma_mv is ma.robust
+
+
+# --------------------------------------------------------------------------- #
+# the CR2 factorisation when a cluster block is not positive definite
+# --------------------------------------------------------------------------- #
+def test_the_symmetric_root_reproduces_a_positive_definite_matrix():
+    from pimeta.rve import _symmetric_root
+
+    rng = np.random.default_rng(4)
+    A = rng.normal(size=(5, 5))
+    A = A @ A.T + np.eye(5)
+    R = _symmetric_root(A)
+    assert R == pytest.approx(R.T, abs=1e-12)
+    assert R @ R.T == pytest.approx(A, abs=1e-10)
+
+
+def test_the_symmetric_root_is_defined_when_cholesky_is_not():
+    """A cluster block with a negative eigenvalue is not a Cholesky input.
+
+    That is the case a two-stage IPD fit produces when a variance component is
+    estimated on its boundary: the block is nearly singular, and rounding or a
+    boundary estimate makes it indefinite.  Cholesky raises; the symmetric root
+    with a floored spectrum does not, which is what keeps the CR2 sandwich
+    available in exactly those fits.
+    """
+    from pimeta.rve import _symmetric_root
+
+    A = np.array([[1.0, 0.2], [0.2, -1e-9]])
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.cholesky(A)
+    lam, V = np.linalg.eigh(A)
+    assert lam[0] < 0.0            # this matrix really is indefinite, not just
+    R = _symmetric_root(A)         # numerically awkward
+    assert np.all(np.isfinite(R))
+    # the only change to A is that the negative eigenvalue is raised to the
+    # floor: R R' = A + (floor - lambda_min) v v'
+    expected = (1e-10 - lam[0]) * np.outer(V[:, 0], V[:, 0])
+    assert R @ R.T - A == pytest.approx(expected, abs=1e-9)
+
+
+def test_cr2_runs_on_a_cluster_whose_block_is_indefinite():
+    from pimeta.rve import _cr_vcov, _View
+
+    # three clusters of two rows, one block indefinite
+    X = np.column_stack([np.ones(6), [0.0, 0.1, 1.0, 1.1, 2.0, 2.1]])
+    M = np.zeros((6, 6))
+    blocks = [np.array([[0.2, 0.05], [0.05, 0.2]]),
+              np.array([[0.3, 0.1], [0.1, 0.3]]),
+              np.array([[0.4, 0.2], [0.2, -1e-10]])]
+    for j, blk in enumerate(blocks):
+        M[2 * j:2 * j + 2, 2 * j:2 * j + 2] = blk
+    yi = np.array([0.1, 0.2, 0.4, 0.3, 0.5, 0.6])
+    beta = np.array([[0.15], [0.1]])
+    vb = np.eye(2) * 0.01
+    view = _View(X=X, yi=yi, beta=beta, M=M, vb=vb, p=2, k=6, level=0.95,
+                 btt=[1], multilevel=True, stored_cluster=None)
+    cluster = np.repeat([1, 2, 3], 2)
+    with pytest.raises(np.linalg.LinAlgError):
+        np.linalg.cholesky(blocks[2])
+    vb_cr, E_list, _X, _Omega, _B = _cr_vcov(view, cluster, "CR2")
+    assert np.all(np.isfinite(vb_cr))
+    assert np.all(np.isfinite(np.column_stack(E_list)))
