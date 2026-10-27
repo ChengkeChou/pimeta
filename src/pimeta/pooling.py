@@ -158,18 +158,16 @@ def _reml_ml_loglik(
     return float(ll)
 
 
-def _metafor_fisher_scoring_tau2(
-    y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str
-) -> float:
-    """ML/REML tau^2 via metafor's exact Fisher-scoring iteration.
+def _fisher_scoring_core(
+    y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str,
+    *, threshold: float = 1e-5, max_iter: int = 100
+) -> tuple[float, int, bool]:
+    """metafor's Fisher scoring, plus the iteration count and the stop reason.
 
-    A generic profile-likelihood optimizer (e.g. ``scipy.optimize.minimize_scalar``)
-    converges to the true optimum, but
-    ``metafor::rma`` *stops* its Fisher scoring once ``change < 1e-5``, which
-    leaves the estimate a few 1e-8 away from the exact optimum. To reproduce R
-    to full double precision we re-implement that exact loop: Hedges start
-    value, global-mean centering, the ``P = W - W X (X'W X)^-1 X'W`` projection
-    updated each step, and step-halving at the tau^2 >= 0 boundary.
+    Returns ``(tau2, n_iter, hit_max_iter)``.  The estimate is the one
+    :func:`_metafor_fisher_scoring_tau2` returns, which is now a thin wrapper:
+    one loop, one definition of "converged", so a diagnostic that reports on
+    the search cannot disagree with the fit about whether the search ended.
     """
     y = np.asarray(y, dtype=float).ravel()
     v = np.asarray(v, dtype=float).ravel()
@@ -189,8 +187,10 @@ def _metafor_fisher_scoring_tau2(
     tr_pv = float(np.sum(v) - np.trace(stXX @ (X.T @ (v[:, None] * X))))
     tau2 = max(0.0, (rss - tr_pv) / (k - p))
 
-    threshold = 1e-5  # metafor's con$threshold
-    for _ in range(100):  # metafor's con$maxiter
+    n_iter = 0
+    hit_max_iter = True
+    for _ in range(int(max_iter)):
+        n_iter += 1
         wi = 1.0 / (v + tau2)
         yppy = quad_form_squared(X, wi, ymc)
         if method == "ML":
@@ -205,6 +205,7 @@ def _metafor_fisher_scoring_tau2(
         change = abs(tau2_new - tau2)
         tau2 = tau2_new
         if change < threshold:
+            hit_max_iter = False
             break
 
     # metafor's ll0check: if ll(tau^2 = 0) is larger, set tau^2 = 0.
@@ -215,7 +216,56 @@ def _metafor_fisher_scoring_tau2(
         if ll0 - ll > tol:
             tau2 = 0.0
 
-    return float(tau2)
+    return float(tau2), int(n_iter), bool(hit_max_iter)
+
+
+def _metafor_fisher_scoring_tau2(
+    y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str
+) -> float:
+    """ML/REML tau^2 via metafor's exact Fisher-scoring iteration.
+
+    A generic profile-likelihood optimizer (e.g. ``scipy.optimize.minimize_scalar``)
+    converges to the true optimum, but
+    ``metafor::rma`` *stops* its Fisher scoring once ``change < 1e-5``, which
+    leaves the estimate a few 1e-8 away from the exact optimum. To reproduce R
+    to full double precision we re-implement that exact loop: Hedges start
+    value, global-mean centering, the ``P = W - W X (X'W X)^-1 X'W`` projection
+    updated each step, and step-halving at the tau^2 >= 0 boundary.
+    """
+    return _fisher_scoring_core(y, v, X, method)[0]
+
+
+def tau2_iterations(y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str,
+                    *, max_iter: int = 100) -> tuple[int, bool]:
+    """How many Fisher-scoring steps the fit takes, and whether it ran out.
+
+    Fed to the ``max_iter_reached`` diagnostic.  Recomputed at check time from
+    the same loop that produced the estimate, so a stale counter cannot make the
+    diagnostic and the fit disagree.
+    """
+    _, n_iter, hit = _fisher_scoring_core(y, v, X, method, max_iter=max_iter)
+    return n_iter, hit
+
+
+def profile_modes(y: ArrayLike, v: ArrayLike, X: np.ndarray, method: str,
+                  *, n_grid: int = 61) -> list[float]:
+    """Interior local maxima of the profile likelihood in tau^2.
+
+    The grid runs from ``tau^2 = 0`` to ``upper = 10 x max(largest sampling
+    variance, sample variance of the effects)``.  The range comes from the data
+    rather than from the estimate, because a range chosen around the answer
+    would define the question away.  A local maximum is a grid point larger
+    than both neighbours; the boundary at zero is not one, since
+    ``_check_tau2_zero`` already owns that case.
+    """
+    y = np.asarray(y, dtype=float).ravel()
+    v = np.asarray(v, dtype=float).ravel()
+    upper = 10.0 * max(float(np.max(v)), float(np.var(y)), 1e-8)
+    grid = np.concatenate([[0.0], np.geomspace(1e-8, upper, int(n_grid))])
+    values = np.array([float(_reml_ml_loglik(y, v, X, value, method))
+                       for value in grid])
+    return [float(grid[i]) for i in range(1, grid.size - 1)
+            if values[i] > values[i - 1] and values[i] > values[i + 1]]
 
 
 def _resolve_tau2(

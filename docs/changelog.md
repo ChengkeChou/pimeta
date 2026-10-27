@@ -8,6 +8,23 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- Two diagnostics that report on the *search* rather than on the surface it
+  ended on, the last two of the seven codes the roadmap listed. Both read the
+  ML/REML heterogeneity loop, which is now one function with a report instead of
+  a bare `float`:
+  - `max_iter_reached` fires when the Fisher scoring for `tau^2` stopped at its
+    100-iteration limit instead of at the `change < 1e-5` tolerance. Every fit
+    returns its last iterate either way; what is wrong in this case is that the
+    standard error of `tau^2` comes from a curvature that was never reached, and
+    nothing in the returned numbers says so. `not_converged` covers the case
+    where an optimiser flags itself; this covers the one where it does not.
+  - `multi_modal_likelihood` scans the profile likelihood in `tau^2` on a fixed
+    grid derived from the data (10 x the larger of the largest sampling variance
+    and the sample variance of the effects, so the range cannot be defined by
+    the answer) and fires when the profile has more than one interior local
+    maximum. An optimiser returns one peak; this reports that there was another,
+    with both locations, because "the estimate depends on where the search
+    started" is a different statement from "the estimate is 0.03".
 - `tau_trend(tau="spline")`: a spline scale for the dynamic-heterogeneity model,
   built so that the shape is estimated with **one** hyperparameter instead of
   `nk - 2` free coefficients. The restricted cubic spline's non-linear columns

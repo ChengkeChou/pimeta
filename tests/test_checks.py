@@ -301,6 +301,9 @@ def test_flat_likelihood_fires_when_the_surface_is_concave_up(monkeypatch):
         return (float(tau2) - 0.05) ** 2
 
     monkeypatch.setattr(pooling, "_reml_ml_loglik", fake_loglik)
+    # the multimodality scan also evaluates the likelihood; isolate the count to
+    # the curvature check, which is what this test is about
+    monkeypatch.setattr(pooling, "profile_modes", lambda *a, **k: [])
     stub = _stub(tau2=0.2, yi=np.array([0.1, 0.2, 0.3, 0.4]),
                  vi=np.full(4, 0.05), X=np.ones((4, 1)), method="REML")
     diagnosis = checks.diagnose(stub)
@@ -313,3 +316,97 @@ def test_flat_likelihood_is_skipped_at_the_boundary():
     stub = _stub(tau2=0.0, yi=np.array([0.1, 0.2, 0.3, 0.4]),
                  vi=np.full(4, 0.05), X=np.ones((4, 1)), method="REML")
     assert "flat_likelihood" not in ma.diagnose(stub).codes()
+
+
+# --------------------------------------------------------------------------- #
+# the search, not the surface: iteration limit and multimodality
+# --------------------------------------------------------------------------- #
+def test_max_iter_reached_is_silent_when_the_search_converges():
+    yi = np.array([0.10, 0.50, 0.90, 1.30, -0.20, 0.70])
+    fit = ma.rma(yi, vi=np.full(6, 0.0025))
+    assert "max_iter_reached" not in ma.diagnose(fit).codes()
+    from pimeta.pooling import tau2_iterations
+
+    n_iter, hit = tau2_iterations(np.asarray(fit.yi, dtype=float),
+                                  np.asarray(fit.vi, dtype=float), fit.X, "REML")
+    assert not hit and 0 < n_iter <= 100
+
+
+def test_max_iter_reached_fires_when_the_loop_runs_out(monkeypatch):
+    """A search that exhausts its budget is reported as one.
+
+    The stop reason is what is under test here, so the report is patched rather
+    than the loop: on most data the Hedges start value is already close enough
+    that even a one-step budget can meet the tolerance, which would make a
+    "shrink the budget" version of this test a coin toss.
+    """
+    import pimeta.checks as checks
+    import pimeta.pooling as pooling
+
+    monkeypatch.setattr(pooling, "tau2_iterations", lambda *a, **k: (1, True))
+    yi = np.array([0.10, 0.50, 0.90, 1.30, -0.20, 0.70, 0.40, 0.05])
+    stub = _stub(tau2=0.2, yi=yi, vi=np.full(yi.size, 0.0025),
+                 X=np.ones((yi.size, 1)), method="REML")
+    diagnosis = checks.diagnose(stub)
+    assert "max_iter_reached" in diagnosis.codes()
+    message = [d.message for d in diagnosis.items
+               if d.code == "max_iter_reached"][0]
+    assert "1-iteration limit" in message
+
+
+def test_max_iter_reached_is_skipped_for_non_iterative_estimators():
+    # DerSimonian-Laird does not iterate, so no budget can be exhausted
+    stub = _stub(tau2=0.2, yi=np.array([0.1, 0.2, 0.3, 0.4]),
+                 vi=np.full(4, 0.05), X=np.ones((4, 1)), method="DL")
+    assert "max_iter_reached" not in ma.diagnose(stub).codes()
+
+
+def test_multi_modal_likelihood_is_silent_on_a_unimodal_profile():
+    yi = np.array([0.10, 0.50, 0.90, 1.30, -0.20, 0.70])
+    fit = ma.rma(yi, vi=np.full(6, 0.0025))
+    assert "multi_modal_likelihood" not in ma.diagnose(fit).codes()
+    from pimeta.pooling import profile_modes
+
+    peaks = profile_modes(np.asarray(fit.yi, dtype=float),
+                          np.asarray(fit.vi, dtype=float), fit.X, "REML")
+    assert len(peaks) <= 1
+
+
+def test_multi_modal_likelihood_fires_on_a_patched_two_peak_profile(monkeypatch):
+    """A profile with two maxima, constructed so the grid sees both.
+
+    The finder is patched because a real two-peak tau^2 profile needs a
+    pathological data set to build; what is under test is that the diagnostic
+    reports what the finder found, including both locations.
+    """
+    import pimeta.checks as checks
+    import pimeta.pooling as pooling
+
+    monkeypatch.setattr(pooling, "profile_modes",
+                        lambda *a, **k: [0.01, 4.0])
+    stub = _stub(tau2=0.2, yi=np.array([0.1, 0.2, 0.3, 0.4]),
+                 vi=np.full(4, 0.05), X=np.ones((4, 1)), method="REML")
+    diagnosis = checks.diagnose(stub)
+    assert "multi_modal_likelihood" in diagnosis.codes()
+    message = [d.message for d in diagnosis.items
+               if d.code == "multi_modal_likelihood"][0]
+    assert "0.01" in message and "4" in message
+
+
+def test_the_profile_modes_finder_reports_the_neighbourhood_of_the_fit():
+    """The scanned peak has to land on the same mode the optimiser found.
+
+    The grid is deliberately coarse (61 points over several orders of
+    magnitude), so the reported peak is a *grid* point and cannot be a local
+    maximum to 1e-3; what it must be is the same mode, which is checked against
+    the fitted estimate.
+    """
+    from pimeta.pooling import profile_modes
+
+    yi = np.array([0.10, 0.50, 0.90, 1.30, -0.20, 0.70])
+    vi = np.full(6, 0.0025)
+    X = np.ones((6, 1))
+    fit = ma.rma(yi, vi)
+    peaks = profile_modes(yi, vi, X, "REML")
+    assert len(peaks) == 1
+    assert peaks[0] == pytest.approx(float(fit.tau2), rel=0.5)

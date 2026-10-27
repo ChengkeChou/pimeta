@@ -482,13 +482,94 @@ def _check_flat_likelihood(fit) -> Diagnostic | None:
                "its standard error")
 
 
+def _fisher_report(fit) -> tuple[int, bool] | None:
+    """Iterations the ML/REML heterogeneity search used, and whether it ran out."""
+    method = str(getattr(fit, "method", "")).upper()
+    if method not in ("ML", "REML"):
+        return None
+    yi = getattr(fit, "yi", None)
+    vi = getattr(fit, "vi", None)
+    design = getattr(fit, "X", None)
+    if yi is None or vi is None or design is None:
+        return None
+    from .pooling import tau2_iterations
+
+    try:
+        return tau2_iterations(np.asarray(yi, dtype=float),
+                               np.asarray(vi, dtype=float),
+                               np.asarray(design, dtype=float), method)
+    except Exception:                    # noqa: BLE001 - a check must not raise
+        return None
+
+
+def _check_max_iter_reached(fit) -> Diagnostic | None:
+    """The heterogeneity search stopped at its iteration limit.
+
+    ``not_converged`` covers an optimiser that says so; this is the other half,
+    a search that hit its budget and returned its last iterate without any flag.
+    The estimate is then wherever the last step landed, and the standard error
+    of ``tau^2`` comes from a curvature that was never reached.
+    """
+    report = _fisher_report(fit)
+    if report is None:
+        return None
+    n_iter, hit = report
+    if not hit:
+        return None
+    return Diagnostic(
+        code="max_iter_reached", category="optimisation", severity="warning",
+        message=f"the Fisher scoring for tau^2 stopped at its {n_iter}-iteration "
+                "limit instead of at the convergence threshold",
+        action="the estimate is whatever the last step produced. Raise the "
+               "iteration limit, or fix tau^2 at a defensible value; do not "
+               "read the standard error of tau^2 as if the search had converged")
+
+
+def _check_multi_modal_likelihood(fit) -> Diagnostic | None:
+    """More than one local maximum on the tau^2 profile.
+
+    Every optimiser returns *one* peak; the question this answers is whether
+    there was another.  The profile is scanned on a fixed grid derived from the
+    data (see :func:`pimeta.pooling.profile_modes`), and only interior maxima
+    are counted, because ``tau^2 = 0`` is the boundary and
+    ``_check_tau2_zero`` already reports it.
+    """
+    method = str(getattr(fit, "method", "")).upper()
+    if method not in ("ML", "REML"):
+        return None
+    yi = getattr(fit, "yi", None)
+    vi = getattr(fit, "vi", None)
+    design = getattr(fit, "X", None)
+    if yi is None or vi is None or design is None:
+        return None
+    from .pooling import profile_modes
+
+    try:
+        peaks = profile_modes(np.asarray(yi, dtype=float),
+                              np.asarray(vi, dtype=float),
+                              np.asarray(design, dtype=float), method)
+    except Exception:                    # noqa: BLE001 - a check must not raise
+        return None
+    if len(peaks) < 2:
+        return None
+    shown = ", ".join(f"{peak:.4g}" for peak in peaks)
+    return Diagnostic(
+        code="multi_modal_likelihood", category="optimisation",
+        severity="warning",
+        message=f"the tau^2 profile has {len(peaks)} local maxima (at {shown})",
+        action="the likelihood does not single out one heterogeneity: report "
+               "that the estimate depends on where the search started, and "
+               "consider the models at both peaks instead of only the one that "
+               "was returned")
+
+
 _CHECKS = (_check_non_finite_estimate, _check_negative_variance,
-           _check_not_converged, _check_tau2_zero, _check_variance_component,
-           _check_ill_conditioned, _check_near_rank_deficient,
-           _check_boundary_correlation, _check_studies_dropped,
-           _check_zero_weight_study, _check_zero_variance,
-           _check_flat_likelihood, _check_few_studies,
-           _check_posterior_equals_prior)
+           _check_not_converged, _check_max_iter_reached, _check_tau2_zero,
+           _check_variance_component, _check_ill_conditioned,
+           _check_near_rank_deficient, _check_boundary_correlation,
+           _check_studies_dropped, _check_zero_weight_study, _check_zero_variance,
+           _check_flat_likelihood, _check_multi_modal_likelihood,
+           _check_few_studies, _check_posterior_equals_prior)
 
 
 def software_versions() -> dict:
