@@ -4,7 +4,7 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] — 2026-10-27
 
 ### Added
 
@@ -2767,4 +2767,5 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.0
 [1.0.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.1
