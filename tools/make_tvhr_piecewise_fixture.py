@@ -24,25 +24,19 @@ The reference numbers in ``tests/test_tvhr_joint.py`` come from
 ``tools/r_reference/tvhr_piecewise.R``, which rebuilds the split-follow-up
 design, fits each study with ``glm.fit`` and pools with ``metafor::rma.mv``.
 
-**This script currently exposes a defect and the fixture is NOT regenerated from
-it.**  On these bytes ``metafor::rma.mv`` reports between-interval correlations
-``(0.864, 0.637, 0.163)`` — an interior, valid correlation matrix — while
-``piecewise_joint`` reports ``(1.000, 1.000, -0.203)``.  Two correlations of
-exactly 1 with a third of -0.203 is not a correlation matrix at all: it has
-negative eigenvalues, so the fit has collapsed onto a degenerate face rather
-than converged to the likelihood's interior optimum.  The betas, standard errors
-and variance components agree between the two implementations to 1e-3; only the
-correlations differ, which is what a ridge-stall looks like.
-
-The shipped fixture does not show this because there both implementations land
-on the boundary together, which is why it went unnoticed.  Until the optimiser
-is fixed, this file is a reproducer rather than a generator: running it
-overwrites the fixture with bytes the pinned constants do not describe, so
-``--check`` will fail and that failure is the point.
+History: the seed below used to expose a defect.  ``rma_mv(struct="UN")``
+once bounded each correlation to (-1, 1) *per pair*, which does not keep the
+implied matrix positive definite, and on these bytes the fit reported
+``rho = (1.000, 1.000, -0.203)`` — not a correlation matrix — where
+``metafor::rma.mv`` reports ``(0.864, 0.637, 0.163)``.  Since the Cholesky
+parametrisation landed (the fit now agrees with metafor to six decimals on
+these exact bytes), this file is a generator again: the seed is kept as the
+regression case for that defect.
 
 Usage::
 
-    python tools/make_tvhr_piecewise_fixture.py --check    # exits 1: see above
+    python tools/make_tvhr_piecewise_fixture.py            # rewrite
+    python tools/make_tvhr_piecewise_fixture.py --check    # exit 1 if stale
 """
 
 from __future__ import annotations

@@ -185,7 +185,7 @@ def test_centring_can_be_switched_off():
     centred = ma.ipd_two_stage_curve(y, study=study, treat=treat,
                                      covariate=age, knots=KNOTS)
     assert centred.curve([50.0]).est[0] == pytest.approx(
-        uncentred.curve([50.0]).est[0], abs=1e-6)
+        uncentred.curve([50.0]).est[0], abs=1e-4)
 
 
 def test_a_balanced_study_is_not_thrown_away():

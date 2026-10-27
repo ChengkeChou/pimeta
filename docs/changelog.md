@@ -49,7 +49,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   pair from a handful of studies, and on the shipped fixture one of them reaches
   0.9998: the covariance is singular, and any joint test that contrasts the
   intervals is then decided by where on that ridge the optimiser stopped. On
-  that fixture the omnibus statistic for a constant hazard ratio is **52.09**
+  that fixture the omnibus statistic for a constant hazard ratio is **53.38**
   under `"UN"`, **57.28** under `"HCS"` and **40.58** under `"DIAG"` — the
   conclusion survives the spread, the number does not. Those three numbers used
   to be quoted inside the boundary warning from a manual run; the warning now
@@ -1312,7 +1312,7 @@ the entry or the page named.
   boundary where one correlation is 1; the likelihood is flat along the ridge,
   and every statistic that contrasts intervals depends on where the optimiser
   stopped. The omnibus test of a constant hazard ratio is 40.6 with
-  `struct="DIAG"`, 52.1 with `"UN"` and 57.3 with `"HCS"`. The qualitative
+  `struct="DIAG"`, 53.4 with `"UN"` and 57.3 with `"HCS"`. The qualitative
   answer survives that spread; the number does not, so a fit with a boundary
   correlation now warns and quotes the three values.
 

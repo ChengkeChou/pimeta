@@ -55,7 +55,7 @@ Two limitations are deliberate and worth stating:
   correlation is :math:`\\pm 1`; the likelihood is then flat along a ridge and
   every statistic that contrasts intervals — the omnibus test especially —
   depends on where the optimiser stopped.  On the shipped 16-study fixture the
-  omnibus statistic is 40.6 with ``struct="DIAG"``, 52.1 with ``"UN"`` and 57.3
+  omnibus statistic is 40.6 with ``struct="DIAG"``, 53.4 with ``"UN"`` and 57.3
   with ``"HCS"``: the qualitative answer survives, the number does not, and a
   fit with a boundary correlation warns.  :func:`contrast_trend` avoids the
   problem instead of reporting around it: it never forms the covariance.
@@ -917,7 +917,7 @@ def piecewise_joint(time, event, *, study, treat, breaks, rho=None,
                 "between-study covariance is singular and any joint test that "
                 "contrasts the intervals is decided by where on that ridge the "
                 "optimiser stopped: on the shipped fixture struct='UN' gives "
-                "chi2 = 52.1 for a constant hazard ratio where struct='HCS' "
+                "chi2 = 53.4 for a constant hazard ratio where struct='HCS' "
                 "gives 57.3 and struct='DIAG' gives 40.6.  The qualitative "
                 "answer survives that spread; the statistic does not.  "
                 "structure_sensitivity() recomputes the spread for this fit",

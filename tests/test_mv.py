@@ -436,3 +436,40 @@ def test_rho_sensitivity_round_trips_through_a_record(tmp_path):
         [0.0, 0.5], rel=EXACT)
     assert np.asarray(loaded.results["values"]["estimate"]) == pytest.approx(
         np.asarray(res.estimate), rel=EXACT)
+
+
+# -- the correlation cone: box bounds do not imply positive definiteness ----- #
+
+def test_the_un_cone_check_distinguishes_valid_from_indefinite():
+    """Two correlations at 1 and a third negative is not a correlation matrix."""
+    from pimeta.rma_mv import _UNComp
+
+    comp = _UNComp(np.array([0, 1, 2]), np.array([0, 0, 0]), 3)
+    # parameters: tau2 (3), then rho in column-major lower-triangular order
+    good = np.array([0.1, 0.1, 0.1, 0.5, 0.5, 0.0])
+    bad = np.array([0.1, 0.1, 0.1, 1.0 - 1e-9, 1.0 - 1e-9, -0.2])
+    assert comp.is_valid(good) is True
+    assert comp.is_valid(bad) is False
+
+
+def test_the_cholesky_vector_round_trips_through_tau2_and_rho():
+    """The parametrisation the free path optimises over is a bijection."""
+    from pimeta.rma_mv import _UNComp
+
+    comp = _UNComp(np.array([0, 1, 2]), np.array([0, 0, 0]), 3)
+    p = np.array([0.04, 0.09, 0.16, 0.6, -0.3, 0.2])
+    l = comp.to_chol_vec(p)
+    assert l.shape == (6,)
+    back = comp.from_chol_vec(l)
+    assert back == pytest.approx(p, abs=1e-9)
+
+
+def test_an_invalid_point_is_snapped_into_the_cone_for_the_conversion():
+    """``to_chol_vec`` has to work for any initial value, valid or not."""
+    from pimeta.rma_mv import _UNComp
+
+    comp = _UNComp(np.array([0, 1, 2]), np.array([0, 0, 0]), 3)
+    bad = np.array([0.1, 0.1, 0.1, 0.99, 0.99, -0.5])
+    l = comp.to_chol_vec(bad)
+    back = comp.from_chol_vec(l)
+    assert comp.is_valid(back) is True

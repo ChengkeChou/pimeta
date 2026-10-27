@@ -311,7 +311,7 @@ Already there, in more depth than "pool a log hazard ratio":
   correlation per interval pair from a handful of studies, and on the shipped
   fixture one correlation reaches 0.9998: the covariance is then singular and
   the *statistic* is decided by where the optimiser stopped on the ridge. The
-  omnibus statistic for "the hazard ratio is constant" takes 52.09, 57.28 and
+  omnibus statistic for "the hazard ratio is constant" takes 53.38, 57.28 and
   40.58 under the three structures — the conclusion is the same, the number is
   not. `structure_sensitivity()` computes that spread for the fit at hand
   instead of quoting it, and `piecewise_joint` warns when the correlation is at
@@ -352,7 +352,7 @@ correlation is not always identifiable: with few studies `Sigma` lands on a
 boundary where one correlation is ±1, the likelihood is flat along a ridge, and
 every statistic that contrasts intervals depends on where the optimiser
 stopped. On the 16-study fixture the omnibus statistic is 40.6 with
-`struct="DIAG"`, 52.1 with `"UN"` and 57.3 with `"HCS"` — the qualitative answer
+`struct="DIAG"`, 53.4 with `"UN"` and 57.3 with `"HCS"` — the qualitative answer
 survives that spread, the number does not, and a fit with a boundary
 correlation warns.
 

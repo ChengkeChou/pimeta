@@ -282,7 +282,7 @@ def test_the_record_and_the_text(joint_diag):
 
 
 def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
-    """The warning quotes 52.1 / 57.3 / 40.6; those have to be computed.
+    """The warning quotes 53.4 / 57.3 / 40.6; those have to be computed.
 
     A sentence in a warning is a claim like any other.  This is the
     recomputation the warning points at, so the three numbers are checked
@@ -291,7 +291,7 @@ def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
     out = joint_un.structure_sensitivity()
     by = out["by_struct"]
     assert set(by) == {"UN", "HCS", "DIAG"}
-    assert by["UN"]["tests"]["any"]["stat"] == pytest.approx(52.09, abs=0.05)
+    assert by["UN"]["tests"]["any"]["stat"] == pytest.approx(53.38, abs=0.05)
     assert by["HCS"]["tests"]["any"]["stat"] == pytest.approx(57.28, abs=0.05)
     assert by["DIAG"]["tests"]["any"]["stat"] == pytest.approx(40.58, abs=0.05)
     # the spread is exactly what the per-structure stats say it is

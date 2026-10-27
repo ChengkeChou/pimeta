@@ -901,6 +901,88 @@ class _UNComp:
             + [(-1.0 + 1e-9, 1.0 - 1e-9)] * self._n_free_rho
         )
 
+    # -- the correlation cone: checking it, and staying inside it ---------- #
+    def corr_matrix(self, p: np.ndarray) -> np.ndarray:
+        """The implied correlation matrix, without checking whether it is one."""
+        R = np.eye(self.J)
+        rho = self._full_rho(p)
+        for k, (i, j) in enumerate(self._rho_pairs):
+            R[i, j] = R[j, i] = rho[k]
+        return R
+
+    def is_valid(self, p: np.ndarray) -> bool:
+        """Whether the implied correlation matrix is positive definite.
+
+        The per-pair box bounds are necessary and not sufficient: with three or
+        more inner levels a vector of correlations that is inside ``(-1, 1)``
+        term by term can still imply an indefinite ``R``, and the likelihood is
+        then evaluated at a point that is not a covariance matrix at all.
+        Nothing in the box constraint stops the optimiser walking there, which
+        is how a fit can end up reporting two correlations of exactly one and a
+        third one negative.
+        """
+        if self._n_free_rho == 0:
+            return True
+        try:
+            np.linalg.cholesky(self.corr_matrix(p))
+        except np.linalg.LinAlgError:
+            return False
+        return True
+
+    def to_chol_vec(self, p: np.ndarray) -> np.ndarray:
+        """External ``(tau2, rho)`` -> the column-major lower Cholesky vector.
+
+        Only meaningful when every parameter is free: ``G = L L'`` is then
+        positive semidefinite by construction for any ``L``, the map is smooth
+        everywhere including the boundary, and a variance going to zero is the
+        corresponding row of ``L`` going to zero -- no dangling correlations.
+        """
+        tau2 = self._full_tau2(p)
+        rho = self._full_rho(p)
+        sd = np.sqrt(np.maximum(tau2, 1e-6))
+        R = np.eye(self.J)
+        for k, (i, j) in enumerate(self._rho_pairs):
+            R[i, j] = R[j, i] = rho[k]
+        eigenvalues, eigenvectors = np.linalg.eigh(R)
+        if eigenvalues.min() < 1e-4:
+            # an invalid starting point is snapped to the cone, because the
+            # conversion has to be possible for any ``init``
+            eigenvalues = np.maximum(eigenvalues, 1e-4)
+            R = eigenvectors @ np.diag(eigenvalues) @ eigenvectors.T
+            d = np.sqrt(np.diag(R))
+            R = R / np.outer(d, d)
+        L = np.linalg.cholesky(np.outer(sd, sd) * R)
+        return np.array([L[i, j] for j in range(self.J)
+                         for i in range(j, self.J)], dtype=float)
+
+    def from_chol_vec(self, l_vec: np.ndarray) -> np.ndarray:
+        """The Cholesky vector -> external ``(tau2, rho)``."""
+        L = np.zeros((self.J, self.J))
+        idx = 0
+        for j in range(self.J):
+            for i in range(j, self.J):
+                L[i, j] = l_vec[idx]
+                idx += 1
+        G = L @ L.T
+        tau2 = np.diag(G).copy()
+        sd = np.sqrt(tau2)
+        rho = np.zeros(self._n_rho)
+        for k, (i, j) in enumerate(self._rho_pairs):
+            denom = sd[i] * sd[j]
+            if denom > 1e-12:
+                rho[k] = float(np.clip(G[i, j] / denom, -1.0, 1.0))
+        out = np.zeros(self._n_free_tau2 + self._n_free_rho)
+        out[: self._n_free_tau2] = tau2[self._free_tau2]
+        out[self._n_free_tau2:] = rho[self._free_rho]
+        return out
+
+    def chol_bounds(self) -> list:
+        """Bounds for the Cholesky vector: non-negative diagonal, free elsewhere."""
+        return (
+            [(0.0, None)] * self._n_free_tau2
+            + [(None, None)] * self._n_free_rho
+        )
+
     def report(self, p: np.ndarray):
         tau2 = [float(x) for x in self._full_tau2(p)]
         rho = [float(x) for x in self._full_rho(p)]
@@ -1245,8 +1327,20 @@ def rma_mv(
         D_list = []
         offset = 0
         for c in components:
-            D_list.append(c.make_D(params[offset : offset + c.n_params]))
+            piece = params[offset : offset + c.n_params]
             offset += c.n_params
+            valid = getattr(c, "is_valid", None)
+            if valid is not None and not valid(piece):
+                # Only reachable when parameters are pinned (the free path is
+                # optimised on the Cholesky vector, which cannot leave the
+                # cone).  A smooth quadratic barrier pushes the iterate back
+                # inside instead of a hard wall, which would stall the line
+                # search on a non-smooth cliff.
+                lam = float(np.linalg.eigvalsh(c.corr_matrix(piece))[0])
+                if lam <= 1e-6:
+                    return 1e5 + 1e7 * (1e-6 - lam) ** 2
+                return 1e5
+            D_list.append(c.make_D(piece))
         return _mv_loglik(D_list, Y, V, X, method)
 
     if sigma2 is not None:
@@ -1273,8 +1367,31 @@ def rma_mv(
                 [b for b, pin in zip(bounds, pinned) if not pin],
                 components, minimize, minimize_scalar))
     else:
-        params = _mv_optimise(
-            obj, init, bounds, components, minimize, minimize_scalar)
+        # The free path optimises the Cholesky vector ``G = L L'``: every
+        # ``L`` gives a positive semidefinite covariance by construction, the
+        # map is smooth all the way to the boundary, and a variance going to
+        # zero is the corresponding row of ``L`` going to zero.  This is the
+        # parametrisation metafor uses internally, and it is what keeps a fit
+        # from reporting a correlation matrix with negative eigenvalues.  The
+        # external ``(tau2, rho)`` vector is only assembled afterwards.
+        #
+        # Only needed for J >= 3: with two inner levels the single correlation
+        # and its box bounds already describe the cone, and keeping the old
+        # surface there preserves the measured parity with metafor exactly.
+        free_un = [c for c in components
+                   if getattr(c, "kind", None) == "un" and c.J >= 3
+                   and not np.any(c._fixed_tau2)
+                   and not np.any(c._fixed_rho)]
+        if len(components) == 1 and len(free_un) == 1:
+            comp = free_un[0]
+            l0 = comp.to_chol_vec(init)
+            l_opt = _mv_optimise(
+                lambda l: obj(comp.from_chol_vec(l)),
+                l0, comp.chol_bounds(), components, minimize, minimize_scalar)
+            params = comp.from_chol_vec(l_opt)
+        else:
+            params = _mv_optimise(
+                obj, init, bounds, components, minimize, minimize_scalar)
 
     # final fit at the optimum
     D_list = []
