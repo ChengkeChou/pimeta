@@ -13,25 +13,18 @@ hazard ratio that **falls** over follow-up.  The points of the design:
 * each study has its own baseline hazard (``base = 0.08`` with a lognormal
   study effect of SD 0.3) and censoring is exponential with mean 40 months, so
   the intervals do not all carry the same amount of information;
-* the seed is chosen so that the unstructured between-study covariance lands on
-  the correlation boundary.  That is deliberate: the boundary is the case the
-  warning and ``structure_sensitivity()`` exist for, and a fixture without it
-  would never exercise that path.  It is a property of the fixture, not a claim
-  about the method — the fitted statistic is whatever the ridge makes it, which
-  is exactly what the module says out loud.
+* the seed is chosen because it once exposed a defect in the unstructured
+  fit: on these bytes the old per-pair box-bounds parameterisation reported
+  ``rho = (1.000, 1.000, -0.203)`` — not a correlation matrix — where
+  ``metafor::rma.mv`` reports ``(0.864, 0.637, 0.163)``.  Under the
+  Cholesky parameterisation the fit agrees with metafor to six decimals and
+  sits in the interior of the correlation cone, which is why the boundary
+  warning is exercised by a separate synthetic case in the tests instead of
+  by this fixture.
 
 The reference numbers in ``tests/test_tvhr_joint.py`` come from
 ``tools/r_reference/tvhr_piecewise.R``, which rebuilds the split-follow-up
 design, fits each study with ``glm.fit`` and pools with ``metafor::rma.mv``.
-
-History: the seed below used to expose a defect.  ``rma_mv(struct="UN")``
-once bounded each correlation to (-1, 1) *per pair*, which does not keep the
-implied matrix positive definite, and on these bytes the fit reported
-``rho = (1.000, 1.000, -0.203)`` — not a correlation matrix — where
-``metafor::rma.mv`` reports ``(0.864, 0.637, 0.163)``.  Since the Cholesky
-parametrisation landed (the fit now agrees with metafor to six decimals on
-these exact bytes), this file is a generator again: the seed is kept as the
-regression case for that defect.
 
 Usage::
 

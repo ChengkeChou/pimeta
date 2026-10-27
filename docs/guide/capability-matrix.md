@@ -308,11 +308,13 @@ Already there, in more depth than "pool a log hazard ratio":
   `structure_sensitivity()` refits the same stacked data under `"UN"`,
   `"HCS"` and `"DIAG"` and reports the trend statistics under each. That
   exists because the unstructured between-study covariance estimates a
-  correlation per interval pair from a handful of studies, and on the shipped
-  fixture one correlation reaches 0.9998: the covariance is then singular and
-  the *statistic* is decided by where the optimiser stopped on the ridge. The
-  omnibus statistic for "the hazard ratio is constant" takes 53.38, 57.28 and
-  40.58 under the three structures — the conclusion is the same, the number is
+  correlation per interval pair from a handful of studies, and with few
+  studies a correlation can land on the +/-1 boundary: the covariance is then
+  singular and the *statistic* is decided by where the optimiser stopped on
+  the ridge. On the regenerated fixture the UN fit is interior (rho 0.864,
+  0.637, 0.163) and the omnibus statistic for "the hazard ratio is constant"
+  takes 46.75, 51.53 and 40.94 under the three structures — the conclusion is
+  the same, the number is
   not. `structure_sensitivity()` computes that spread for the fit at hand
   instead of quoting it, and `piecewise_joint` warns when the correlation is at
   the boundary.
@@ -351,8 +353,9 @@ same problem as choosing the number of spline knots. And the between-study
 correlation is not always identifiable: with few studies `Sigma` lands on a
 boundary where one correlation is ±1, the likelihood is flat along a ridge, and
 every statistic that contrasts intervals depends on where the optimiser
-stopped. On the 16-study fixture the omnibus statistic is 40.6 with
-`struct="DIAG"`, 53.4 with `"UN"` and 57.3 with `"HCS"` — the qualitative answer
+stopped. On the regenerated 16-study fixture the UN fit is interior (rho
+0.864, 0.637, 0.163) and the omnibus statistic is 40.94 with
+`struct="DIAG"`, 46.75 with `"UN"` and 51.53 with `"HCS"` — the qualitative answer
 survives that spread, the number does not, and a fit with a boundary
 correlation warns.
 
@@ -360,8 +363,11 @@ Pinned by `tests/test_tvhr.py` against `glm(family = poisson)` in R and then
 `metafor::rma` per interval, and by `tests/test_tvhr_joint.py` against
 `metafor::rma.mv` on the stacked block: coefficients to 1e-6, the per-study
 sampling covariance to 1e-8, the diagonal pooling to 1e-6. The unstructured
-pooling is pinned only to 1e-3, and the test says why — that fit is on the
-ridge. One detail worth knowing: R's default `epsilon = 1e-8` leaves the GLM
+pooling is pinned to 1e-6 as well, since the Cholesky parameterisation of the
+between-study covariance fits inside the correlation cone — an earlier fixture
+sat on the boundary (rho 0.9998), where two correct optimisers can stop at
+different points on the ridge, and was pinned to 1e-3 with the test saying
+why. One detail worth knowing: R's default `epsilon = 1e-8` leaves the GLM
 standard errors off by 1.4e-5, so the reference is generated with
 `epsilon = 1e-14`; the difference looks like an implementation gap and is a
 convergence tolerance.

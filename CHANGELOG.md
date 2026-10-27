@@ -46,15 +46,16 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
   the trend statistics under each, with the smallest and largest value every
   statistic takes across the structures that converge. With three intervals the
   unstructured between-study covariance estimates one correlation per interval
-  pair from a handful of studies, and on the shipped fixture one of them reaches
-  0.9998: the covariance is singular, and any joint test that contrasts the
-  intervals is then decided by where on that ridge the optimiser stopped. On
-  that fixture the omnibus statistic for a constant hazard ratio is **53.38**
-  under `"UN"`, **57.28** under `"HCS"` and **40.58** under `"DIAG"` — the
-  conclusion survives the spread, the number does not. Those three numbers used
-  to be quoted inside the boundary warning from a manual run; the warning now
-  points at this method, which computes them for the fit at hand (0.09 s for
-  three refits on the 16-study fixture).
+  pair from a handful of studies. On the regenerated fixture the UN fit is
+  interior (rho 0.864 / 0.637 / 0.163) and the omnibus statistic for a
+  constant hazard ratio is **46.75** under `"UN"`, **51.53** under `"HCS"`
+  and **40.94** under `"DIAG"` — the conclusion survives the spread, the
+  number does not. When a fit does land on the ridge (a correlation at
+  +/-1) the covariance is singular and any joint test that contrasts the
+  intervals is decided by where on that ridge the optimiser stopped. Those
+  three numbers used to be quoted inside the boundary warning from a manual
+  run; the warning now points at this method, which computes them for the fit
+  at hand (0.09 s for three refits on the 16-study fixture).
 
 ### Changed
 

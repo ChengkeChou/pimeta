@@ -26,10 +26,10 @@ MANIFEST = DATA / "MANIFEST.json"
 ORIGINS = {"generated", "r-reference", "upstream", "unverified"}
 
 #: The files whose origin this repository cannot state. Pinned deliberately:
-#: see the module docstring.
-UNVERIFIED = {
-    "tvhr_piecewise.csv",
-}
+#: see the module docstring. Empty means every fixture names its source — the
+#: last one (tvhr_piecewise.csv) gained a reproducible generator in
+#: tools/make_tvhr_piecewise_fixture.py.
+UNVERIFIED: set[str] = set()
 
 
 @pytest.fixture(scope="module")

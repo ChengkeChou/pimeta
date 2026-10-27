@@ -93,7 +93,7 @@ diag_fit <- pooled("DIAG")
 cat("## struct = DIAG\n")
 cat("beta  ", sprintf("%.10f", as.numeric(diag_fit$beta)), "\n")
 cat("se    ", sprintf("%.10f", as.numeric(diag_fit$se)), "\n")
-cat("tau2  ", sprintf("%.10f", diag_fit$sigma2), "\n")
+cat("tau2  ", sprintf("%.10f", diag(as.matrix(diag_fit$G))), "\n")
 cat("loglik", sprintf("%.10f", as.numeric(diag_fit$ll)), "\n")
 
 un_fit <- pooled("UN")
@@ -113,3 +113,4 @@ cat("linear est", sprintf("%.10f", sum(w * b)),
 cat("## versions\n")
 cat("metafor", as.character(packageVersion("metafor")), "| R",
     as.character(getRversion()), "\n")
+

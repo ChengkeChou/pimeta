@@ -50,21 +50,21 @@ pytestmark = pytest.mark.filterwarnings(
 
 # --- R 4.6.1, metafor 5.2.1, glm(epsilon = 1e-14) ------------------------
 # study 1's own fit
-R_STUDY1_LOG_HR = [0.4767983343, -0.1539744094, 0.0042736336]
-R_STUDY1_VAR = [0.0174375094, 0.0678685048, 0.1388888889]
+R_STUDY1_LOG_HR = [0.6800604831, 0.0141478177, -0.9486947629]
+R_STUDY1_VAR = [0.0139124693, 0.1096491228, 1.0769230140]
 
 # struct = "DIAG"
-R_DIAG_BETA = [0.5909320230, 0.2412065871, -0.0170264305]
-R_DIAG_SE = [0.0522384335, 0.0609400437, 0.0906407100]
-R_DIAG_TAU2 = [0.0212932560, 0.0000000001, 0.0247566031]
+R_DIAG_BETA = [0.5961074003, 0.3032869464, 0.0115939110]
+R_DIAG_SE = [0.0395647069, 0.0906328360, 0.0875751756]
+R_DIAG_TAU2 = [0.0020457485, 0.0643426252, 0.0249968596]
 
 # struct = "UN"
-R_UN_BETA = [0.5920080021, 0.2435418923, -0.0165547592]
-R_UN_SE = [0.0532022401, 0.0702545423, 0.0911177147]
-R_UN_TAU2 = [0.0230038320, 0.0194281842, 0.0263449990]
-R_UN_RHO = [0.9997975338, 0.6503201172, 0.6654742678]
-R_UN_LINEAR_EST = -0.6085627613
-R_UN_LINEAR_SE = 0.0957289176
+R_UN_BETA = [0.5967206352, 0.3019390169, 0.0185415573]
+R_UN_SE = [0.0448007131, 0.0918549205, 0.0897311465]
+R_UN_TAU2 = [0.0089367745, 0.0680171949, 0.0309306430]
+R_UN_RHO = [0.8643335600, 0.6371967341, 0.1631502686]
+R_UN_LINEAR_EST = -0.5781790779
+R_UN_LINEAR_SE = 0.0938046536
 
 
 @pytest.fixture(scope="module")
@@ -90,7 +90,11 @@ def test_the_per_study_stage_matches_r(separate):
     assert list(separate.log_hr[0]) == pytest.approx(R_STUDY1_LOG_HR,
                                                      rel=1e-8)
     var = np.diag(np.asarray(separate.cov_hr)[0])
-    assert list(var) == pytest.approx(R_STUDY1_VAR, rel=1e-8)
+    # rel 1e-6, not 1e-8: the third interval carries few events, and there the
+    # two IRLS stopping rules leave the variance differing in the eighth digit
+    # (1.0769230769 against R's 1.0769230140).  The log HRs themselves agree
+    # to 1e-8, so this is a convergence tolerance, not a model difference.
+    assert list(var) == pytest.approx(R_STUDY1_VAR, rel=1e-6)
 
 
 def test_the_per_study_covariance_is_diagonal(separate):
@@ -122,26 +126,22 @@ def test_the_diagonal_fit_matches_metafor(joint_diag):
 
 
 def test_the_unstructured_fit_matches_metafor_loosely(joint_un):
-    """Tolerance 1e-3, because this fit sits on the correlation ridge.
+    """Six-decimal agreement with metafor's UN fit.
 
-    ``rho`` between the first two intervals is 0.9998 under metafor and
-    0.9999999 under pimeta: two correct implementations stopping at different
-    points on the same ridge.  Pinning this to 1e-6 would pin the optimiser.
+    Older fixtures put this fit on the correlation ridge (rho 0.9998), where
+    two correct optimisers can stop at different points.  The regenerated
+    fixture sits well inside the cone (rho 0.864 / 0.637 / 0.163), so the
+    Cholesky parameterisation reproduces metafor to six decimals.  The test
+    name keeps "loosely" as a reminder of why the ridge used to matter.
     """
-    assert joint_un.beta == pytest.approx(R_UN_BETA, abs=1e-3)
-    assert joint_un.se == pytest.approx(R_UN_SE, abs=1e-3)
-    assert joint_un.tau2 == pytest.approx(R_UN_TAU2, abs=1e-3)
+    assert joint_un.beta == pytest.approx(R_UN_BETA, abs=1e-6)
+    assert joint_un.se == pytest.approx(R_UN_SE, abs=1e-6)
+    assert joint_un.tau2 == pytest.approx(R_UN_TAU2, abs=1e-6)
     sd = np.sqrt(np.diag(joint_un.Sigma))
     rho = (joint_un.Sigma / np.outer(sd, sd))[np.triu_indices(3, 1)]
-    # the first correlation is the one that can be pinned: both implementations
-    # put it at 1, which is where the ridge is
-    assert rho[0] == pytest.approx(1.0, abs=1e-3)
-    # the other two cannot.  On that ridge they trade off, and the two
-    # implementations differ by 0.02 and 0.11 (pimeta 0.628 / 0.774 against
-    # metafor 0.650 / 0.665).  Asserting 1e-2 here would pin the optimiser,
-    # so the tolerance is what separates "the same model" from "the same
-    # number", and only the first of those is true.
-    assert rho[1:] == pytest.approx(R_UN_RHO[1:], abs=0.12)
+    assert rho == pytest.approx(R_UN_RHO, abs=1e-5)
+    # the matrix is a correlation matrix: Cholesky, not clipping
+    np.linalg.cholesky(joint_un.Sigma / np.outer(sd, sd))
 
 
 def test_the_linear_trend_matches_metafor(joint_un):
@@ -177,7 +177,7 @@ def test_the_omnibus_test_has_two_degrees_of_freedom(joint_un):
 
 
 def test_a_declining_hazard_ratio_is_detected(joint_diag, joint_un):
-    """The fixture's hazard ratio really does fall: 1.81, 1.27, 0.98."""
+    """The fixture's hazard ratio really does fall: 1.82, 1.35, 1.01."""
     for fit in (joint_diag, joint_un):
         assert fit.trend_test("any")["pval"] < 1e-6
         assert fit.trend_test("linear")["pval"] < 1e-6
@@ -225,8 +225,18 @@ def test_the_answer_does_not_depend_on_the_covariance_structure():
 
 
 def test_a_boundary_correlation_warns():
+    """A synthetic fit whose correlations hit the cone boundary warns.
+
+    The shipped fixture now fits in the interior of the correlation cone
+    (rho 0.864 / 0.637 / 0.163), so it no longer exercises the warning.
+    Seed 105 of the constant-effect simulation does: its UN optimum sits on
+    the ridge, and the fit is reported with a RuntimeWarning instead of
+    silently returning a covariance that is not positive definite.
+    """
+    time, event, study, treat = _simulate([0.35, 0.35, 0.35], seed=105,
+                                          k=14, n=250)
     with pytest.warns(RuntimeWarning, match="ridge"):
-        ma.piecewise_joint(TIME, EVENT, study=STUDY, treat=TREAT,
+        ma.piecewise_joint(time, event, study=study, treat=treat,
                            breaks=BREAKS, struct="UN")
 
 
@@ -282,7 +292,7 @@ def test_the_record_and_the_text(joint_diag):
 
 
 def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
-    """The warning quotes 53.4 / 57.3 / 40.6; those have to be computed.
+    """The warning quotes 46.8 / 51.5 / 40.9; those have to be computed.
 
     A sentence in a warning is a claim like any other.  This is the
     recomputation the warning points at, so the three numbers are checked
@@ -291,9 +301,9 @@ def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
     out = joint_un.structure_sensitivity()
     by = out["by_struct"]
     assert set(by) == {"UN", "HCS", "DIAG"}
-    assert by["UN"]["tests"]["any"]["stat"] == pytest.approx(53.38, abs=0.05)
-    assert by["HCS"]["tests"]["any"]["stat"] == pytest.approx(57.28, abs=0.05)
-    assert by["DIAG"]["tests"]["any"]["stat"] == pytest.approx(40.58, abs=0.05)
+    assert by["UN"]["tests"]["any"]["stat"] == pytest.approx(46.75, abs=0.05)
+    assert by["HCS"]["tests"]["any"]["stat"] == pytest.approx(51.53, abs=0.05)
+    assert by["DIAG"]["tests"]["any"]["stat"] == pytest.approx(40.94, abs=0.05)
     # the spread is exactly what the per-structure stats say it is
     stats = [r["tests"]["any"]["stat"] for r in by.values()]
     assert out["spread"]["any"]["min"] == pytest.approx(min(stats), rel=1e-12)
@@ -303,11 +313,23 @@ def test_the_structure_sensitivity_reproduces_the_warning(joint_un):
         joint_un.trend_test("linear")["stat"], rel=1e-8)
 
 
-def test_the_diagonal_structure_cannot_sit_on_the_ridge(joint_un):
-    """The ridge is a property of ``UN``, which is why the spread exists."""
+def test_the_shipped_fit_is_interior_but_a_ridge_case_still_flags(joint_un):
+    """The boundary flag is a property of the data, not of ``UN``.
+
+    The regenerated fixture fits in the interior of the correlation cone, so
+    no structure flags a boundary.  The ridge is still reachable — seed 105
+    of the constant-effect simulation puts the ``UN`` optimum on it — and the
+    flag must fire there, which is what the spread and the warning exist for.
+    """
     by = joint_un.structure_sensitivity()["by_struct"]
-    assert by["UN"]["boundary"] is True
+    assert by["UN"]["boundary"] is False
     assert by["DIAG"]["boundary"] is False
+
+    time, event, study, treat = _simulate([0.35, 0.35, 0.35], seed=105,
+                                          k=14, n=250)
+    ridge = ma.piecewise_joint(time, event, study=study, treat=treat,
+                               breaks=BREAKS)
+    assert ridge.structure_sensitivity()["by_struct"]["UN"]["boundary"] is True
 
 
 def test_every_structure_agrees_the_hazard_ratio_falls(joint_un):

@@ -141,6 +141,16 @@ ORIGIN: dict[str, dict[str, Any]] = {
                 "and tools/r_reference/onestage_slopes.R recomputes every "
                 "pinned number with lme4",
     },
+    "tvhr_piecewise.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_tvhr_piecewise_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "16 simulated studies of 400 participants with a hazard "
+                "ratio that falls from exp(0.60) to exp(0) over 24 months; "
+                "the generator fixes the seed and --check reproduces the "
+                "bytes, and tools/r_reference/tvhr_piecewise.R recomputes "
+                "every pinned number with glm and metafor::rma.mv",
+    },
     "_r_senn2013.tsv": {
         "origin": "r-reference",
         "produced_by": "tools/r_reference/netmeta_senn2013.R",
@@ -187,16 +197,7 @@ ORIGIN: dict[str, dict[str, Any]] = {
 
 #: Fixtures whose origin is not recorded. Pinned by a test so the list can only
 #: shrink by recording a source, and can only grow by someone editing this file.
-UNVERIFIED = (
-    # The one remaining.  Its *reference* is now reproducible:
-    # tools/r_reference/tvhr_piecewise.R rebuilds the split-follow-up design,
-    # fits each study with glm.fit on an explicit design matrix and pools with
-    # metafor::rma.mv, matching every pinned constant to 1e-9.  What is still
-    # missing is the generator: the file was simulated by a script that was not
-    # kept, and none of the seeds tried reproduces its bytes.  Recording it as
-    # "generated" without that would be a claim this repository cannot support.
-    "tvhr_piecewise.csv",
-)
+UNVERIFIED = ()
 
 _ORIGINS = ("generated", "r-reference", "upstream", "unverified")
 
