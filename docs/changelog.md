@@ -8,6 +8,44 @@ and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.
 
 ### Added
 
+- `tau_trend(tau="spline")`: a spline scale for the dynamic-heterogeneity model,
+  built so that the shape is estimated with **one** hyperparameter instead of
+  `nk - 2` free coefficients. The restricted cubic spline's non-linear columns
+  are projected off `[1, t]` and Gram-Schmidt'ed, so `B'B = I` and
+  `B'[1, t] = 0`: the level and the linear trend keep their own coefficients,
+  and a single ridge weight `1/sigma_s^2` shrinks every bending direction
+  equally. `sigma_s` is estimated by the Laplace approximation to the marginal
+  likelihood, which is the P-spline-as-mixed-model estimator (Eilers & Marx
+  1996); profiling the *penalised* objective over `sigma_s` would not work,
+  because the penalty is smallest at `gamma = 0` and the fit would always
+  report the linear model. The effective degrees of freedom
+  `edf = tr((J + lambda I)^-1 J)` is reported and folded into the scale
+  reference: `df_alpha = k - 2 - round(edf)`, and the likelihood-ratio test of
+  "the scale does not change with time" uses `chi2` with `1 + edf` degrees of
+  freedom. A penalised spline deliberately has **no Wald test** — there is no
+  fixed number of coefficients to form one from — and asking for one raises
+  with that explanation. Measured on two committed fixtures: on `dynhet.csv`
+  (linear truth) it collapses to the linear fit exactly (`sigma_s = 0.001` at
+  the search bound, `edf = 0`, identical log-likelihood); on the new
+  `dynhet_spline.csv` (a bump: `tau^2` 0.050 at the ends, 0.246 in the middle)
+  it finds the bump where the linear model sees nothing (loglik −8.29 against
+  −11.58), with `sigma_s = 4.12`, `edf = 1.53` and an LRT of 6.73 on 2.53 df
+  (p = 0.057 — a shallow bump in 60 studies should be borderline). Cross-checked
+  against Stan: `tools/r_reference/tau2t_spline.{stan,R}` fits the same model on
+  the same basis in CmdStan 2.40.0 (half-normal(5) prior on `sigma_s`, so the
+  comparison is of estimators and not of priors) and agrees on the level
+  (−3.061 against −3.063), the trend (−0.0061 against −0.0053) and the shape,
+  while `sigma_s` agrees only to about 30 % (4.60 against 4.12) — it is the
+  weakly identified direction and the posterior's own SD of 2.6 says so.
+  `bayes_tau_trend(tau="spline")` refuses and points at that Stan reference,
+  because the package's random-walk sampler is not written for a wiggliness
+  hyperparameter.
+- `tools/make_dynhet_spline_fixture.py` and `tests/data/dynhet_spline.csv`: a
+  60-study fixture whose between-study variance is a bump in the middle of the
+  time range, with `--check` byte reproducibility. It exists because the linear
+  fixture cannot test a spline — its heterogeneity really does trend linearly,
+  so the spline correctly collapses and no test of the wiggliness path is
+  possible on it.
 - `ma.mv.kenward_roger_region`: Kenward–Roger denominator degrees of freedom
   for a joint region, computed from the variance parameters instead of charging
   them as if they were free the way `k - p` does. The derivatives are taken by

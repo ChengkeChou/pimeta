@@ -42,6 +42,7 @@ from pimeta.dynamichet import (
     _design,
     _grad_alpha,
     _neg_loglik,
+    _spline_basis,
     bayes_tau_trend,
     tau_trend,
 )
@@ -49,6 +50,7 @@ from pimeta.dynamichet import (
 DATA = pathlib.Path(__file__).parent / "data" / "dynhet.csv"
 TRUTH = pathlib.Path(__file__).parent / "reference" / "dynhet_truth.json"
 MULTINMA = pathlib.Path(__file__).parent / "reference" / "dynhet_metafor.csv"
+SPLINE_DATA = pathlib.Path(__file__).parent / "data" / "dynhet_spline.csv"
 
 # exact posterior by quadrature, tools/quadrature_dynhet.py
 EXACT_ALPHA = np.array([-2.5562, 0.0956])
@@ -59,6 +61,34 @@ EXACT_TAU2_CENTRE = 0.0836
 
 #: metafor names its terms after the columns it was given
 R_NAMES = {"time": "year_c", "time^2": "year_c2", "intrcpt": "intrcpt"}
+
+# --- the bump fixture, frequency and Bayes ---------------------------------
+# pimeta's penalised fit on tests/data/dynhet_spline.csv, measured:
+SPLINE_ALPHA = [-3.0631900549350006, -0.005270274355615835,
+                -4.717910495153534, -1.45266348212426]
+SPLINE_SIGMA_S = 4.1212671509
+SPLINE_EDF = 1.5329199132
+SPLINE_LOGLIK = -8.2905903237
+SPLINE_LINEAR_LOGLIK = -11.5780538117
+SPLINE_LRT = 6.7262676732
+SPLINE_CURVE = [0.024993656043552866, 0.09448788959624178,
+                0.008875667242929965]        # at 1980, 1997.5, 2015
+
+# The same model in Stan (tools/r_reference/tau2t_spline.R, cmdstanr 0.9.0.9002
+# with CmdStan 2.40.0, 4 chains x 2000 draws after 2000 warmup, seed 1234,
+# adapt_delta 0.99, half-normal(5) prior on sigma_s so that the check is of the
+# estimator and not of the prior):
+STAN_A0 = -3.0612672364
+STAN_A0_SD = 0.3647899992
+STAN_A1 = -0.0061295207
+STAN_A1_SD = 0.0431843765
+STAN_SIGMA_S = 4.6005169645
+STAN_SIGMA_S_SD = 2.6287324424
+STAN_B0 = 0.2445982396
+STAN_B0_SD = 0.0365659125
+STAN_TAU2 = [0.0459424205, 0.1056788833, 0.0244893325]   # 1980, 1997.5, 2015
+STAN_TAU2_Q5 = [0.0028661401, 0.0511044738, 0.0003175569]
+STAN_TAU2_Q95 = [0.1428366075, 0.1940743659, 0.0927778195]
 
 
 def _fixture():
@@ -460,3 +490,165 @@ def test_exported_from_the_top_level_package():
     assert ma.bayes_tau_trend is bayes_tau_trend
     assert ma.TauTrendResult is TauTrendResult
     assert ma.BayesTauTrendResult is BayesTauTrendResult
+
+
+# --------------------------------------------------------------------------- #
+# the spline scale
+# --------------------------------------------------------------------------- #
+def _spline_fixture():
+    """The bump fixture: tau^2 low at both ends, high in the middle."""
+    rows = list(csv.DictReader(SPLINE_DATA.open(encoding="utf-8")))
+    y = np.array([float(r["yi"]) for r in rows])
+    v = np.array([float(r["vi"]) for r in rows])
+    t = np.array([float(r["year"]) for r in rows])
+    u = (t - t.min()) / (t.max() - t.min())
+    tau2 = np.exp(-3.0 + 1.6 * np.exp(-((u - 0.5) / 0.18) ** 2))
+    return y, v, t, tau2
+
+
+def test_the_bending_basis_is_orthonormal_and_orthogonal_to_the_linear_part():
+    y, v, t = _fixture()
+    basis = _spline_basis(t, float(t.mean()))
+    B = basis.bending(t)
+    assert B.shape == (t.size, 2)
+    assert B.T @ B == pytest.approx(np.eye(2), abs=1e-12)
+    linear = np.column_stack([np.ones(t.size), t - t.mean()])
+    assert B.T @ linear == pytest.approx(np.zeros((2, 2)), abs=1e-10)
+
+
+def test_the_bending_basis_evaluates_at_new_times_the_same_way_it_was_fitted():
+    """The stored transform, not a fresh Gram-Schmidt, defines the basis."""
+    y, v, t = _fixture()
+    basis = _spline_basis(t, float(t.mean()))
+    grid = np.linspace(t.min(), t.max(), 9)
+    B = basis.bending(grid)
+    # every column is orthogonal to the linear part *at those points* only
+    # approximately, but its norm must be O(1) and the curve must be smooth
+    assert np.all(np.isfinite(B))
+    assert np.all(np.abs(B) < 10.0)
+    assert np.max(np.abs(np.diff(B, axis=0))) < 1.0
+
+
+def test_the_spline_collapses_to_the_linear_fit_when_the_truth_is_linear():
+    """The fixture has a linear tau^2(t); the wiggliness must go to zero."""
+    y, v, t = _fixture()
+    linear = tau_trend(y, v, t, tau="linear")
+    spline = tau_trend(y, v, t, tau="spline")
+    assert spline.sigma_s is not None and spline.sigma_s <= 2e-3
+    assert spline.edf == pytest.approx(0.0, abs=1e-6)
+    assert spline.alpha[:2] == pytest.approx(linear.alpha, abs=1e-4)
+    assert spline.loglik == pytest.approx(linear.loglik, abs=1e-6)
+
+
+def test_the_spline_recovers_a_non_monotone_shape_the_linear_model_misses():
+    y, v, t, tau2 = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    linear = tau_trend(y, v, t, tau="linear")
+    assert spline.sigma_s is not None and spline.sigma_s > 0.5
+    assert spline.edf is not None and spline.edf > 0.5
+    assert spline.loglik > linear.loglik + 2.0
+    # the fitted curve peaks in the middle, where the truth does
+    grid = np.linspace(t.min(), t.max(), 9)
+    fitted = spline.predict(grid)["tau2"]
+    assert 3 <= int(np.argmax(fitted)) <= 5
+    assert fitted[4] > 1.5 * max(fitted[0], fitted[-1])
+
+
+def test_the_spline_spends_its_degrees_of_freedom_in_the_scale_tests():
+    y, v, t, _ = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    linear = tau_trend(y, v, t, tau="linear")
+    assert spline.df_alpha is not None and linear.df_alpha is not None
+    # edf is folded into the df: the scale reference loses what the spline spends
+    assert spline.df_alpha == pytest.approx(
+        spline.k - 2 - round(float(spline.edf)), abs=1)
+    assert spline.df_alpha < linear.df_alpha
+    out = spline.test_trend("lrt")
+    assert out["df1"] == pytest.approx(1.0 + float(spline.edf), abs=1e-6)
+    assert 0.0 <= out["p_value"] <= 1.0
+
+
+def test_a_penalised_spline_has_no_wald_test_and_says_so():
+    y, v, t, _ = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    with pytest.raises(ValueError, match="no fixed number of scale"):
+        spline.test_trend("wald")
+
+
+def test_a_spline_scale_needs_enough_studies_and_the_polynomial_mean():
+    y, v, t, _ = _spline_fixture()
+    with pytest.raises(ValueError, match="needs at least"):
+        tau_trend(y[:6], v[:6], t[:6], tau="spline")
+    with pytest.raises(ValueError, match="scale only"):
+        tau_trend(y, v, t, mu="spline")
+    # a 3-knot spline has one bending column and needs fewer studies; ten
+    # studies cannot pin the wiggliness, so the span warning fires and is
+    # expected here
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        small = tau_trend(y[:10], v[:10], t[:10], tau="spline", n_knots=3)
+    assert small.alpha.size == 3
+
+
+def test_the_spline_is_refused_by_the_gaussian_sampler():
+    y, v, t, _ = _spline_fixture()
+    with pytest.raises(ValueError, match="Stan reference"):
+        bayes_tau_trend(y, v, t, tau="spline")
+
+
+def test_the_spline_record_carries_the_knots_and_the_wiggliness():
+    y, v, t, _ = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    payload = spline.to_dict()
+    json.dumps(payload)
+    assert len(payload["knots"]) == 4
+    assert payload["sigma_s"] > 0.0
+    assert payload["edf"] > 0.0
+    assert spline.knots is not None and spline.knots.size == 4
+    assert "alpha.bend1" in str(spline)
+
+
+def test_the_penalised_fit_matches_the_committed_numbers():
+    """The spline fit itself, pinned on bytes and on one seed."""
+    y, v, t, _ = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    assert list(spline.alpha) == pytest.approx(SPLINE_ALPHA, abs=1e-8)
+    assert spline.sigma_s == pytest.approx(SPLINE_SIGMA_S, rel=1e-6)
+    assert spline.edf == pytest.approx(SPLINE_EDF, rel=1e-6)
+    assert spline.loglik == pytest.approx(SPLINE_LOGLIK, abs=1e-7)
+    linear = tau_trend(y, v, t, tau="linear")
+    assert linear.loglik == pytest.approx(SPLINE_LINEAR_LOGLIK, abs=1e-7)
+    out = spline.test_trend("lrt")
+    assert out["statistic"] == pytest.approx(SPLINE_LRT, abs=1e-6)
+    curve = spline.predict(np.array([1980.0, 1997.5, 2015.0]))["tau2"]
+    assert list(curve) == pytest.approx(SPLINE_CURVE, rel=1e-6)
+
+
+def test_the_penalised_fit_agrees_with_the_stan_posterior():
+    """Two estimators of one model: penalised REML against sampled Bayes.
+
+    The frequentist side is a Laplace-approximated marginal likelihood; the
+    Bayesian side is CmdStan on the same basis, with a half-normal(5) prior on
+    the wiggliness so that what is compared is the estimator and not a prior
+    that already knows the answer.  They agree on the level, the trend and the
+    shape.  `sigma_s` agrees only to about 30 %, which is the honest
+    statement: the wiggliness is the weakly identified direction and both
+    answers say so (the posterior SD of `sigma_s` is 2.6 on a mean of 4.6).
+    """
+    y, v, t, _ = _spline_fixture()
+    spline = tau_trend(y, v, t, tau="spline")
+    # a coefficient: 4 posterior standard errors, plus the Laplace error
+    assert spline.alpha[0] == pytest.approx(STAN_A0, abs=4 * STAN_A0_SD + 0.02)
+    assert spline.alpha[1] == pytest.approx(STAN_A1, abs=4 * STAN_A1_SD + 0.02)
+    assert spline.beta[0] == pytest.approx(STAN_B0, abs=4 * STAN_B0_SD + 0.02)
+    # the wiggliness: same order of magnitude, and the frequentist value inside
+    # one posterior standard deviation of the Bayesian mean
+    assert abs(spline.sigma_s - STAN_SIGMA_S) < STAN_SIGMA_S_SD
+    # the curve: the frequentist values lie inside the 90 % posterior interval
+    curve = spline.predict(np.array([1980.0, 1997.5, 2015.0]))["tau2"]
+    for j in range(3):
+        assert STAN_TAU2_Q5[j] <= curve[j] <= STAN_TAU2_Q95[j]
+        assert abs(float(curve[j]) - STAN_TAU2[j]) < 0.5 * STAN_TAU2[j] + 0.02
+    # both estimators put the peak in the middle, which is the substantive claim
+    assert STAN_TAU2[1] > STAN_TAU2[0] and STAN_TAU2[1] > STAN_TAU2[2]
+    assert curve[1] > curve[0] and curve[1] > curve[2]

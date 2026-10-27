@@ -1,5 +1,5 @@
 {
-  "count": 15,
+  "count": 16,
   "files": {
     "_konstantopoulos2011.csv": {
       "bytes": 1379,
@@ -54,6 +54,15 @@
       "origin": "generated",
       "produced_by": "tools/make_dynhet_fixture.py",
       "sha256": "4bdc2f1f931077ff200e33c308b9d2c1b0b8c5620054a167f8354ecc407609af"
+    },
+    "dynhet_spline.csv": {
+      "bytes": 2182,
+      "licence": "MIT",
+      "name": "dynhet_spline.csv",
+      "note": "60 studies whose between-study variance is a bump in the middle of the time range (0.050 at the ends, 0.246 at the centre), the shape a spline scale exists for; the generator fixes the seed and --check reproduces the bytes, and tools/r_reference/tau2t_spline.R refits the same model in Stan",
+      "origin": "generated",
+      "produced_by": "tools/make_dynhet_spline_fixture.py",
+      "sha256": "293d9269cfe9e1abb35ea91b9daaa7c6ebeb0c6e37444db2530289c3224be95f"
     },
     "ipd_nma.csv": {
       "bytes": 261479,

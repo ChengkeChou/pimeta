@@ -67,6 +67,17 @@ ORIGIN: dict[str, dict[str, Any]] = {
         "note": "simulated time-varying heterogeneity; the generating script "
                 "fixes the seed, so the bytes are reproducible",
     },
+    "dynhet_spline.csv": {
+        "origin": "generated",
+        "produced_by": "tools/make_dynhet_spline_fixture.py",
+        "licence": OWN_LICENCE,
+        "note": "60 studies whose between-study variance is a bump in the "
+                "middle of the time range (0.050 at the ends, 0.246 at the "
+                "centre), the shape a spline scale exists for; the generator "
+                "fixes the seed and --check reproduces the bytes, and "
+                "tools/r_reference/tau2t_spline.R refits the same model in "
+                "Stan",
+    },
     "nma_bayes.csv": {
         "origin": "generated",
         "produced_by": "tools/make_nma_bayes_fixture.py",

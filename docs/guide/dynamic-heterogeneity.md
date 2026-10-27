@@ -33,7 +33,7 @@ loud one.
 |---|---|---|
 | `k < 15` | two periods, `tau="linear"` on a 0/1 indicator | a continuous :math:`\tau^2(t)` has almost no power; `exp(alpha[1])` is then the ratio of the two periods' variances, which is the honest question |
 | `15 <= k <= 45` | `ma.bayes_tau_trend` | the shrinkage prior on the slope is what keeps three influential early studies from deciding the shape; the frequentist profile likelihood is unbiased but very noisy here |
-| `25 <= k <= 50`, non-monotone | not implemented (see [Limits](#limits)) | a spline or Gaussian-process scale needs its own reference |
+| `25 <= k <= 50`, non-monotone | `tau="spline"` (see [The spline scale](#the-spline-scale)) | a bump in the middle of the time range has no linear or quadratic trend to speak of, and a spline is the smallest model that can follow one |
 | `k > 45` | `ma.tau_trend` | the profile likelihood is well behaved, and the fit takes milliseconds instead of minutes |
 
 The two-period route needs no new code: pass a 0/1 column as `time` with
@@ -205,6 +205,71 @@ prediction comes from the draws, and the difference is visible: on the fixture
 the Bayesian prediction interval at the last year is 19 % wider than the
 frequentist one.
 
+## The spline scale
+
+`tau="spline"` puts a restricted cubic spline on :math:`\log\tau^2(t)`, with
+`n_knots = 4` by default. Two decisions make it estimable at `k = 60` rather
+than merely fittable:
+
+1. **The bending columns are orthogonalised.** The spline contributes
+   `nk - 2 = 2` non-linear columns. They are projected off :math:`[1, t]` and
+   Gram–Schmidt'ed, so the basis satisfies :math:`B'B = I` and
+   :math:`B'[1, t] = 0`. The first property turns a single wiggliness
+   hyperparameter into one ridge penalty that shrinks every direction equally;
+   the second makes the level and the linear trend keep their own coefficients,
+   so `alpha[0]` and `alpha[1]` mean the same thing as in the linear model.
+2. **The wiggliness is a variance component, not a free parameter.**
+   :math:`\gamma \sim N(0, \sigma_s^2 I)`, and :math:`\sigma_s` is estimated by
+   the Laplace approximation to the marginal likelihood — the penalised-spline
+   estimator written as the mixed model it is (Eilers & Marx 1996; Ruppert,
+   Wand & Carroll 2003). Profiling the *penalised* objective over
+   :math:`\sigma_s` would not work, and it is worth saying why: the penalty is
+   smallest at :math:`\gamma = 0`, so that objective improves monotonically as
+   :math:`\sigma_s \to 0` and the fit would always report the linear model. The
+   two terms that make the comparison honest are the prior normalisation
+   :math:`-\tfrac{m}{2}\log\sigma_s^2` and the Laplace volume
+   :math:`\tfrac12\log\det(J + \lambda I)`.
+
+The effective degrees of freedom the bending block spends is
+:math:`\mathrm{edf} = \operatorname{tr}\{(J + \lambda I)^{-1} J\}`, and it is
+folded back into the scale reference: `df_alpha = k - 2 - round(edf)` for
+Knapp–Hartung, and the likelihood-ratio test against a constant scale is
+referred to :math:`\chi^2` with :math:`1 + \mathrm{edf}` degrees of freedom.
+There is deliberately **no Wald test** for a spline: a penalised fit has no
+fixed number of scale coefficients to form one from, and the method says so
+instead of reporting a statistic with an unknown reference distribution.
+
+### What it does on the two fixtures
+
+`dynhet.csv` (linear truth) — the spline must collapse: it returns the linear
+coefficients to 1e-4, :math:`\sigma_s = 0.001` at the lower bound of the search,
+`edf = 0` and a log-likelihood identical to the linear fit.
+
+`dynhet_spline.csv` (a bump: :math:`\tau^2` 0.050 at the ends, 0.246 in the
+middle) — the linear model sees nothing (loglik −11.58), the spline finds it
+(−8.29) with :math:`\sigma_s = 4.12` and `edf = 1.53`. The likelihood-ratio
+test against a constant scale gives 6.73 on 2.53 degrees of freedom,
+p = 0.057: a borderline answer, which is what one draw of 60 studies *should*
+give for a bump this shallow.
+
+### The Bayesian check, and what it agrees about
+
+`tools/r_reference/tau2t_spline.R` fits the same model in Stan (CmdStan 2.40.0
+through cmdstanr), on the same basis, with a half-normal(5) prior on
+:math:`\sigma_s` so that the comparison is of estimators rather than of priors:
+
+| quantity | penalised REML | Stan posterior mean |
+|---|---|---|
+| `alpha[0]` | −3.0632 | −3.0613 (sd 0.365) |
+| `alpha[1]` | −0.00527 | −0.00613 (sd 0.043) |
+| `sigma_s` | 4.12 | 4.60 (sd 2.63) |
+| :math:`\tau^2` at 1980 / 1997.5 / 2015 | 0.0250 / 0.0945 / 0.0089 | 0.046 / 0.106 / 0.024 |
+
+The level, the trend and the shape agree; :math:`\sigma_s` agrees only to about
+30 %, which is the honest statement — it is the weakly identified direction, and
+the posterior says so itself. Both estimates put the peak in the middle, which
+is the substantive claim.
+
 ## How this was validated
 
 Four layers, in the order that lets each mean something.
@@ -284,11 +349,11 @@ Three findings that changed the implementation:
 
 ## Limits
 
-- **No non-parametric scale.** A spline or Gaussian-process
-  :math:`\log\tau^2(t)` is not implemented. It is not a missing switch: a
-  flexible scale needs its own reference, its own effective-degrees-of-freedom
-  story, and a shrinkage prior whose behaviour at small `k` has been measured.
-  `tau="quadratic"` is the honest middle ground and is what the module offers.
+- **The spline scale is a shape detector, not a variance curve.** On the bump
+  fixture it finds the peak and the troughs, but the level at the peak is
+  estimated from two bending coefficients and carries the width the posterior
+  shows (0.106 with a 90 % interval of 0.051–0.194). Do not read a single
+  :math:`\hat\tau^2(t)` off the curve without its interval.
 - **No credible region for the curve.** `predict` returns pointwise intervals;
   the simultaneous band across all :math:`t` is wider and is not computed.
 - **The Bayesian fit is a random walk** (`pimeta.bayes`), not NUTS. That is

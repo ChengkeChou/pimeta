@@ -32,7 +32,7 @@ What is genuinely open:
 | Item | State |
 |---|---|
 | RoBMA — Bayesian model averaging over selection models | implemented (36-model space, exact quadrature); the **free-weight** pathway has no third-party check, because the R reference's two pathways disagree about the kernel orientation |
-| Non-parametric scale for `tau_trend` (spline or Gaussian process) | constant, linear and quadratic are implemented and validated; the spline is not. CmdStan now builds and samples here, so a Bayesian reference is available for it |
+| Non-parametric scale for `tau_trend` (spline or Gaussian process) | **spline implemented**: orthonormal bending basis, one wiggliness hyperparameter estimated by Laplace marginal likelihood, `edf` folded into the Knapp–Hartung df, cross-checked against CmdStan on a bump fixture (`tools/r_reference/tau2t_spline.R`); a Gaussian-process prior is not implemented |
 | HTE — formal inference on treatment-effect modification | skeleton only |
 | IPD curve band | model-based 0.816–0.884; per-point Satterthwaite df gives 0.944–0.996 except at the edge of the covariate range (0.740 at `x = 65`, where the sandwich itself is wrong) |
 | Joint prediction region | 0.767 at `k = 10` under chi-square, 0.827 under Hotelling and **0.903** under Kenward–Roger degrees of freedom; 0.903 is not 0.95 because a prediction region also carries the uncertainty of `Sigma` inside the ellipse |

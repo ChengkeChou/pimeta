@@ -1399,7 +1399,7 @@ likelihood-based ML/REML are handled by metafor's Fisher-scoring loop in
 ## `tau_trend`
 
 ```python
-tau_trend(yi, vi, time, *, mu: 'str' = 'linear', tau: 'str' = 'linear', method: 'str' = 'REML', test: 'str' = 'knha', se: 'str' = 'gls', level=0.95, max_iter: 'int' = 500, tol: 'float' = 1e-10, max_ratio: 'float' = 100.0) -> 'TauTrendResult'
+tau_trend(yi, vi, time, *, mu: 'str' = 'linear', tau: 'str' = 'linear', method: 'str' = 'REML', test: 'str' = 'knha', se: 'str' = 'gls', level=0.95, max_iter: 'int' = 500, tol: 'float' = 1e-10, max_ratio: 'float' = 100.0, knots=None, n_knots: 'int' = 4) -> 'TauTrendResult'
 ```
 
 Fit :math:`y_i \sim N(x_i'\beta,\ v_i + \exp(z_i'\alpha))`.
@@ -1410,7 +1410,7 @@ Fit :math:`y_i \sim N(x_i'\beta,\ v_i + \exp(z_i'\alpha))`.
 - `vi` — their sampling variances.
 - `time` — the continuous index — year, follow-up time, dose, any ordering. Centred internally, so the intercepts are the values at the mean time and ``alpha[1]`` is per unit of the original scale.
 - `mu` — shape of the mean, ``"none"``, ``"linear"`` or ``"quadratic"``.
-- `tau` — shape of :math:`\log\tau^2`, same options.  ``"none"`` gives a constant :math:`\tau^2`, which makes the fit an ordinary random-effects model with moderators.
+- `tau` — shape of :math:`\log\tau^2`, ``"none"``, ``"linear"``, ``"quadratic"`` or ``"spline"``.  ``"none"`` gives a constant :math:`\tau^2`, which makes the fit an ordinary random-effects model with moderators.  ``"spline"`` puts a restricted cubic spline on the log scale, orthogonalised against ``[1, t]`` and shrunk by one wiggliness hyperparameter :math:`\sigma_s` — see `TauTrendResult` for what is reported and why a spline is not allowed to spend ``nk - 2`` free coefficients.
 - `method` — ``"REML"`` (default) or ``"ML"``.
 - `test` — ``"knha"`` (default), ``"t"`` or ``"z"``.  Knapp–Hartung scales the location variance by :math:`RSS/(k-p)` and refers the location tests to a t with ``k-p`` degrees of freedom; the scale tests use ``k-q``.
 - `se` — ``"gls"`` for :math:`(X'WX)^{-1}`, what metafor reports and what the parity tests check; ``"profile"`` for the joint-information block, which propagates the scale uncertainty.  Both are always stored.
@@ -1418,6 +1418,8 @@ Fit :math:`y_i \sim N(x_i'\beta,\ v_i + \exp(z_i'\alpha))`.
 - `max_iter` — optimiser iterations.
 - `tol` — optimiser gradient tolerance.
 - `max_ratio` — warn when the fitted :math:`\tau^2(t)` spans more than this factor across the observed range.  A log-linear scale fitted to data with almost no heterogeneity can run to :math:`\pm\infty` — on a simulation with a constant :math:`\tau^2 = 0.02` the estimate was :math:`\alpha_1 = 10.2`, a 27 000-fold change, which ``metafor`` reports just as happily.  Set to ``inf`` to silence it.
+- `knots` — explicit knot positions for ``tau="spline"``; the default is `default_knots` on the centred time.
+- `n_knots` — number of knots for ``tau="spline"``, 4 by default (two bending columns).
 
 **Returns**
 
@@ -1430,7 +1432,7 @@ Fit :math:`y_i \sim N(x_i'\beta,\ v_i + \exp(z_i'\alpha))`.
 ## `TauTrendResult`
 
 ```python
-TauTrendResult(beta: 'np.ndarray', se_beta: 'np.ndarray', se_beta_profile: 'np.ndarray', vcov_beta: 'np.ndarray', vcov_beta_profile: 'np.ndarray', alpha: 'np.ndarray', se_alpha: 'np.ndarray', vcov_alpha: 'np.ndarray', vcov: 'np.ndarray', tau2: 'np.ndarray', time_centre: 'float', mu_kind: 'str', tau_kind: 'str', method: 'str', test: 'str', level: 'float', s2w: 'float', loglik: 'float', k: 'int', p: 'int', q: 'int', rss: 'float', converged: 'bool', kind: 'str' = 'frequentist', _refit: 'Callable[[], dict] | None' = None) -> None
+TauTrendResult(beta: 'np.ndarray', se_beta: 'np.ndarray', se_beta_profile: 'np.ndarray', vcov_beta: 'np.ndarray', vcov_beta_profile: 'np.ndarray', alpha: 'np.ndarray', se_alpha: 'np.ndarray', vcov_alpha: 'np.ndarray', vcov: 'np.ndarray', tau2: 'np.ndarray', time_centre: 'float', mu_kind: 'str', tau_kind: 'str', method: 'str', test: 'str', level: 'float', s2w: 'float', loglik: 'float', k: 'int', p: 'int', q: 'int', rss: 'float', converged: 'bool', kind: 'str' = 'frequentist', knots: 'np.ndarray | None' = None, sigma_s: 'float | None' = None, edf: 'float | None' = None, _basis: '_SplineBasis | None' = None, _refit: 'Callable[[], dict] | None' = None) -> None
 ```
 
 A fitted location-scale model with time in the mean and the variance.
