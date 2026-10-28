@@ -94,13 +94,47 @@ def test_cr2_and_hcs_are_recorded_as_negative_results():
     assert hcs["boundary_share"] > plain["boundary_share"]
 
 
+def test_the_adaptive_reference_fixes_the_right_edge():
+    """The one change that worked, and the constraint it had to satisfy.
+
+    Neither the variance estimator nor the covariance structure moved this
+    number: CR2 made it worse, ``HCS`` left it alone, the LKJ penalty added two
+    points.  What was wrong was the *shape* of the reference -- a point-wise t
+    where the contrast needs several basis directions at once -- and the fix
+    shows up as a single column of the campaign, so it is pinned here rather
+    than described.
+    """
+    run = _band("adaptive_band")
+    point = run["point_coverage"]
+    adaptive = run["coverage"]
+    assert adaptive[4] > point[4] + 0.10, (adaptive[4], point[4])
+    assert adaptive[4] >= 0.85
+    # and it does not buy that by widening everything: no covariate gets worse
+    for j in range(4):
+        assert adaptive[j] >= point[j] - 0.03, j
+
+
 # --------------------------------------------------------------------------- #
 # the joint prediction region
 # --------------------------------------------------------------------------- #
 def test_the_region_baseline_records_every_reference_at_both_sample_sizes():
     main = REGION["runs"]["main"]["k"]
     for k in ("10", "20"):
-        assert {"chi2", "f", "kr", "bootstrap"} <= set(main[k])
+        assert {"chi2", "f", "hk", "kr", "bootstrap"} <= set(main[k])
+
+
+def test_the_hk_reference_beats_the_closed_forms_at_k_ten():
+    """The study-based divisor is what makes it work, and it is pinned here.
+
+    Counting rows instead of studies gives the same coverage as Hotelling, so a
+    later refactor that "simplifies" the divisor would silently undo the whole
+    correction.  The gap to nominal is recorded too: HK is the best closed form,
+    not a calibrated one.
+    """
+    k10 = REGION["runs"]["main"]["k"]["10"]
+    assert k10["hk"] > k10["f"]
+    assert k10["hk"] > k10["chi2"]
+    assert k10["hk"] < REGION["nominal"]
 
 
 def test_the_bootstrap_is_the_only_reference_that_improves_at_small_k():

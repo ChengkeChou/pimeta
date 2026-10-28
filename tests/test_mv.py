@@ -539,3 +539,64 @@ def test_eta_at_one_is_the_unpenalised_fit():
 def test_a_negative_lkj_strength_is_refused():
     with pytest.raises(ValueError, match="lkj_eta"):
         _correlated_fit(-1.0)
+
+
+# --------------------------------------------------------------------------- #
+# a user-supplied rho on a struct="UN" term
+# --------------------------------------------------------------------------- #
+def test_a_supplied_rho_is_fixed_on_a_un_term():
+    """``rho=`` means "fix this", as in rma.mv -- it used to be dropped.
+
+    The silent drop was the worst kind of API bug: the fit returned numbers, the
+    call looked honoured, and the model that ran was not the one asked for.
+    """
+    pinned = ma.rma_mv(np.array(YI), V=ma.vcalc(
+        np.array(VI), cluster=np.array(STUDY), obs=np.array(OUTCOME), rho=0.5),
+        mods=_fit().X, data=_data(), random="~ outcome | study", struct="UN",
+        intercept=False, rho=0.5)
+    assert list(pinned.rho) == pytest.approx([0.5], abs=1e-12)
+    # and it is genuinely a different model: one parameter fewer
+    free = _fit()
+    assert pinned.parms == free.parms - 1
+    # `sigma2` is empty for a UN term; the variance components are `tau2`
+    assert float(np.sum(pinned.tau2)) != pytest.approx(
+        float(np.sum(free.tau2)), rel=1e-6)
+
+
+def test_a_pinned_rho_leaves_the_other_component_free():
+    pinned = ma.rma_mv(np.array(YI), V=ma.vcalc(
+        np.array(VI), cluster=np.array(STUDY), obs=np.array(OUTCOME), rho=0.5),
+        mods=_fit().X, data=_data(), random="~ outcome | study", struct="UN",
+        intercept=False, rho=0.5)
+    assert pinned.tau2 is not None and len(pinned.tau2) == 2
+    assert all(np.isfinite(pinned.tau2)) and all(np.asarray(pinned.tau2) >= 0.0)
+
+
+def test_a_rho_outside_the_open_interval_is_refused():
+    with pytest.raises(ValueError, match="strictly between"):
+        ma.rma_mv(np.array(YI), V=ma.vcalc(
+            np.array(VI), cluster=np.array(STUDY), obs=np.array(OUTCOME),
+            rho=0.5), mods=_fit().X, data=_data(),
+            random="~ outcome | study", struct="UN", intercept=False, rho=1.0)
+
+
+def test_a_rho_of_the_wrong_length_is_refused_for_three_outcomes():
+    """One value per correlation: two outcomes need one, three need three."""
+    rng = np.random.default_rng(0)
+    k, J = 8, 3
+    study = np.repeat(np.arange(1, k + 1), J)
+    outcome = np.tile(["a", "b", "c"], k)
+    vi = rng.uniform(0.01, 0.03, k * J)
+    data = {"study": study, "outcome": outcome,
+            "yi": np.zeros(k * J), "vi": vi}
+    V = ma.vcalc(vi, cluster=study, obs=outcome, rho=0.3)
+    from pimeta.data_compat import design_matrix
+    X, _ = design_matrix("~ outcome - 1", data)
+    with pytest.raises(ValueError, match="one per correlation"):
+        ma.rma_mv(np.zeros(k * J), V=V, mods=X, data=data,
+                  random="~ outcome | study", struct="UN",
+                  intercept=False, rho=[0.1, 0.2])
+    pinned = ma.rma_mv(np.zeros(k * J), V=V, mods=X, data=data,
+                       random="~ outcome | study", struct="UN",
+                       intercept=False, rho=[0.1, 0.2, 0.3])
+    assert list(pinned.rho) == pytest.approx([0.1, 0.2, 0.3], abs=1e-12)

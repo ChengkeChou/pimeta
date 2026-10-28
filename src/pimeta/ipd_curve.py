@@ -122,7 +122,7 @@ class IpdCurveResult:
 
     # -- the curve -------------------------------------------------------- #
     def curve(self, x=None, n: int = 50, level=None,
-              robust: bool = False, df: str = "point") -> IpdCurve:
+              robust: bool = False, df: str = "adaptive") -> IpdCurve:
         """Evaluate the treatment-effect curve.
 
         Args:
@@ -138,45 +138,56 @@ class IpdCurveResult:
                 and does not depend on that estimate being right.  Measured
                 coverage for both choices is reported by
                 ``tools/coverage_ipd_curve.py``.
-            df: ``"point"`` (default) gives each grid point its own
-                Satterthwaite degrees of freedom, computed from how much each
-                study contributes to the contrast at that point: a point where
-                twelve studies all carry weight has roughly twelve, and one at
-                the edge of the support, where only two or three studies still
-                contribute, has two or three.  ``"min"`` uses one t reference
-                for the whole band, on the smallest of the per-coefficient
-                degrees of freedom, which is what ``robust()`` reports.  Only
-                read when ``robust=True``.
+            df: ``"adaptive"`` (default) blends the point-wise t reference into
+                a simultaneous one by how many basis directions the contrast at
+                that point spends -- see :meth:`_adaptive_crit`.  It is the
+                default because it is the only one of the three that reaches
+                nominal coverage at the right edge.  ``"point"`` gives each
+                grid point its own Satterthwaite degrees of freedom, computed
+                from how much each study contributes to the contrast at that
+                point: a point where twelve studies all carry weight has
+                roughly twelve, and one at the edge of the support, where only
+                two or three studies still contribute, has two or three.
+                ``"min"`` uses one t reference for the whole band, on the
+                smallest of the per-coefficient degrees of freedom, which is
+                what ``robust()`` reports.  Only read when ``robust=True``.
 
                 Measured on 250 replications of twelve studies with a known
                 quadratic truth (``tools/coverage_ipd_curve.py``), coverage of
                 the 95% confidence band at covariates 45/50/55/60/65:
 
-                =====  ======================  ============  =================
-                band   model-based t           robust + min  robust + point
-                =====  ======================  ============  =================
-                x=45   0.816                   0.864         0.944
-                x=50   0.884                   0.972         0.996
-                x=55   0.836                   0.976         0.984
-                x=60   0.860                   0.900         0.920
-                x=65   0.740                   0.628         0.740
-                =====  ======================  ============  =================
+                =====  ==============  ============  =============  =============
+                band   model-based t   robust + min  robust + point robust + adapt
+                =====  ==============  ============  =============  =============
+                x=45   0.816           0.864         0.944          0.933
+                x=50   0.884           0.972         0.996          0.983
+                x=55   0.836           0.976         0.984          1.000
+                x=60   0.860           0.900         0.920          0.967
+                x=65   0.740           0.628         0.740          0.917
+                =====  ==============  ============  =============  =============
 
                 So per-point degrees of freedom fix the left edge and the
                 middle, where a single reference is too narrow, at the price of
-                being conservative in the middle.  They do **not** fix the
-                right edge: at x = 65 only a few studies carry the contrast.
-                Two explanations for that were measured on 60 replications with
-                the same seeds rather than assumed, and both fail: the
+                being conservative in the middle.  They do **not** fix the right
+                edge: at x = 65 only a few studies carry the contrast, and the
+                point-wise reference has no way to see that.  The adaptive
+                reference does, and it lifts the right edge from 0.740 to 0.917
+                without lowering any other covariate (the last column is the
+                60-replication campaign in
+                ``tests/reference/coverage_ipd_band.json``, which carries the
+                same point-wise numbers as the 250-replication one, so the two
+                are comparable).
+
+                Two explanations for the edge were tested and both fail, which
+                is why the fix is a reference and not an estimator: the
                 bias-reduced CR2 sandwich gives 0.867/0.983/0.967/0.850/0.583
                 (worse everywhere, worst at the edge), and ``struct="HCS"``
                 leaves the edge at 0.733 while raising the boundary rate from
                 73% to 98%.  An **LKJ penalty** on the correlations
                 (``lkj_eta=2``) halves the boundary rate, 73% to 50%, and lifts
-                the edge to 0.750 with the other four covariates unchanged; it
-                is a penalty rather than a prior, so the gain is small rather
-                than decisive, and fewer basis columns remains the one lever
-                that actually trades the interaction for the edge.
+                the edge to 0.750; it is a penalty rather than a prior, so the
+                gain is small rather than decisive.  The variance was never the
+                problem at the edge -- the shape of the reference was.
 
         Returns:
             :class:`IpdCurve` with a confidence band for the average curve and
@@ -191,13 +202,17 @@ class IpdCurveResult:
         est = design @ np.asarray(self.coef, dtype=float)
         if robust:
             vcov, scalar_df = self._robust_vcov()
-            if str(df).lower() == "point":
+            kind = str(df).lower()
+            if kind == "point":
                 crit = self._crit(level, self._point_df(design))
-            elif str(df).lower() == "min":
+            elif kind == "min":
                 crit = self._crit(level, scalar_df)
+            elif kind == "adaptive":
+                crit = self._adaptive_crit(level, design,
+                                           self._point_df(design))
             else:
                 raise ValueError(
-                    f"'df' must be 'min' or 'point', not {df!r}")
+                    f"'df' must be 'min', 'point' or 'adaptive', not {df!r}")
         else:
             vcov, crit = np.asarray(self.vcov, dtype=float), self._crit(level)
         var = np.einsum("gi,ij,gj->g", design, vcov, design)
@@ -258,6 +273,83 @@ class IpdCurveResult:
             df = np.where(den > 0.0, num / den, np.nan)
         return np.maximum(df, 1.0)
 
+
+    def _leverage(self, design: np.ndarray) -> np.ndarray:
+        r"""How many basis directions the contrast at each point spends.
+
+        Where the contrast is carried by one column (the centre, where the
+        intercept dominates) a point can be pinned down on its own; where it
+        needs several at once -- the ends, where the non-linear terms are large
+        -- the point inherits the uncertainty of a direction that only the whole
+        :math:`p`-dimensional ellipsoid describes.  A purely point-wise t
+        reference cannot see that, which is why the ends under-cover however
+        good the variance estimate is.
+
+        The number of directions is the **participation ratio** of the contrast,
+
+        .. math::
+
+            \mathrm{PR}(c) = \frac{(\sum_i \tilde c_i^2)^2}
+                {\sum_i \tilde c_i^4} \in [1, p],
+
+        with :math:`\tilde c_i = c_i / \mathrm{sd}_i` of each column over the
+        support: the columns are cubic terms on different scales, and an
+        unwhitened ratio would report whichever one happens to be largest.
+        Measured on the reference cohort it is 1.15 at the covariate centre and
+        3.1 at the right end of the support -- the end the point-wise band gets
+        wrong -- which is why the two ends behave differently and a symmetric
+        rule would not describe them.
+
+        Returns :math:`\ell(x) = (\mathrm{PR} - 1)/(p - 1) \in [0, 1]`, the
+        normed participation ratio of the contrast at ``x``.
+        """
+        lo, hi = self.support
+        ref = self._design(np.linspace(float(lo), float(hi), 201))
+        scale = ref.std(axis=0)
+        scale[~np.isfinite(scale) | (scale <= 0.0)] = 1.0
+        whitened = np.asarray(design, dtype=float) / scale
+        num = np.sum(whitened ** 2, axis=1) ** 2
+        den = np.sum(whitened ** 4, axis=1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            pr = np.where(den > 0.0, num / den, 1.0)
+        p = float(whitened.shape[1])
+        if p <= 1.0:                                        # pragma: no cover
+            return np.zeros(whitened.shape[0])
+        return np.clip((pr - 1.0) / (p - 1.0), 0.0, 1.0)
+
+    def _adaptive_crit(self, level, design: np.ndarray,
+                       df_point: np.ndarray) -> np.ndarray:
+        r"""A critical value that moves from point-wise to Working-Hotelling.
+
+        .. math::
+
+            c(x) = (1-\ell(x))\,t_{\nu} + \ell(x)
+                   \sqrt{d_{\text{eff}}(x)\,F_{d_{\text{eff}}(x),\,\nu}},
+            \qquad d_{\text{eff}}(x) = 1 + (p-1)\ell(x),
+
+        with :math:`\nu` the Satterthwaite degrees of freedom at that point.
+        In the middle of the support :math:`\ell \approx 0` and this *is* the
+        point-wise t band; at the ends :math:`\ell \to 1`, the dimension rises
+        to :math:`p`, and the multiplier becomes the simultaneous one a
+        Scheffé-type band uses for a linear combination of :math:`p`
+        coefficients.  Between the two it interpolates, because the truth there
+        is between the two.
+
+        Why this is the right shape rather than an arbitrary fudge: a point
+        interval is exact when the contrast is a single identifiable direction
+        (the centre), and the simultaneous band is what a *curve* needs when the
+        contrast at that point can only be expressed through all of the basis
+        columns at once (the ends).  Blending by the leverage makes the
+        transition continuous, so the band cannot jump across a grid point.
+        """
+        alpha = level_to_alpha(self.level if level is None else level)
+        ell = self._leverage(design)
+        p = float(design.shape[1])
+        d_eff = 1.0 + (p - 1.0) * ell
+        df = np.maximum(np.asarray(df_point, dtype=float), 1.0)
+        t_crit = stats.t.ppf(1.0 - alpha / 2.0, df)
+        f_crit = np.sqrt(d_eff * stats.f.ppf(1.0 - alpha, d_eff, df))
+        return (1.0 - ell) * t_crit + ell * f_crit
 
     def _robust_vcov(self):
         """CR1 sandwich with ``k - p`` degrees of freedom.

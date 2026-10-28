@@ -366,8 +366,29 @@ def test_the_point_band_differs_from_the_scalar_band_only_in_the_critical_value(
 
 
 def test_an_unknown_df_choice_is_refused(fit):
-    with pytest.raises(ValueError, match="must be 'min' or 'point'"):
+    with pytest.raises(ValueError, match="must be 'min', 'point' or 'adaptive'"):
         fit.curve([50.0], robust=True, df="nope")
+
+
+def test_the_adaptive_band_is_the_default_and_widens_the_edges(fit):
+    """The reference that reaches nominal at the edge is what a caller gets.
+
+    The band is a curve, and at the ends of the support the contrast there is a
+    near-collinear combination of every basis column: a point-wise t cannot see
+    that, a simultaneous reference can.  The default has to be the one that was
+    measured to work, not the one that was there first.
+    """
+    points = np.array([45.0, 55.0, 65.0])
+    default = fit.curve(points, robust=True)
+    point = fit.curve(points, robust=True, df="point")
+    # the covariance is shared; only the critical value differs
+    assert default.se == pytest.approx(point.se, rel=1e-12)
+    ratio = ((default.ci_ub - default.est) / (point.ci_ub - point.est))
+    # wider at both ends than in the middle
+    assert ratio[0] > 1.0 and ratio[2] > 1.0
+    assert ratio[2] > ratio[1]
+    # and the middle is left alone: there the contrast spends one direction
+    assert ratio[1] == pytest.approx(1.0, abs=0.05)
 
 
 def test_the_model_based_band_ignores_the_df_choice(fit):

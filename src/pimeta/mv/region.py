@@ -332,18 +332,24 @@ def predict_region(result, *, level=None, observation=None, test="t",
             question is where its *observed* estimates would fall rather than
             where its true effects would.
         test: ``"t"`` (default) for the Hotelling :math:`F` small-sample
-            reference, ``"z"`` for the asymptotic :math:`\chi^2_J` one, or
+            reference, ``"z"`` for the asymptotic :math:`\chi^2_J` one,
+            ``"hk"`` for the multivariate Hartung-Knapp one, or
             ``"bootstrap"`` for a critical value calibrated by re-simulating
             and **refitting** the model (see ``simulate``).  ``"t"`` is the
             default because it was measured to be better at every ``k`` --
             0.83 against 0.77 at ``k = 10``, 0.93 against 0.92 at ``k = 20``,
             0.95 against 0.94 at ``k = 40`` -- and because a reference that
             under-covers by 12 points at ``k = 10`` is not a defensible
-            default.  ``"bootstrap"`` is the one that reaches nominal at
-            small ``k``; it costs ``n_boot`` refits and its cutoff is
-            data-dependent by design, so it is opt-in rather than the default.
+            default.  ``"hk"`` inflates the estimation part of the covariance
+            by :math:`q = r'M^{-1}r/(k_s - p)` and refers the result to
+            :math:`J F_{J,\,k_s-p}`; it is the best of the closed forms at
+            small ``k`` (0.87 at ``k = 10``) but not calibrated either.
+            ``"bootstrap"`` is the one that reaches nominal at small ``k``;
+            it costs ``n_boot`` refits and its cutoff is data-dependent by
+            design, so it is opt-in rather than the default.
         df: denominator degrees of freedom for ``test="t"``; defaults to
-            ``k - p``.  Ignored by ``test="z"``.
+            ``k - p``.  For ``test="hk"`` it defaults to the number of
+            **studies** minus ``p``.  Ignored by ``test="z"``.
         simulate: ``test="bootstrap"`` only.  A callable that takes a seeded
             ``numpy.random.Generator`` and returns a **refitted** result of the
             same model on data simulated from the fit at hand.  The library

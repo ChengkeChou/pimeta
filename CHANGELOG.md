@@ -4,6 +4,49 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-10-28
+
+The release that makes the publish workflow work, and closes the two coverage
+gaps that 1.1.1 could only measure.
+
+### Fixed
+
+- The test suite imported pandas at module level in four files. pandas is an
+  optional dependency and CI installs only the hard requirements, so pytest
+  could not collect those files; a collection error fails every shard that
+  contains one. With sixteen shards over four interpreters the whole matrix
+  was red and the publish workflow never reached its upload step. The four
+  modules now read CSVs with the standard library and pass mappings where a
+  DataFrame was only a container, and tests/test_coverage_reproduction.py
+  puts the repository root on sys.path instead of relying on the cwd.
+  Verified in the CI-parity environment (editable install, pytest and mypy
+  only): 2521 passed, 18 skipped, none failed.
+- rma_mv(rho=...) was silently ignored for struct=UN: the correlation was
+  estimated even when the caller pinned it. It is now honoured -- a scalar
+  fixes every pair, a sequence of J(J-1)/2 values fixes them one by one, NaN
+  leaves one free -- and a value on the boundary is refused with a message
+  rather than sent into a singular covariance.
+
+### Added
+
+- predict_region(test=hk): the multivariate Hartung-Knapp reference.
+  Measured on the two-outcome harness at k=10 it covers 0.87 against 0.84
+  for Hotelling and 0.79 for chi-square; at k=20, 0.96 against 0.96 and
+  0.94. The factor is q = r'M^-1 r/(studies - p), and the divisor matters:
+  with rows in place of studies the correction is almost inert (0.84 at
+  k=10). It inflates the estimation part of the covariance only, so the
+  ellipsoid changes shape as well as size. It does not reach nominal at
+  k=10, and the gap that remains is the estimated between-study covariance
+  rather than the scale of the mean -- the bootstrap remains the reference
+  that carries that.
+- curve(df=adaptive), now the default for the robust IPD band: it blends
+  the point-wise t reference into a Working-Hotelling one by the
+  participation ratio of the contrast, which is 1.15 at the covariate centre
+  and 3.1 at the right end of the support. On the reference cohort the right
+  edge goes from 0.740 to 0.917 and x=60 from 0.920 to 0.967, with the other
+  covariates unchanged. The edge was never a variance problem: CR2 and
+  struct=HCS were both measured and both leave it where it was.
+
 ## [1.1.1] — 2026-10-27
 
 The content of 1.1.0 plus the coverage baselines. 1.1.0 was tagged on the remote against an earlier build and is left in place rather than moved, so this is the tag that names the published artefact.
@@ -2823,6 +2866,7 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.2]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.0
 [1.0.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.1

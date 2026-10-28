@@ -807,7 +807,8 @@ class _UNComp:
                  outer_labels: list[str] | None = None,
                  name: str | None = None,
                  fixed_tau2: np.ndarray | None = None,
-                 fixed_rho: np.ndarray | bool | None = None):
+                 fixed_rho: np.ndarray | bool | None = None,
+                 pinned_rho: np.ndarray | None = None):
         self.inner_idx = inner_idx
         self.outer_groups = outer_groups
         self.J = J
@@ -827,6 +828,18 @@ class _UNComp:
             self._fixed_rho = np.asarray(fixed_rho, dtype=bool).reshape(-1)
         else:
             self._fixed_rho = np.zeros(self._n_rho, dtype=bool)
+        # ``rho=`` fixes a correlation rather than starting from it (rma.mv),
+        # so the pinned values are part of the model and not of the search.
+        if pinned_rho is not None:
+            values = np.asarray(pinned_rho, dtype=float).reshape(-1)
+            if values.size != self._n_rho:                   # pragma: no cover
+                raise ValueError(
+                    f"'rho' for the {self.name!r} term needs {self._n_rho} "
+                    f"value(s), not {values.size}")
+            self._pinned_rho = np.where(np.isfinite(values), values, 0.0)
+            self._fixed_rho = self._fixed_rho | np.isfinite(values)
+        else:
+            self._pinned_rho = np.zeros(self._n_rho)
         self._free_tau2 = ~self._fixed_tau2
         self._free_rho = ~self._fixed_rho
         self._n_free_tau2 = int(self._free_tau2.sum())
@@ -841,7 +854,7 @@ class _UNComp:
         return tau2
 
     def _full_rho(self, p: np.ndarray) -> np.ndarray:
-        rho = np.zeros(self._n_rho)
+        rho = np.array(self._pinned_rho, dtype=float, copy=True)
         rho[self._free_rho] = p[self._n_free_tau2:self._n_free_tau2 + self._n_free_rho]
         return rho
 
@@ -1064,6 +1077,35 @@ def _cooccur_comb_k(inner_idx: np.ndarray, outer_groups: np.ndarray, J: int) -> 
     return np.array(out)
 
 
+def _un_rho_values(value, n_pairs: int, name: str) -> np.ndarray:
+    """Expand a user-supplied ``rho`` for a ``struct="UN"`` term.
+
+    ``rma.mv`` takes ``rho`` as a **fixed** value, not a starting value, and
+    that is what this returns: an array of length ``n_pairs`` in which ``NaN``
+    means "estimate this one".  A scalar fixes every pair to it, which is the
+    only sensible reading of ``rho=0.5`` on a term with several pairs, and a
+    sequence must have exactly one entry per pair.
+
+    Silently ignoring the argument was the bug this replaces: ``rho=0.5`` on
+    ``struct="UN"`` used to be dropped and the correlation estimated anyway, so
+    a user pinning a value got a different model with no complaint.
+    """
+    array = np.asarray(value, dtype=float).ravel()
+    if array.size == 1:
+        array = np.full(n_pairs, float(array[0]))
+    elif array.size != n_pairs:
+        raise ValueError(
+            f"'rho' for the {name!r} term must be a scalar or have {n_pairs} "
+            f"value(s) (one per correlation), not {array.size}")
+    finite = array[np.isfinite(array)]
+    if np.any(np.abs(finite) >= 1.0):
+        raise ValueError(
+            "'rho' must lie strictly between -1 and 1: a correlation on the "
+            "boundary makes the between-study covariance singular, and the "
+            "fit would be built from a matrix that has no inverse")
+    return array
+
+
 def _build_components(descs: list[dict], data, k: int,
                       rho=None) -> list:
     """Instantiate random-effect component objects from descriptors.
@@ -1134,12 +1176,28 @@ def _build_components(descs: list[dict], data, k: int,
             J = int(inner_idx.max()) + 1
             fixed_tau2 = _levels_k(inner_idx, outer_groups, J) == 1
             fixed_rho_un = _cooccur_comb_k(inner_idx, outer_groups, J) == 0
+            pinned_rho = None
+            if rho_list:
+                # With one random term a full per-pair vector is unambiguous, so
+                # `rho=[0.1, 0.2, 0.3]` on a three-outcome UN term works; with
+                # several terms the argument stays one value per term.
+                if len(descs) == 1:
+                    value = np.asarray(rho_list, dtype=float).ravel()
+                else:
+                    value = rho_list[min(rho_pos, len(rho_list) - 1)]
+                    rho_pos += 1
+                pinned_rho = _un_rho_values(
+                    value, J * (J - 1) // 2, str(desc.get("name") or "un"))
+                # a pair the user pinned is estimated even when the design
+                # would otherwise have fixed it at zero
+                fixed_rho_un = fixed_rho_un & ~np.isfinite(pinned_rho)
             comps.append(_UNComp(inner_idx, outer_groups, J,
                                  inner_labels=[str(x) for x in inner_levels],
                                  outer_labels=[str(x) for x in outer_levels],
                                  name=desc.get("name"),
                                  fixed_tau2=fixed_tau2,
-                                 fixed_rho=fixed_rho_un))
+                                 fixed_rho=fixed_rho_un,
+                                 pinned_rho=pinned_rho))
         elif kind == "gen":
             vars_ = desc["vars"]
             no_intercept = any(v in ("0", "-1", "- 1") for v in vars_)

@@ -80,7 +80,9 @@ def _band_reps(eta: float) -> dict:
             continue
         fitted += 1
         boundary += bool(fit.identifiability()["boundary"])
-        curve = fit.curve(band_harness.GRID, robust=True, df="point")
+        # the default `df`, not an explicit one: the point of this test is that
+        # the path a user gets is the one the baseline describes
+        curve = fit.curve(band_harness.GRID, robust=True)
         hits += (curve.ci_lb <= truth) & (truth <= curve.ci_ub)
     return {"fitted": fitted,
             "boundary": boundary,

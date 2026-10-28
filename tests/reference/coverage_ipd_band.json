@@ -89,6 +89,25 @@
         ],
         "boundary_share": 0.4666666666666667,
         "note": "no further gain in coverage over eta = 2"
+      },
+      "adaptive_band": {
+        "what": "the same 60-replication campaign with the leverage-adaptive reference, which is now curve() default for the robust band",
+        "harness": "tools/coverage_ipd_curve.py + tools/_band_adaptive.py (same seeds)",
+        "replications": 60,
+        "coverage": [
+          0.933,
+          0.983,
+          1.0,
+          0.967,
+          0.917
+        ],
+        "point_coverage": [
+          0.933,
+          0.983,
+          1.0,
+          0.9,
+          0.733
+        ]
       }
     }
   }

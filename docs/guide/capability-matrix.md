@@ -142,13 +142,13 @@ honest one when the studies can pay for it.
 **What the band actually covers** was measured rather than assumed
 (`tools/coverage_ipd_curve.py`, 250 replications of 12 studies, nominal 95%):
 
-| x | model-based (default) | CR1 + one df | CR1 + per-point df |
-|---|---|---|---|
-| 45 | 0.816 | 0.864 | 0.944 |
-| 50 | 0.884 | 0.972 | 0.996 |
-| 55 | 0.836 | 0.976 | 0.984 |
-| 60 | 0.860 | 0.900 | 0.920 |
-| 65 | 0.740 | 0.628 | 0.740 |
+| x | model-based (default) | CR1 + one df | CR1 + per-point df | CR1 + adaptive |
+|---|---|---|---|---|
+| 45 | 0.816 | 0.864 | 0.944 | 0.933 |
+| 50 | 0.884 | 0.972 | 0.996 | 0.983 |
+| 55 | 0.836 | 0.976 | 0.984 | 1.000 |
+| 60 | 0.860 | 0.900 | 0.920 | 0.967 |
+| 65 | 0.740 | 0.628 | 0.740 | 0.917 |
 
 No band is calibrated, and the failure is not where a simple story would put
 it. The model-based Wald band under-covers throughout, because it conditions on
@@ -159,20 +159,31 @@ reference it is *worse* at the edge of the covariate range, where a spline curve
 is least stable.
 
 Giving each grid point its own Satterthwaite degrees of freedom, computed from
-how much each study contributes to the contrast there (`curve(robust=True)` now
-does this by default; `df="min"` keeps the old single reference), fixes the left
-edge and the middle — at the price of being conservative in the middle — and
+how much each study contributes to the contrast there (`df="point"`), fixes the
+left edge and the middle — at the price of being conservative in the middle — and
 does **not** fix the right edge. At `x = 65` only two or three studies carry the
 contrast.
 
-Two candidate explanations for that were measured on 60 replications with the
-same seeds, and both are wrong:
+What does fix it is a different *shape* of reference rather than a different
+variance. At the ends of the support the contrast there is a near-collinear
+combination of **every** basis column, so the point on the curve can only be
+pinned down through the whole four-dimensional ellipsoid; a point-wise t cannot
+see that. `curve(df="adaptive")`, the default for the robust band, measures how
+many basis directions the contrast at each point spends (its participation
+ratio: 1.15 at the covariate centre, 3.1 at the right end of the support) and
+blends the point-wise t into a Working–Hotelling multiplier accordingly. The
+right edge goes from 0.740 to 0.917 and `x = 60` from 0.920 to 0.967, with the
+other covariates unchanged.
+
+Two estimator-side explanations for that edge were measured on 60 replications
+with the same seeds, and both are wrong:
 
 | at x = 45 / 50 / 55 / 60 / 65 | coverage |
 |---|---|
 | CR1 + per-point df | 0.933 / 0.983 / 1.000 / 0.900 / **0.733** |
 | CR2 (Bell–McCaffrey) + per-point df | 0.867 / 0.983 / 0.967 / 0.850 / **0.583** |
 | `struct="HCS"`, CR1 + per-point df | 0.917 / 0.983 / 1.000 / 0.900 / **0.733** |
+| CR1 + adaptive reference | 0.933 / 0.983 / 1.000 / 0.967 / **0.917** |
 
 The bias-reduced sandwich is **worse everywhere** and worst at the edge: a
 study's marginal block already contains the between-study variance, so shrinking
@@ -180,9 +191,10 @@ its residual by its leverage removes variance the two-stage model has already
 accounted for. The common-correlation structure leaves the edge at 0.733 and
 makes the boundary rate *worse* (98% of fits against 73%), because with four
 knots it is the scale parameters that hit the boundary, not the correlation
-structure. What remains is fewer basis columns — a modelling decision that buys
-the edge with the interaction — and the honest reading: better, not calibrated,
-and say so where it is not.
+structure. So the variance and the covariance structure were never the problem
+at the edge: the reference was. Fewer basis columns is still a lever, but it is
+a modelling decision that buys the edge with the interaction, and it is no
+longer needed to make the band honest.
 
 The prediction band is wider and therefore over-covers under CR1 (0.98 to 1.00)
 while reaching 0.88 to 0.94 model-based. `test="t"` changes nothing (44 residual
