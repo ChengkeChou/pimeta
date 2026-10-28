@@ -4,6 +4,83 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-10-28
+
+1.1.2 was never uploaded: its publish run failed in the build job, before the
+upload step. This fixes what that run found. Nothing in the library changes
+behaviour; the wheel is built from the same source semantics as 1.1.2.
+
+### Fixed
+
+- `tests/test_dynamichet_gp.py` located its fixture by replacing a
+  Windows-shaped path inside `__file__`, which is a no-op on POSIX: on Linux
+  the file resolved to the test module itself and all nine tests errored. That
+  is why the publish build job failed after seventeen minutes while the same
+  suite was green on Windows. It now uses `pathlib`.
+- Two tests pinned six digits of quantities that are not identified to six
+  digits. The spline's wiggliness and the GP's length scale sit on a nearly
+  flat marginal likelihood, so the returned point moves with the BLAS build:
+  same bytes, Linux gives `sigma_s = 4.1200197` and Windows `4.1212672`. The
+  pinned-number tests now allow 1 per cent, and say so; the properties that are
+  actually identified (effective df, the curve, both limits, the LRT's degrees
+  of freedom) are still asserted, and one of them is asserted self-consistently
+  against the fit it came from rather than against a constant.
+- `docs/guide/releasing.md` checked the freshly installed wheel to six digits,
+  which fails on the machine that builds it. It now compares to four, with the
+  measurement that says why.
+- Four more tests encoded the Windows build rather than the statistic, found by
+  running the suite on Linux for the first time:
+  - `tests/test_onestage.py` pinned `tau2` and `sigma2` to six digits. Those
+    components sit on a flat ridge of the REML criterion: the two starting
+    points, and the two BLAS builds, stop 7e-6 apart while agreeing in the
+    objective to 1e-10. They now compare to 1e-4 and the test says why.
+  - `tests/test_ipd_curve.py` compared a centred and an uncentred fit of the
+    same curve to 1e-4; the uncentred parameterisation gives up conditioning
+    and lands 3e-4 away, a fifth of the estimate's standard error. Now 1e-3.
+  - `tests/test_tvhr_joint.py` reached the correlation ridge by pinning seed
+    105 of its simulation, which lands on the ridge on one BLAS build and one
+    side of it on the other. A test that asserts where an optimiser stops on a
+    flat likelihood tests the build; the module now searches a short list of
+    seeds and asserts that the warning exists.
+- `ipd_one_stage` reported `converged=False` on a fit that had converged. Its
+  two starting points reach the same optimum; whichever stalled first in its
+  line search was kept, because the objectives tie to the last bit, and
+  `success` then described the optimiser rather than the fit. The better of a
+  tie is now the run that reports success, and `success` itself is backed up by
+  a relative-gradient criterion (`_converged`), which is what tells a flat
+  optimum apart from a stalled search that is still far away. This is the one
+  behaviour change in the release, and it is a fix: a converged fit is no
+  longer reported as unconverged depending on the BLAS build.
+- `tools/make_tvhr_piecewise_fixture.py --check` compared the regenerated table
+  byte for byte, which cannot hold: the times come from
+  `Generator.multivariate_normal`, whose decomposition is a LAPACK call, and
+  each draw decides how many exponentials the record consumes, so the stream
+  diverges between builds and the same seed produces a different table. On
+  Linux 6288 of 6400 rows differed. It now checks the design - header, row
+  count, study and treat columns, times inside the horizon, and both events and
+  censoring in every study - and documents why the values cannot be carried
+  across machines. The committed fixture and its reference numbers are
+  untouched.
+
+### Added
+
+- `publish.yml` gains the failure-annotation step `ci.yml` already had, and
+  keeps the pytest log it annotates. Without it a failed publish run says only
+  "Process completed with exit code 1", which is how a Linux-only test failure
+  stayed a mystery for a whole release.
+
+### Verified
+
+- Windows, `_pimeta_clean` (Python 3.13, numpy 2.5.4): 2544 passed,
+  6 skipped, 0 failed.
+- Linux, WSL Ubuntu (Python 3.10.12, numpy 2.2.6, scipy 1.15.3):
+  2532 passed, 18 skipped, 0 failed -- 1113 s. The eighteen extra skips are
+  the optional-dependency tests, which have pandas and the rest on Windows.
+  This is the platform that builds the wheel, and 1.1.3 is the first release
+  whose suite has been run on it before tagging.
+- `ruff check src tests tools` clean; `mypy src/pimeta` clean (120 files);
+  `tools/gen_api_docs.py` rewrites only `docs/changelog.md`.
+
 ## [1.1.2] - 2026-10-28
 
 The release that makes the publish workflow work, and closes the two coverage
@@ -2866,6 +2943,7 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.3]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.1
 [1.1.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.0

@@ -116,11 +116,13 @@ def test_the_manifest_is_regenerable_and_current():
 
 # --------------------------------------------------------------- regenerable
 def test_a_generated_fixture_can_be_rebuilt_from_its_script(manifest):
-    """A generator is only a source if running it reproduces the file.
+    """A generator is only a source if running it still produces the table.
 
     Scripts that advertise ``--check`` are actually executed; the rest are
-    recorded but not claimed to be byte-reproducible, which is a weaker and
-    honest statement.
+    recorded but not claimed to be reproducible.  ``--check`` itself decides
+    what "reproduce" can mean for its fixture -- the TVHR generator compares
+    the design, because its times come from a LAPACK call and so differ
+    between BLAS builds -- and the assertion here is only that it agrees.
     """
     import subprocess
     import sys

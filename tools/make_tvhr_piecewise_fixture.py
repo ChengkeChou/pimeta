@@ -30,6 +30,9 @@ Usage::
 
     python tools/make_tvhr_piecewise_fixture.py            # rewrite
     python tools/make_tvhr_piecewise_fixture.py --check    # exit 1 if stale
+
+The check is structural on purpose: the times are not portable.  See
+``_problems`` for why.
 """
 
 from __future__ import annotations
@@ -97,6 +100,61 @@ def build() -> str:
     return "\n".join(lines) + "\n"
 
 
+def _problems(current: str, text: str) -> list[str]:
+    """Differences between the table on disk and the regenerated one.
+
+    The times cannot be compared, and not because of the last digit.  They
+    come from ``Generator.multivariate_normal``, whose decomposition is a
+    LAPACK call, and every draw decides how many exponentials the record
+    consumes; the stream therefore diverges between BLAS builds and the same
+    seed produces a different table, time by time, on a different machine.
+    Byte equality would make this script fail on every machine but the one
+    that wrote the file.
+
+    What is portable is the design: the header, one row per participant, the
+    study and treat columns, times inside the follow-up horizon, and every
+    study contributing both events and censoring.  That is what ``--check``
+    asserts.  The reference numbers in ``tests/test_tvhr_joint.py`` were
+    computed from the committed file, so the platform dependence of the draws
+    does not reach the fits.
+    """
+    want = text.splitlines()
+    got = current.splitlines()
+    if not got or got[0] != want[0]:
+        return [f"header is {got[0] if got else 'missing'!r}, "
+                f"expected {want[0]!r}"]
+    if len(got) != len(want):
+        return [f"{len(got) - 1} data rows on disk, {len(want) - 1} "
+                "regenerated"]
+    problems: list[str] = []
+    events: dict[str, int] = {}
+    rows: dict[str, int] = {}
+    for i, (new, old) in enumerate(zip(want[1:], got[1:]), start=2):
+        s, tr, _t, e = new.split(",")
+        s2, tr2, t2, e2 = old.split(",")
+        if (s, tr) != (s2, tr2):
+            problems.append(f"row {i}: study/treat differ, "
+                            f"{old!r} vs {new!r}")
+            continue
+        if not 0.0 < float(t2) <= HORIZON:
+            problems.append(f"row {i}: time {t2} is outside the horizon")
+        if e2 not in ("0", "1"):
+            problems.append(f"row {i}: event is {e2!r}")
+        rows[s2] = rows.get(s2, 0) + 1
+        events[s2] = events.get(s2, 0) + int(e2)
+        if len(problems) >= 5:
+            break
+    else:
+        for study, n in sorted(rows.items()):
+            if n != PER_STUDY:
+                problems.append(f"study {study} has {n} rows, "
+                                f"expected {PER_STUDY}")
+            elif not 0 < events[study] < n:
+                problems.append(f"study {study} has {events[study]} events "
+                                f"in {n} rows")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--check", action="store_true",
@@ -105,11 +163,14 @@ def main(argv: list[str] | None = None) -> int:
     text = build()
     if args.check:
         current = OUT.read_text(encoding="utf-8") if OUT.exists() else ""
-        if current != text:
-            print(f"{OUT.name} is not reproducible from this script",
+        problems = _problems(current, text)
+        if problems:
+            print(f"{OUT.name} is not reproducible from this script:",
                   file=sys.stderr)
+            for line in problems:
+                print(f"  {line}", file=sys.stderr)
             return 1
-        print(f"{OUT.name}: reproducible")
+        print(f"{OUT.name}: design reproduces (times are BLAS-dependent)")
         return 0
     OUT.write_text(text, encoding="utf-8", newline="\n")
     print(f"wrote {OUT} ({len(text.splitlines()) - 1} rows, "

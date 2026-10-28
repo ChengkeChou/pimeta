@@ -229,12 +229,13 @@ def test_a_boundary_correlation_warns():
 
     The shipped fixture now fits in the interior of the correlation cone
     (rho 0.864 / 0.637 / 0.163), so it no longer exercises the warning.
-    Seed 105 of the constant-effect simulation does: its UN optimum sits on
-    the ridge, and the fit is reported with a RuntimeWarning instead of
-    silently returning a covariance that is not positive definite.
+    A constant-effect simulation does: its UN optimum sits on the ridge, and
+    the fit is reported with a RuntimeWarning instead of silently returning a
+    covariance that is not positive definite.  Which seed reaches the ridge
+    depends on where the optimiser stops on a flat likelihood, so the seed is
+    chosen rather than pinned -- see ``_ridge_case``.
     """
-    time, event, study, treat = _simulate([0.35, 0.35, 0.35], seed=105,
-                                          k=14, n=250)
+    time, event, study, treat = _ridge_case()
     with pytest.warns(RuntimeWarning, match="ridge"):
         ma.piecewise_joint(time, event, study=study, treat=treat,
                            breaks=BREAKS, struct="UN")
@@ -317,18 +318,20 @@ def test_the_shipped_fit_is_interior_but_a_ridge_case_still_flags(joint_un):
     """The boundary flag is a property of the data, not of ``UN``.
 
     The regenerated fixture fits in the interior of the correlation cone, so
-    no structure flags a boundary.  The ridge is still reachable — seed 105
-    of the constant-effect simulation puts the ``UN`` optimum on it — and the
-    flag must fire there, which is what the spread and the warning exist for.
+    no structure flags a boundary.  The ridge is still reachable -- a
+    constant-effect simulation puts the ``UN`` optimum on it (see
+    ``_ridge_case``) -- and the flag must fire there, which is what the spread
+    and the warning exist for.
     """
     by = joint_un.structure_sensitivity()["by_struct"]
     assert by["UN"]["boundary"] is False
     assert by["DIAG"]["boundary"] is False
 
-    time, event, study, treat = _simulate([0.35, 0.35, 0.35], seed=105,
-                                          k=14, n=250)
+    time, event, study, treat = _ridge_case()
     ridge = ma.piecewise_joint(time, event, study=study, treat=treat,
                                breaks=BREAKS)
+    # the seed was chosen for this property, so the claim under test is that
+    # the flag survives the trip through ``structure_sensitivity``
     assert ridge.structure_sensitivity()["by_struct"]["UN"]["boundary"] is True
 
 
@@ -488,3 +491,32 @@ def _simulate(effect, *, seed, k, n, breaks=BREAKS, sd_study=0.12,
             out_tr.append(float(treat[b]))
     return (np.array(out_t), np.array(out_e), np.array(out_s),
             np.array(out_tr))
+
+
+# Seeds of the constant-effect simulation that put the UN optimum on the
+# ridge.  The list is a search order, not a set of expectations: the tests
+# take the first seed that lands on the boundary on the machine at hand.
+RIDGE_SEEDS = (110, 131, 132, 139)
+
+
+def _ridge_case():
+    """Data whose UN correlations sit on the boundary of the cone.
+
+    Whether a given simulation lands *exactly* on the ridge depends on where
+    L-BFGS-B stops on a flat likelihood, which is decided by the BLAS build
+    rather than by the model: seed 105 does it on one build and not on
+    another.  A few seeds are tried and the first that warns is returned, so
+    the tests assert that the warning exists rather than what one seed does on
+    one platform.
+    """
+    for seed in RIDGE_SEEDS:
+        data = _simulate([0.35, 0.35, 0.35], seed=seed, k=14, n=250)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            ma.piecewise_joint(data[0], data[1], study=data[2], treat=data[3],
+                               breaks=BREAKS)
+        if any("ridge" in str(w.message).lower() for w in caught):
+            return data
+    raise AssertionError(
+        f"none of the seeds {RIDGE_SEEDS} put the UN optimum on the "
+        "correlation ridge; add another seed to RIDGE_SEEDS")

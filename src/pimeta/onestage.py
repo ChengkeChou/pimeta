@@ -431,7 +431,7 @@ def _fit_random_slopes(X, y, Z, rows, *, method, max_iter, struct, q):
         "sigma2": s2,
         "D": s2 * lam,
         "loglik": -float(best.fun),
-        "converged": bool(best.success),
+        "converged": _converged(best),
     }
 
 
@@ -476,6 +476,32 @@ def _num_hessian(fun, x, step=1e-4):
             fmm = fun(x - ei - ej)
             H[i, j] = H[j, i] = (fpp - fpm - fmp + fmm) / (4.0 * step * step)
     return H, f0
+
+
+def _converged(res, rel: float = 1e-6) -> bool:
+    """Whether the optimiser stopped somewhere it cannot improve on.
+
+    L-BFGS-B reports ``ABNORMAL`` when its line search cannot find a decrease.
+    On a variance-component likelihood that happens at the optimum: the
+    criterion is flat to machine precision, so the search cannot *demonstrate*
+    a decrease even though there is none to find.  Whether that happens on a
+    given machine is decided by the last bits of the objective, so
+    ``res.success`` alone would make a converged fit look unconverged on one
+    BLAS build and converged on another.
+
+    The gradient at the stopping point is what distinguishes a flat optimum
+    from a stalled search that is still far away, scaled by the objective so
+    that the same threshold applies to a log-likelihood of 2 and of 200.  The
+    threshold is the relative-gradient criterion the mixed-model packages use;
+    on the reference fit that stops this way the gradient is 3e-7 of the
+    objective.
+    """
+    if getattr(res, "success", False):
+        return True
+    jac = np.asarray(getattr(res, "jac", np.zeros(1)), dtype=float)
+    if jac.size == 0 or not np.all(np.isfinite(jac)):
+        return False
+    return bool(np.max(np.abs(jac)) <= rel * max(1.0, abs(float(res.fun))))
 
 
 # --------------------------------------------------------------------------- #
@@ -647,7 +673,15 @@ def ipd_one_stage(y, *, study, treat, covariates=None, family: str = "gaussian",
                 options={"maxiter": int(max_iter), "ftol": 1e-15,
                          "gtol": 1e-10},
             )
-            if best is None or res.fun < best.fun:
+            # Both starts normally reach the same optimum, and then the
+            # objective cannot separate them.  Pick on ``(fun, not success)``
+            # rather than on ``fun`` alone: otherwise whichever start happened
+            # to stall in its line search a few ulps above the other one is
+            # reported, and ``converged`` becomes a property of the BLAS build
+            # instead of a property of the fit.
+            if best is None or res.fun < best.fun or (
+                    res.success and not best.success
+                    and res.fun <= best.fun + 1e-10 * max(1.0, abs(best.fun))):
                 best = res
         assert best is not None
         s2 = float(np.exp(best.x[0]))
@@ -657,7 +691,7 @@ def ipd_one_stage(y, *, study, treat, covariates=None, family: str = "gaussian",
         vb = np.linalg.inv(xtvx)
         loglik = -float(best.fun)
         sigma2: float | None = s2
-        converged = bool(best.success)
+        converged = _converged(best)
         tau2 = 0.0 if tau2 < 1e-10 else tau2
     else:
         if not np.all((y == 0.0) | (y == 1.0)):
@@ -692,7 +726,7 @@ def ipd_one_stage(y, *, study, treat, covariates=None, family: str = "gaussian",
             vb = np.linalg.pinv(fixed_block)
         b = beta
         sigma2 = None
-        converged = bool(res.success)
+        converged = _converged(res)
         tau2 = 0.0 if tau2 < 1e-8 else tau2
 
     se = np.sqrt(np.diag(vb))

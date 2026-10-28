@@ -16,11 +16,25 @@ pushed from a branch that is behind the remote names the wrong commit.
 ## 1. The suite, the linter, the types, the docs
 
 ```bash
-python -m pytest tests -q            # ~14 min; expect 0 failed, 6 skipped
+python -m pytest tests -q            # ~14 min; expect 0 failed, 18 skipped
 ruff check src tests tools
 python -m mypy src/pimeta            # the CI venv, not the anaconda one
 python tools/gen_api_docs.py         # then re-run `git status`: docs/ must be clean
 ```
+
+**Run it on Linux too, and run it first.** The wheel is built on `ubuntu-latest`,
+so a suite that is green on Windows and red on Linux is not a green suite: it
+just has not been run where it counts. Six failures in 1.1.2 were Windows-only
+assumptions, and every one of them was invisible locally. From Windows:
+
+```bash
+wsl.exe -d Ubuntu -e bash -lc "cd /mnt/<drive>/<path>/pimeta && \
+  PYTHONPATH=/mnt/<drive>/<path>/pimeta/src python3 -m pytest tests -q"
+```
+
+Write that as a `.sh` file and pass the path: PowerShell mangles `$?` and nested
+quotes inside `-lc`, and the failure looks like a Python error rather than a
+quoting one.
 
 `gen_api_docs.py` regenerating nothing is the proof that the public surface did
 not move. If it writes pages, the change is a documentation change and belongs
@@ -52,13 +66,22 @@ python -m venv /tmp/check
 import numpy as np, pimeta as ma
 d = np.genfromtxt('pimeta/tests/data/dynhet_spline.csv', delimiter=',', names=True)
 fit = ma.tau_trend(d['yi'], d['vi'], d['year'], tau='spline')
-print(ma.__version__, round(fit.sigma_s, 6), round(fit.edf, 6))
+sigma_s, edf = 4.121267, 1.532920      # tests/test_dynhet.py, SPLINE_SIGMA_S / SPLINE_EDF
+assert abs(fit.sigma_s - sigma_s) < 0.01, fit.sigma_s
+assert abs(fit.edf - edf) < 0.01, fit.edf
+print(ma.__version__, fit.sigma_s, fit.edf)
 "
 ```
 
-The pinned values are `4.121267` and `1.532920` (`tests/test_dynhet.py`,
-`SPLINE_SIGMA_S` / `SPLINE_EDF`). A wheel that installs but does not reproduce a
-pinned number is not a release candidate; it is a wheel.
+A wheel that installs but does not reproduce these is not a release candidate;
+it is a wheel.
+
+**Compare to four digits, not six.** The last digits move with the BLAS build:
+same bytes, same version, Linux returns `sigma_s = 4.1200197` and Windows
+`4.1212672` -- a relative difference of 3e-4 -- because the marginal likelihood
+in the wiggliness is nearly flat within one grid step. The rule is a tolerance
+of 1 per cent, and it is the same tolerance the test uses; a check that compares
+six digits fails on the machine that builds the wheel.
 
 Two things that cost an hour the first time: `python -m build` from inside the
 repository imports the local `./build/` directory instead of the build package,
