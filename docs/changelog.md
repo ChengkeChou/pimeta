@@ -40,10 +40,17 @@ reason that has nothing to do with the library. This fixes that reason. The
 
 ### Verified
 
-- The lesson from two failed releases is that testing the Windows working tree
-  from WSL is not testing the runner: `/mnt/d` still holds CRLF. The suite is
-  now run in a **fresh clone** on Linux (`git clone /mnt/d/... /tmp/pimeta_ci`),
-  which is the checkout the runner makes, plus the full suite on Windows.
+- The publish job's own environment, reproduced locally: **Ubuntu, Python
+  3.12.16**, a fresh git clone (LF throughout), the built wheel installed in a
+  clean environment with nothing but pytest on top -- **2532 passed,
+  18 skipped, 0 failed** in 1097 s, and the workflow's smoke test (every name
+  in `__all__` resolves, `rma` runs) prints 545 exports.
+- Windows, `_pimeta_clean` (Python 3.12.3, numpy 2.5.4): 2544 passed,
+  6 skipped, 0 failed.
+- The built sdist extracted and its suite run from inside: the packaging gaps
+  above would otherwise only show up for whoever downloads it.
+- `ruff check src tests tools` clean; `mypy src/pimeta` clean (120 files);
+  `twine check` passes on both artefacts.
 
 ## [1.1.3] - 2026-10-28
 

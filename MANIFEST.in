@@ -3,26 +3,22 @@ include README.md
 include CHANGELOG.md
 include pyproject.toml
 
-# Test suite and every file it reads, so `pytest` works from the sdist.
-# `tests/data` holds .csv, .tsv and MANIFEST.json; `tests/reference` holds the
-# R/Stata dumps the pinned numbers come from.  A wildcard on *.csv shipped
-# eleven of sixteen fixtures and no manifest, and the manifest test also wants
-# tools/r_reference/*.R, so a sdist user could not run the suite at all --
-# which the comment here claimed was the point of including tests/.
-recursive-include tests *.py
-recursive-include tests/data *
-recursive-include tests/reference *
+# Everything the suite reads, so `pytest` works from the sdist.  Listing
+# extensions instead of a wildcard missed a different directory each time:
+# tests/data held eleven of sixteen fixtures and no MANIFEST.json, the .tsv
+# reference and tests/reference were absent, and tests/validation/baseline and
+# tests/perf went missing too -- each breaking a different test module.
+recursive-include tests *
+recursive-include tools *
 
 # Runnable walkthrough referenced from the README.
-recursive-include examples *.py
+recursive-include examples *
 
 # Documentation sources (generated with `python tools/gen_api_docs.py`) and the
 # figures the guide pages link to; test_docs.py checks every relative link.
-recursive-include docs *.md
-recursive-include docs *.yml
-recursive-include docs *.png
-recursive-include docs *.svg
-recursive-include tools *.py
-recursive-include tools *.R
-recursive-include tools *.stan
+recursive-include docs *
+
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude .pytest_cache
 include mkdocs.yml
