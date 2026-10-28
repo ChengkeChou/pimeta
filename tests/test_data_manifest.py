@@ -40,8 +40,33 @@ def manifest() -> dict:
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
 
 
+def _content(path: Path) -> bytes:
+    """The fixture's bytes with line endings canonicalised to LF.
+
+    git checks text files out with CRLF on Windows and LF everywhere else, and
+    the manifest is computed from the canonical form, so a Windows working tree
+    and a runner checkout describe the same fixture.  Without this, 1.1.3's
+    manifest failed on the runner for six fixtures that differed from it by
+    exactly their line count.
+    """
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(_content(path)).hexdigest()
+
+
+@pytest.mark.parametrize("name", sorted(json.loads(
+    MANIFEST.read_text(encoding="utf-8"))["files"]) if MANIFEST.exists() else [])
+def test_the_bytes_are_the_bytes_the_manifest_recorded(manifest, name):
+    path = DATA / name
+    entry = manifest["files"][name]
+    size = len(_content(path))
+    assert size == entry["bytes"], (
+        f"{name} is {size} bytes of content, the manifest says "
+        f"{entry['bytes']}; the fixture changed, so the tests that depend on it "
+        "are no longer testing what they recorded")
+    assert _sha256(path) == entry["sha256"], f"{name} has changed content"
 
 
 def test_every_fixture_is_listed_and_nothing_else_is(manifest):
@@ -53,18 +78,6 @@ def test_every_fixture_is_listed_and_nothing_else_is(manifest):
         "`python tools/make_data_manifest.py`")
     assert not (listed - on_disk), (
         f"manifest entries with no file: {sorted(listed - on_disk)}")
-
-
-@pytest.mark.parametrize("name", sorted(json.loads(
-    MANIFEST.read_text(encoding="utf-8"))["files"]) if MANIFEST.exists() else [])
-def test_the_bytes_are_the_bytes_the_manifest_recorded(manifest, name):
-    path = DATA / name
-    entry = manifest["files"][name]
-    assert path.stat().st_size == entry["bytes"], (
-        f"{name} is {path.stat().st_size} bytes, the manifest says "
-        f"{entry['bytes']}; the fixture changed, so the tests that depend on it "
-        "are no longer testing what they recorded")
-    assert _sha256(path) == entry["sha256"], f"{name} has changed content"
 
 
 def test_every_entry_declares_a_known_origin_and_a_licence(manifest):

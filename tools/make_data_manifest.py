@@ -214,7 +214,20 @@ _ORIGINS = ("generated", "r-reference", "upstream", "unverified")
 
 
 def digest(path: Path) -> dict[str, Any]:
-    data = path.read_bytes()
+    """Fingerprint a fixture by its content, not by its line endings.
+
+    git checks text files out with CRLF on Windows and LF everywhere else, so
+    ``read_bytes`` gives a different SHA-256 and a different length for the
+    same committed file on the two platforms; the manifest then fails on the
+    platform that builds the wheel.  That is what happened to 1.1.3: six
+    fixtures were "changed" on the runner by exactly their line count.
+
+    Canonicalising to LF makes the fingerprint describe what git stores, which
+    is what "this fixture did not change" is meant to say.
+    ``.gitattributes`` pins the same rule for the checkout, so the two agree in
+    both directions.
+    """
+    data = path.read_bytes().replace(b"\r\n", b"\n")
     return {"sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data)}
 
 

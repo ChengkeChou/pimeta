@@ -29,13 +29,13 @@
       "sha256": "278666efbae51a80a799ab96ff9aee703bc8963a4ac54bac98367a67b343786f"
     },
     "_r_senn2013.tsv": {
-      "bytes": 39794,
+      "bytes": 38878,
       "licence": "MIT",
       "name": "_r_senn2013.tsv",
       "note": "output of the reference implementation, whose versions are recorded in the file's own header",
       "origin": "r-reference",
       "produced_by": "tools/r_reference/netmeta_senn2013.R",
-      "sha256": "559673e71a002007a663caed3d8c9d02a7b27af9ffefd3285564cf222a2f2b32"
+      "sha256": "d0af90576fa8bd05c1adcfc4644f1fe7be01465da28032b57abc644c040a0fb9"
     },
     "_senn2013_comparison.csv": {
       "bytes": 1887,
@@ -47,13 +47,13 @@
       "source": "netmeta::senn2013"
     },
     "dynhet.csv": {
-      "bytes": 1399,
+      "bytes": 1362,
       "licence": "MIT",
       "name": "dynhet.csv",
       "note": "simulated time-varying heterogeneity; the generating script fixes the seed, so the bytes are reproducible",
       "origin": "generated",
       "produced_by": "tools/make_dynhet_fixture.py",
-      "sha256": "4bdc2f1f931077ff200e33c308b9d2c1b0b8c5620054a167f8354ecc407609af"
+      "sha256": "47f2ac79e76d5ea6a8c9e01c965d222912d9f7f9c824390ed4e27e14fcadbf4c"
     },
     "dynhet_spline.csv": {
       "bytes": 2182,
@@ -74,13 +74,13 @@
       "sha256": "878b56d3bb0ba47f9473022155d8e19ed39be8dac48b2ccf26b424f58c3466e8"
     },
     "nma_bayes.csv": {
-      "bytes": 1085,
+      "bytes": 1052,
       "licence": "MIT",
       "name": "nma_bayes.csv",
       "note": "simulated arm-level network for the Bayesian NMA; checked against tools/quadrature_nma_bayes.py and multinma",
       "origin": "generated",
       "produced_by": "tools/make_nma_bayes_fixture.py",
-      "sha256": "98995e6c728dddfad4aec3d88da711cf645a5aab18817d6da6ecbcf695eed94e"
+      "sha256": "bac801da73eef81a57c6d4c16000492acbc6d3348ce962683862c047a4d22d41"
     },
     "nma_dose.csv": {
       "bytes": 1039,
@@ -110,31 +110,31 @@
       "sha256": "73d5e6912cdf9fcd904d1026f29b097c7c8f2cce1ddf8a301e4088458c3cb170"
     },
     "prediction_joint.csv": {
-      "bytes": 792,
+      "bytes": 773,
       "licence": "MIT",
       "name": "prediction_joint.csv",
       "note": "18 simulated accuracy studies with a C-statistic and a calibration slope; the generator fixes the seed and documents the data-generating process, and the reference numbers in tests/test_prediction_joint.py come from tools/r_reference/prediction_joint.R on exactly these bytes",
       "origin": "generated",
       "produced_by": "tools/make_prediction_joint_fixture.py",
-      "sha256": "628ac481d90e405e598f79404c52a63c0da4356c743876380bfaa78b6429ecff"
+      "sha256": "99e7193403408d0929c1ab1c740c64971e7ada3e8bcdaab90e5beba8c1e13dcf"
     },
     "robma.csv": {
-      "bytes": 388,
+      "bytes": 372,
       "licence": "MIT",
       "name": "robma.csv",
       "note": "simulated selection-model fixture used by the RoBMA and diagnostics tests",
       "origin": "generated",
       "produced_by": "tools/make_robma_fixture.py",
-      "sha256": "1ea8b8d90c2ec78321785a8c176fee4f04e1e306daba93011069db74c6c7f95f"
+      "sha256": "48a9c6d700241d96388b09189f68ff0903dbba97c8b9bb3a0556ff64ad12d8bd"
     },
     "timecourse.csv": {
-      "bytes": 1544,
+      "bytes": 1495,
       "licence": "MIT",
       "name": "timecourse.csv",
       "note": "16 simulated studies at 3, 6 and 12 months with a random intercept and slope and AR(1) within-study errors; the reference numbers come from tools/r_reference/timecourse.R",
       "origin": "generated",
       "produced_by": "tools/make_timecourse_fixture.py",
-      "sha256": "3ddbddf9a4357a4083549d22abbad7ceb2217234149acef5b9df4f233225dd6e"
+      "sha256": "d957f4fe0d8e95549b5de45a89ef87f4bc395ba6f1d7cd6e5c0e6cd187a556fe"
     },
     "tvhr_piecewise.csv": {
       "bytes": 100669,

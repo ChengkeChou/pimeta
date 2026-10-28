@@ -4,6 +4,32 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-10-28
+
+1.1.3 was never uploaded either: its publish run failed in the build job, for a
+reason that has nothing to do with the library. This fixes that reason. The
+1.1.3 notes below still describe the change that matters, so they stand.
+
+### Fixed
+
+- `tests/data/MANIFEST.json` recorded the fixtures' byte counts as they were in
+  a *Windows working tree*, where git had written CRLF. The blob is LF, so on
+  the runner six fixtures were "changed" by exactly their line count
+  (`_r_senn2013.tsv` 38878 vs 39794, `timecourse.csv` 1495 vs 1544,
+  `dynhet.csv` 1362 vs 1399, `nma_bayes.csv` 1052 vs 1085, `robma.csv` 372 vs
+  388, and one more), and the whole build job failed on a manifest that was
+  wrong rather than on a test that was. Both the generator
+  (`tools/make_data_manifest.py`) and the test now fingerprint the fixture with
+  line endings canonicalised to LF, so the number describes what git stores
+  and no longer depends on the machine that ran the tool.
+
+### Verified
+
+- The lesson from two failed releases is that testing the Windows working tree
+  from WSL is not testing the runner: `/mnt/d` still holds CRLF. The suite is
+  now run in a **fresh clone** on Linux (`git clone /mnt/d/... /tmp/pimeta_ci`),
+  which is the checkout the runner makes, plus the full suite on Windows.
+
 ## [1.1.3] - 2026-10-28
 
 1.1.2 was never uploaded: its publish run failed in the build job, before the
@@ -2943,6 +2969,7 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.4]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.2
 [1.1.1]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.1
