@@ -189,12 +189,20 @@ jobs:
         # Runs after both branches, so the log always states whether PyPI was
         # touched.  This is the answer to "the workflow was green but the new
         # version is not on PyPI".
+        #
+        # `continue-on-error` because this step only *reports*: 1.1.4's upload
+        # succeeded (both files landed on PyPI at 14:33 UTC) and the job still
+        # showed red because this step ran `python`, which ubuntu-latest no
+        # longer provides by default -- the publish job does not install
+        # Python, and it has no checkout, so there is nothing to set up.  A
+        # reporting bug must never mark a shipped release as failed.
+        continue-on-error: true
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             echo "::warning title=Nothing uploaded::DRY RUN - the upload step was skipped. Re-run this workflow with 'dry_run' unchecked to publish to PyPI."
             exit 0
           fi
-          python - <<'PY'
+          python3 - <<'PY'
           import pathlib
 
           # Read the version off the artifacts themselves, not pyproject.toml.
