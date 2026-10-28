@@ -127,6 +127,7 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
     print("the F reference is the Hotelling one, m = k - p")
     print()
     print(f"{ 'k':>5}{'chi2':>8}{'MC se':>8}{'F':>8}{'MC se':>8}"
+          f"{'HK':>8}{'MC se':>8}"
           f"{'KR':>8}{'MC se':>8}{'KR fail':>9}"
           f"{'marginal':>10}{'boundary':>10}{'chi2|ok':>9}{'F|ok':>8}"
           + (f"{'boot':>8}" if n_boot else ""))
@@ -136,6 +137,7 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
         rng = np.random.default_rng([seed0, k])
         hit_z = np.zeros(reps, dtype=bool)
         hit_f = np.zeros(reps, dtype=bool)
+        hit_hk = np.zeros(reps, dtype=bool)
         hit_kr = np.zeros(reps, dtype=bool)
         kr_bad = np.zeros(reps, dtype=bool)
         hit_boot = np.zeros(reps, dtype=bool)
@@ -146,8 +148,10 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
             reg = ma.predict_region(fit, level=level)
             d = reg.distance(fresh)
             tst = ma.predict_region(fit, level=level, test="t")
+            hk = ma.predict_region(fit, level=level, test="hk")
             hit_z[r] = d <= reg.crit
             hit_f[r] = d <= tst.crit
+            hit_hk[r] = d <= hk.crit
             try:
                 kr = ma.mv.kenward_roger_region(fit, level=level)
                 hit_kr[r] = d <= kr["crit"]
@@ -162,16 +166,18 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
                                           rng=rng, k=k)
                 hit_boot[r] = bool(np.isfinite(crit) and d <= crit)
         pz, pf, pm = hit_z.mean(), hit_f.mean(), marg.mean()
+        phk = hit_hk.mean()
         okz, okf = hit_z[~bad], hit_f[~bad]
         usable = ~kr_bad
         pkr = hit_kr[usable].mean() if usable.any() else float("nan")
         print(f"{k:5d}{pz:8.3f}{_se(pz, reps):8.3f}{pf:8.3f}{_se(pf, reps):8.3f}"
+              f"{phk:8.3f}{_se(phk, reps):8.3f}"
               f"{pkr:8.3f}{_se(pkr, int(usable.sum())):8.3f}"
               f"{kr_bad.mean():9.3f}"
               f"{pm:10.3f}{bad.mean():10.3f}"
               f"{_mean(okz):9.3f}{_mean(okf):8.3f}"
               + (f"{hit_boot.mean():8.3f}" if n_boot else ""))
-        rows.append((k, pz, pf, pm, pkr))
+        rows.append((k, pz, pf, pm, pkr, phk))
     print()
     print("marginal is the coverage of two per-outcome z intervals: it "
           "under-covers because it ignores the correlation")
@@ -181,6 +187,8 @@ def run(reps, k_list=(10, 20, 40, 80), seed0=0, level=LEVEL, n_boot=0):
     if any(np.isfinite(row[4]) for row in rows):
         worst = max(abs(row[4] - level) for row in rows if np.isfinite(row[4]))
         print(f"worst |coverage(KR) - {level:.2f}| = {worst:.3f}")
+    worst_hk = max(abs(row[5] - level) for row in rows)
+    print(f"worst |coverage(HK) - {level:.2f}| = {worst_hk:.3f}")
     return rows
 
 

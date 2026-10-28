@@ -245,6 +245,73 @@ def test_an_observation_with_the_wrong_shape_is_rejected(fit):
         ma.predict_region(fit, observation=np.eye(3))
 
 
+# --------------------------------------------------------------------------- #
+# the multivariate Hartung-Knapp reference
+# --------------------------------------------------------------------------- #
+def test_the_hk_reference_inflates_only_the_estimation_part(fit):
+    """q multiplies the covariance of mu_hat, not the between-study covariance.
+
+    That is the difference between a Knapp-Hartung prediction interval,
+    ``mu_hat +- t sqrt(q se^2 + tau^2)``, and an interval that scales
+    everything -- and it changes the *shape* of the ellipsoid, not just its
+    size, which is why it cannot be emulated by enlarging the critical value.
+    """
+    plain = ma.predict_region(fit, test="z")
+    hk = ma.predict_region(fit, test="hk")
+    sigma = np.asarray(fit.g_matrix()[0], dtype=float)
+    assert hk.scale >= 1.0
+    assert hk.cov == pytest.approx(hk.scale * np.asarray(fit.vb) + sigma,
+                                   rel=1e-12)
+    assert plain.cov == pytest.approx(np.asarray(fit.vb) + sigma, rel=1e-12)
+    # the between-study part is untouched: subtracting it leaves q*vb
+    assert hk.cov - sigma == pytest.approx(hk.scale * np.asarray(fit.vb),
+                                           rel=1e-12)
+
+
+def test_the_hk_critical_value_is_J_times_an_F(fit):
+    """The reference is J*F(J, m) with m counted in *studies*, not in rows.
+
+    ``fit.k`` is the number of rows (two outcomes per study here); the
+    correction is about how many independent studies stand behind ``mu_hat``,
+    which is half of that.  Counting rows is what makes the correction almost
+    inert, and it is the mistake this test exists to catch.
+    """
+    region = ma.predict_region(fit, test="hk")
+    m = float(5 - fit.p)                      # the fixture has five studies
+    assert region.crit == pytest.approx(2.0 * stats.f.ppf(0.95, 2, m),
+                                       rel=1e-12)
+    assert region.df == pytest.approx([2.0, m])
+    assert "Hartung-Knapp" in str(region)
+
+
+def test_the_hk_scale_uses_studies_while_the_fit_s2w_uses_rows(fit):
+    """The two quadratic forms are the same; only the divisor differs.
+
+    ``RmaMvResult.s2w`` is ``r'M^{-1}r / (rows - p)``, which is the univariate
+    Knapp-Hartung convention applied to the rows.  The multivariate region
+    divides by ``(studies - p)``, so the two are related by a known factor --
+    asserting the identity is what keeps them from drifting apart.
+    """
+    data = {"study": STUDY, "outcome": OUTCOME,
+            "yi": np.array(YI), "vi": np.array(VI)}
+    V = ma.vcalc(np.array(VI), cluster=data["study"], obs=data["outcome"],
+                 rho=0.5)
+    X, _ = design_matrix("~ outcome - 1", data)
+    knha = ma.rma_mv(np.array(YI), V=V, mods=X, data=data,
+                     random="~ outcome | study", struct="UN",
+                     intercept=False, test="knha")
+    rows = int(knha.k)
+    studies = 5
+    factor = (rows - int(knha.p)) / (studies - int(knha.p))
+    assert ma.predict_region(knha, test="hk").scale == pytest.approx(
+        max(1.0, float(knha.s2w) * factor), rel=1e-10)
+
+
+def test_the_hk_reference_needs_residual_degrees_of_freedom(fit):
+    with pytest.raises(ValueError, match="degrees of freedom"):
+        ma.predict_region(fit, test="hk", df=1.0)
+
+
 def test_the_record_and_the_text(fit):
     region = ma.predict_region(fit)
     record = region.to_dict()

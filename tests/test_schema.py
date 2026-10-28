@@ -9,7 +9,6 @@ have nothing to report, so the clean case is checked explicitly.
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import pimeta as ma
@@ -69,8 +68,9 @@ def test_the_multilevel_result_carries_the_same_three_blocks():
     vi = rng.uniform(0.02, 0.06, cluster.size)
     yi = 0.3 + rng.normal(0.0, 0.25, 6)[cluster] + rng.normal(0.0, 0.05,
                                                               cluster.size)
-    d = pd.DataFrame({"yi": yi, "vi": vi, "cluster": cluster})
-    fit = ma.rma_mv(d["yi"].to_numpy(float), vi=d["vi"].to_numpy(float),
+    d = {"yi": yi, "vi": vi, "cluster": cluster}
+    fit = ma.rma_mv(np.asarray(d["yi"], dtype=float),
+                    vi=np.asarray(d["vi"], dtype=float),
                     data=d, random="~ 1 | cluster")
     out = fit.to_dict()
     assert out["schema_version"] == SCHEMA_VERSION

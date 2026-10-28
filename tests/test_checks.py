@@ -8,11 +8,11 @@ useless as one that never does.
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import pimeta as ma
@@ -28,9 +28,15 @@ def _stub(**kw):
 
 
 def _fixture():
-    d = pd.read_csv(Path(__file__).resolve().parents[1]
-                    / "tests" / "data" / "robma.csv")
-    return d["yi"].to_numpy(float), d["sei"].to_numpy(float)
+    # read with the csv module, not pandas: pandas is an optional dependency of
+    # pimeta, and the CI matrix installs only the hard requirements.  A module
+    # that imports it at top level makes pytest fail to *collect* the file, which
+    # is how this suite went red on every shard of every interpreter.
+    path = Path(__file__).resolve().parents[1] / "tests" / "data" / "robma.csv"
+    with path.open(newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    return (np.array([float(r["yi"]) for r in rows]),
+            np.array([float(r["sei"]) for r in rows]))
 
 
 # --------------------------------------------------------------------------- #

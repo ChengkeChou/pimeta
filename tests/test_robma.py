@@ -17,10 +17,10 @@ MCMC error, not round numbers. ``tests/reference/robma_robma.csv`` is written by
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import pytest
 
 import pimeta as ma
@@ -29,15 +29,33 @@ from pimeta.robma import DEFAULTS as ROBMA_DEFAULTS
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _rows(path):
+    """A CSV as a list of dicts.
+
+    ``csv`` rather than pandas: pandas is an optional dependency, and a test
+    module that imports it makes pytest fail to collect the whole file wherever
+    it is missing.  The reference tables have a column literally named ``0.025``,
+    which ``np.genfromtxt`` cannot turn into a field name, so the standard
+    library's reader is the one that works here.
+    """
+    with Path(path).open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _row(rows, key, value):
+    return next(r for r in rows if r[key] == value)
+
+
 @pytest.fixture(scope="module")
 def fixture():
-    d = pd.read_csv(ROOT / "tests" / "data" / "robma.csv")
-    return d["yi"].to_numpy(float), d["sei"].to_numpy(float)
+    d = _rows(ROOT / "tests" / "data" / "robma.csv")
+    return (np.array([float(r["yi"]) for r in d]),
+            np.array([float(r["sei"]) for r in d]))
 
 
 @pytest.fixture(scope="module")
 def reference():
-    return pd.read_csv(ROOT / "tests" / "reference" / "robma_robma.csv")
+    return _rows(ROOT / "tests" / "reference" / "robma_robma.csv")
 
 
 @pytest.fixture(scope="module")
@@ -127,7 +145,7 @@ def test_a_single_model_matches_its_closed_form_marginal_likelihood(fixture):
 # agreement with the reference implementation
 # --------------------------------------------------------------------------- #
 def test_pooled_effect_agrees_with_the_reference(fit, reference):
-    mu = reference.set_index("term").loc["mu"]
+    mu = _row(reference, "term", "mu")
     assert fit.mu["mean"] == pytest.approx(float(mu["Mean"]), abs=0.02)
     assert fit.mu["sd"] == pytest.approx(float(mu["SD"]), abs=0.01)
     assert fit.mu["q_low"] == pytest.approx(float(mu["0.025"]), abs=0.03)
@@ -135,7 +153,7 @@ def test_pooled_effect_agrees_with_the_reference(fit, reference):
 
 
 def test_heterogeneity_agrees_with_the_reference(fit, reference):
-    tau = reference.set_index("term").loc["tau"]
+    tau = _row(reference, "term", "tau")
     assert fit.tau["mean"] == pytest.approx(float(tau["Mean"]), abs=0.02)
     # the upper tail of tau is the least accurate quantity here: the posterior is
     # three quarters point mass at zero plus a long thin tail, and the tail is
@@ -146,8 +164,7 @@ def test_heterogeneity_agrees_with_the_reference(fit, reference):
 
 
 def test_inclusion_probabilities_agree_with_the_reference(fit, reference):
-    inc = pd.read_csv(ROOT / "tests" / "reference" / "robma_robma_inclusion.csv"
-                      ).set_index("component")
+    inc = _rows(ROOT / "tests" / "reference" / "robma_robma_inclusion.csv")
     pairs = {
         "Effect": "Effect",
         "Heterogeneity": "Heterogeneity",
@@ -155,7 +172,7 @@ def test_inclusion_probabilities_agree_with_the_reference(fit, reference):
     }
     for ours, theirs in pairs.items():
         assert fit.inclusion[ours]["post_prob"] == pytest.approx(
-            float(inc.loc[theirs, "post_prob"]), abs=0.03)
+            float(_row(inc, "component", theirs)["post_prob"]), abs=0.03)
 
 
 # --------------------------------------------------------------------------- #

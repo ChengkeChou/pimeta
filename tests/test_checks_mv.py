@@ -10,7 +10,6 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import numpy as np
-import pandas as pd
 
 import pimeta as ma
 
@@ -34,11 +33,14 @@ def _multilevel_data():
     # estimated at zero and the silent test cannot be silent
     offset = rng.normal(0.0, 0.25, n_clusters)[cluster]
     yi = 0.3 + offset + rng.normal(0.0, 0.05, cluster.size)
-    return pd.DataFrame({"yi": yi, "vi": vi, "cluster": cluster, "id": idv})
+    # a mapping, not a DataFrame: pandas is optional, and importing it at module
+    # level turns a missing optional dependency into a collection error
+    return {"yi": yi, "vi": vi, "cluster": cluster, "id": idv}
 
 
 def _fit_multilevel(d, mods=None):
-    return ma.rma_mv(d["yi"].to_numpy(float), vi=d["vi"].to_numpy(float),
+    return ma.rma_mv(np.asarray(d["yi"], dtype=float),
+                     vi=np.asarray(d["vi"], dtype=float),
                      mods=mods, data=d, random="~ 1 | cluster / id",
                      method="REML")
 

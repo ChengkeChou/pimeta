@@ -19,14 +19,25 @@ counts the baseline records.
 
 from __future__ import annotations
 
+import sys
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 import pimeta as ma
-from tools import coverage_ipd_curve as band_harness
-from tools import coverage_predict_region as region_harness
+
+# The harnesses live in `tools/`, which is not an installed package: under
+# `python -m pytest` the cwd happens to be on `sys.path` and the import works,
+# under any other launcher it does not.  Making it explicit is cheaper than a
+# test that passes or fails depending on how it was started.
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from tools import coverage_ipd_curve as band_harness  # noqa: E402
+from tools import coverage_predict_region as region_harness  # noqa: E402
 
 REPS = 12
 

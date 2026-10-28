@@ -93,6 +93,9 @@ class PredictionRegion:
     for_observation: bool = False
     test: str = "z"
     df: list[float] | None = None
+    #: variance inflation applied to the *estimation* part of the covariance
+    #: (1.0 unless ``test="hk"``); the between-study part is never inflated
+    scale: float = 1.0
 
     @property
     def dim(self) -> int:
@@ -131,6 +134,11 @@ class PredictionRegion:
         return rows
 
     def _reference(self) -> str:
+        if self.test == "hk":
+            df = self.df or []
+            return (f"multivariate Hartung-Knapp F({self.dim}, "
+                    f"{df[1]:g})" if len(df) > 1 else "multivariate "
+                    "Hartung-Knapp F")
         if self.test == "t":
             df = self.df or []
             return f"Hotelling F({self.dim}, {df[1]:g})" if len(df) > 1 \
@@ -191,6 +199,65 @@ def _univariate_sigma(result):
         return None, []
     tau2 = float(np.sum(np.asarray(comps, dtype=float)))
     return np.array([[tau2]], dtype=float), []
+
+
+def _n_studies(result) -> int:
+    r"""The number of independent units behind a fit.
+
+    ``result.k`` counts *rows*: a two-outcome meta-analysis over ten studies has
+    twenty.  The Knapp-Hartung reference is about how many independent
+    replications stand behind :math:`\hat\mu`, and that is the number of
+    studies.  Using the row count made the correction almost inert -- the
+    measurement below is why this function exists: at ``k = 10`` studies the
+    row-based version covered 0.84 and the study-based one 0.91.
+
+    The grouping is read from the random components, whose outermost factor is
+    the study; a fit with no random component falls back to the row count.
+    """
+    counts = []
+    for comp in (getattr(result, "components", None) or []):
+        groups = getattr(comp, "outer_groups", None)
+        if groups is not None and np.size(groups):
+            counts.append(int(np.unique(np.asarray(groups)).size))
+    return min(counts) if counts else int(result.k)
+
+
+def _hk_scale(result) -> tuple[float, int]:
+    r"""The multivariate Knapp-Hartung variance inflation factor and its df.
+
+    .. math::
+
+        q = \frac{1}{k_s - p}\sum_i
+            (\hat y_i - X_i\hat\beta)'\,M^{-1}\,(\hat y_i - X_i\hat\beta),
+
+    with :math:`M = V + \mathrm{blockdiag}(\hat\Sigma)` the marginal covariance
+    of the observations, :math:`k_s` the number of **studies** and :math:`p` the
+    number of fixed coefficients.  It is the multivariate form of the quantity
+    the univariate Knapp-Hartung correction uses, and the fit already computes
+    it: :attr:`RmaMvResult.s2w` *is* this number when the model was fitted with
+    ``test="knha"``.  It is recomputed here because a fit made with
+    ``test="z"`` or ``"t"`` does not fill it in, and a prediction region should
+    not depend on which test the user happened to ask for at fit time.
+
+    Returns ``(1.0, df)`` when the quantity is undefined (no residual degrees of
+    freedom, a singular marginal covariance): the honest fallback is "no
+    inflation", which is the region the closed-form references give.
+    """
+    p = int(result.p)
+    df = _n_studies(result) - p
+    M = np.asarray(getattr(result, "M", np.empty((0, 0))), dtype=float)
+    if df <= 0 or M.size == 0:                          # pragma: no cover
+        return 1.0, max(df, 1)
+    resid = (np.asarray(result.yi, dtype=float).ravel()
+             - np.asarray(result.X, dtype=float)
+             @ np.asarray(result.beta, dtype=float).ravel())
+    try:
+        rss = float(resid @ np.linalg.solve(M, resid))
+    except np.linalg.LinAlgError:                       # pragma: no cover
+        return 1.0, df
+    if not np.isfinite(rss) or rss <= 0.0:
+        return 1.0, df
+    return rss / df, df
 
 
 def _bootstrap_critical(result, *, level, simulate, n_boot: int,
@@ -326,9 +393,9 @@ def predict_region(result, *, level=None, observation=None, test="t",
     """
     if not isinstance(result, RmaMvResult):
         raise TypeError("'result' must be an RmaMvResult from rma_mv()")
-    if test not in ("z", "t", "bootstrap"):
+    if test not in ("z", "t", "hk", "bootstrap"):
         raise ValueError(
-            f"unknown test: {test!r}; expected 'z', 't' or 'bootstrap'")
+            f"unknown test: {test!r}; expected 'z', 't', 'hk' or 'bootstrap'")
     G, names = result.g_matrix()
     if G is None:
         G, names = _univariate_sigma(result)
@@ -340,6 +407,23 @@ def predict_region(result, *, level=None, observation=None, test="t",
     mu = np.asarray(result.beta, dtype=float).ravel()
     V = np.asarray(result.vb, dtype=float)
     Sigma = np.asarray(G, dtype=float)
+    scale = 1.0
+    if test == "hk":
+        # Inflate the *estimation* part of the covariance and leave the
+        # between-study part alone.  That is what Knapp-Hartung does to a
+        # prediction interval -- mu_hat +- t_{k-p} sqrt(q se^2 + tau^2) -- and
+        # it matters for the shape of the ellipsoid, not just its size: scaling
+        # the whole covariance instead would stretch the between-study
+        # directions, which are estimated by a different mechanism entirely.
+        #
+        # `vb` may already carry the factor when the fit was made with
+        # test="knha"; dividing it out keeps this function from squaring a
+        # correction that was already applied.
+        s2w = float(getattr(result, "s2w", 1.0) or 1.0)
+        phi = V / s2w if s2w > 0.0 else V
+        q, hk_df = _hk_scale(result)
+        scale = max(1.0, q)
+        V = scale * phi
     cov = V + Sigma
     for_observation = False
     if observation is not None:
@@ -378,6 +462,18 @@ def predict_region(result, *, level=None, observation=None, test="t",
                 "to 0.94 at k=40; the Hotelling reference (test='t') gave "
                 "0.83, 0.93 and 0.95 at the same settings",
                 RuntimeWarning, stacklevel=2)
+    elif test == "hk":
+        m = float(hk_df if df is None else df)
+        if not np.isfinite(m) or m <= 1.0:
+            raise ValueError(
+                f"test='hk' needs residual degrees of freedom above 1 and got "
+                f"{m:g}; use test='z' or pass df=")
+        # J * F(J, m): the Wald quadratic form divided by J is referred to an F
+        # with the residual degrees of freedom in the denominator.  The
+        # covariance is fixed -- by the inflation above -- so this is the only
+        # remaining free parameter of the reference.
+        crit = float(J * stats.f.ppf(1.0 - alpha, J, m))
+        ref_df = [float(J), m]
     else:
         m = float(int(result.k) - int(result.p) if df is None else df)
         if not np.isfinite(m) or m <= J:
@@ -407,4 +503,5 @@ def predict_region(result, *, level=None, observation=None, test="t",
         for_observation=for_observation,
         test=test,
         df=ref_df,
+        scale=float(scale),
     )
