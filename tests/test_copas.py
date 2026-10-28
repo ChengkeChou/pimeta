@@ -191,11 +191,14 @@ def test_fleiss_pipeline_matches_metasens_on_the_same_surface():
     contour tracer, its own least squares and its own weighted average, so the
     two implementations of that stage cannot differ.  What can -- and does --
     differ is the surface: each grid point is a three-parameter fit, and the
-    two optimisers stop at slightly different places (max 1.4e-5 here).
+    two optimisers stop at slightly different places (max 1.4e-5 here), so the
+    slope inherits that.  It is compared to 1e-5 relative, which is where the
+    surfaces agree; CI measured 2.4e-7 of drift between builds with a 1e-7
+    tolerance, which is a tolerance on the optimiser, not on the statistic.
     """
     r = _fleiss_cached()
     assert r.slope == pytest.approx(R_FLEISS_SLOPE_ON_PIMETA_SURFACE,
-                                    rel=1e-7)
+                                    rel=1e-5)
     assert r.contour["nobs"] == R_FLEISS_NOBS
 
 

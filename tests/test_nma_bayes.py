@@ -113,7 +113,12 @@ def test_marginal_likelihood_equals_numerical_integration():
                 + stats.norm.logpdf(y[1], grid + d[0], math.sqrt(v[1] + tau2))
                 + stats.norm.logpdf(grid, 0.0, sd))
         top = float(np.max(logp))
-        direct = top + float(np.log(np.trapezoid(np.exp(logp - top), grid)))
+        # numpy 2 renamed ``trapz`` to ``trapezoid``, and the project supports
+        # numpy 1.24, where only the old name exists.  CI runs both.
+        trapz = getattr(np, "trapezoid", None)
+        if trapz is None:                                   # numpy < 2.0
+            trapz = np.trapz                                   # noqa: NPY201
+        direct = top + float(np.log(trapz(np.exp(logp - top), grid)))
         # the closed form omits the 2 * -log(2 pi)/2 of the two density constants
         assert closed - direct == pytest.approx(math.log(2.0 * math.pi), abs=1e-8)
 

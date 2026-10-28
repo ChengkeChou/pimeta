@@ -36,6 +36,21 @@ Write that as a `.sh` file and pass the path: PowerShell mangles `$?` and nested
 quotes inside `-lc`, and the failure looks like a Python error rather than a
 quoting one.
 
+**Clone first.** Running the suite from `/mnt/d/...` is not running it on the
+runner: that path is a Windows working tree, so a file git stores with LF may
+be on disk with CRLF. The 1.1.3 publish failed exactly there -- six fixtures
+were "changed" by their line count, because `tests/data/MANIFEST.json` had been
+generated from a CRLF tree. Clone into the Linux filesystem instead:
+
+```bash
+wsl.exe -d Ubuntu -e bash -lc "git clone /mnt/d/<path>/pimeta /tmp/pc && \
+  cd /tmp/pc && PYTHONPATH=/tmp/pc/src python3 -m pytest tests -q"
+```
+
+The manifest now canonicalises line endings, so it cannot be poisoned this way
+again, but the rule is general: fixtures, `--check` scripts and the sdist are
+all compared against what git stores.
+
 `gen_api_docs.py` regenerating nothing is the proof that the public surface did
 not move. If it writes pages, the change is a documentation change and belongs
 in the changelog.

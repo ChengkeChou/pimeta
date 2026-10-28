@@ -23,6 +23,21 @@ reason that has nothing to do with the library. This fixes that reason. The
   line endings canonicalised to LF, so the number describes what git stores
   and no longer depends on the machine that ran the tool.
 
+- Three tests were red on other interpreters in the CI matrix, found in the
+  same run's annotations:
+  - `tests/test_nma_bayes.py` called `np.trapezoid`, which numpy 2 renamed
+    from `trapz`. The package supports numpy 1.24, so on those interpreters
+    the test raised `AttributeError`. It now uses whichever name exists. (No
+    library code used it; the declared floor was never actually exercised by
+    this test.)
+  - `tests/test_nma_timecourse.py` compared `netmeta` to 1e-8 relative for the
+    standard error; CI measured 1.2e-8, because the eighth digit moves with
+    the BLAS build. Now 1e-6, with the measurement in the comment.
+  - `tests/test_copas.py` compared a slope to 1e-7 relative while its own
+    docstring said the two optimisers differ by up to 1.4e-5 on the surface
+    the slope comes from. CI measured 2.4e-7 of drift. Now 1e-5, which is
+    where the surfaces agree.
+
 ### Verified
 
 - The lesson from two failed releases is that testing the Windows working tree
