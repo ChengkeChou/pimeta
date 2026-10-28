@@ -163,12 +163,17 @@ def test_the_league_table_contains_every_pair_once(fit):
 
 
 def test_centring_a_covariate_within_study_does_not_change_the_network():
-    """A within-study shift is absorbed by the study intercept, by design."""
+    """A within-study shift is absorbed by the study intercept, by design.
+
+    The identity is exact in arithmetic and 1e-7 in floating point: the
+    treatment effects are around -0.05 here, so ``abs=1e-8`` is 2e-7
+    relative and one CI shard measured that much drift between builds.
+    """
     shifted = XVAR + np.array([7.0 if s == 3 else 0.0 for s in STUDY])
     base = ipd_nma(Y, study=STUDY, treat=TREAT, covariates={"x": XVAR})
     moved = ipd_nma(Y, study=STUDY, treat=TREAT, covariates={"x": shifted})
-    assert moved.d == pytest.approx(base.d, abs=1e-8)
-    assert moved.gamma == pytest.approx(base.gamma, abs=1e-8)
+    assert moved.d == pytest.approx(base.d, abs=1e-6)
+    assert moved.gamma == pytest.approx(base.gamma, abs=1e-6)
 
 
 def test_a_treatment_by_covariate_interaction_is_estimable(fit):
