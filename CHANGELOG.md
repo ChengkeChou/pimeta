@@ -4,6 +4,57 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-10-29
+
+### Fixed
+
+- **A negative between-outcome correlation could not be estimated** in a
+  `struct="UN"` model with three or more inner levels. `_UNComp.chol_bounds`
+  bound the first `J` entries of the lower-triangular factor, but that vector
+  is column-major, so it bound `L00, L10, L20` -- the first *column* -- instead
+  of the diagonal `L00, L11, L22`. The pair between the first inner level and
+  the others was therefore non-negative by construction: its starting point
+  sat outside the box and was clipped onto the boundary at the first
+  iteration. Measured on a 60-study simulation whose true correlations are
+  (-0.60, 0.20, -0.30), 1.1.4 returned `rho = (0.0000, 0.2854, -0.1272)` --
+  exactly zero where the bound bit, estimated where it did not
+  (`tools/reproduce_neg_rho_clip.py`). The bounds now bind `i == j`.
+- The free diagonal also made the factor non-unique: `L` and the
+  column-signed `L` describe the same `G`, so the likelihood was flat along
+  that direction. With the diagonal non-negative the factor is the Cholesky
+  factor and the direction is gone.
+
+### Changed
+
+- The corrected box alone made fits *worse*, and the cause was not the box.
+  Once the box admits `|rho| = 1`, the correlation matrix reconstructed from
+  the factor is singular, the cone test inside the objective says no, and the
+  objective jumps to `1e5` at exactly the point the optimiser has to cross: on
+  the tvhr fixture the log-likelihood fell from -5.29 to -5.79 and the fit
+  parked on the plateau. The Cholesky route now skips that test
+  (`check_cone=False`), because there `G = L L'` is positive semidefinite by
+  construction and the test was rejecting the boundary solutions the route
+  exists to describe.
+- With that, a single start on the corrected box reaches the same optimum the
+  shipped code reached on every fixture tested (tvhr: -5.2933166, identical
+  `tau2`, `rho` and `beta` to the last digit) *and* the correlations the old
+  box excluded. The cost of a `UN` fit with `J >= 3` is unchanged.
+- Consequence for existing results: the shipped fixtures are unchanged (the
+  1.1.4 numbers are reproduced to the last digit, and `tests/test_mv_chol_bounds.py`
+  pins that), while models whose correlations the old box excluded can now
+  reach them.
+
+### Added
+
+- `tests/test_mv_chol_bounds.py`: the bound ordering, a negative correlation
+  that must be estimated rather than clipped, and the value the multi-start
+  chooses on the tvhr fixture.
+- `tests/test_api_contract.py` and the README correction that goes with it:
+  `result.b` is a `list[float]`, not an `np.ndarray`. `result.vb`, `result.X`
+  and `result.mods` are arrays; every per-study field is a list. The README
+  claimed the opposite in both languages, so `r.b.tolist()` raised and
+  `r.b @ x` raised `TypeError`.
+
 ## [1.1.4] - 2026-10-28
 
 1.1.3 was never uploaded either: its publish run failed in the build job, for a
@@ -2991,6 +3042,7 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.5]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.5
 [1.1.4]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.4
 [1.1.3]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.3
 [1.1.2]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.2

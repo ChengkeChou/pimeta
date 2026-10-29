@@ -992,32 +992,23 @@ class _UNComp:
     def chol_bounds(self) -> list:
         """Bounds for the Cholesky vector: non-negative diagonal, free elsewhere.
 
-        FIXME(1.1.5): the vector is column-major (``L00, L10, L20, L11, L21,
-        L22`` for ``J = 3``), so the diagonal is *not* the first ``J`` entries.
-        Binding the first ``J`` pins ``L10``/``L20`` above zero and leaves
-        ``L11``/``L22`` free.  Measured on a 60-study, three-outcome simulation
-        whose true correlations are (-0.60, 0.20, -0.30):
+        The vector is *column-major* (``L00, L10, L20, L11, L21, L22`` for
+        ``J = 3``), so the diagonal is not the first ``J`` entries.  Binding the
+        first ``J`` pinned ``L10``/``L20`` above zero and left ``L11``/``L22``
+        free, which made every model whose first inner level correlates
+        negatively with the others unreachable: a 60-study simulation with true
+        correlations (-0.60, 0.20, -0.30) returned ``rho = (0.0000, 0.2854,
+        -0.1272)`` -- exactly zero for the pair in the first column, estimated
+        for the two outside it (``tools/reproduce_neg_rho_clip.py``).
 
-        * as shipped, ``rho`` comes back ``(0.0000, 0.2854, -0.1272)`` -- the
-          pair in the first column cannot go negative at all, because its
-          starting point ``L10 = -0.60`` is clipped onto the bound at the first
-          iteration, while the pairs outside the first column are recovered;
-        * binding ``i == j`` instead returns ``(-0.3345, 0.3206, -0.2126)``.
-
-        The fix is one line (``(0.0, None) if i == j else (None, None)``) and it
-        is *not* applied here because it moves every ``UN`` fit onto the part of
-        the cone the old bounds excluded, which re-positions five tests that pin
-        the ridge of the tvhr fixture (``test_the_unstructured_fit_matches_metafor_loosely``,
-        ``test_the_linear_trend_matches_metafor``, the trend-statistic pin, the
-        "shipped fit is interior" assertion, and the ipd_curve centring check).
-        Those numbers describe where the optimiser stopped on a flat
-        likelihood, not what the data say, so they need re-deriving rather than
-        re-tolerancing.  See the 1.1.5 plan.
+        Binding the diagonal instead also removes a redundancy the old bounds
+        introduced: a free diagonal lets ``L`` and the column-signed ``L``
+        describe the same ``G``, so the surface was flat along that direction.
+        With the diagonal non-negative the factor is the Cholesky factor, which
+        is unique.
         """
-        return (
-            [(0.0, None)] * self._n_free_tau2
-            + [(None, None)] * self._n_free_rho
-        )
+        pairs = [(i, j) for j in range(self.J) for i in range(j, self.J)]
+        return [(0.0, None) if i == j else (None, None) for i, j in pairs]
 
     def report(self, p: np.ndarray):
         tau2 = [float(x) for x in self._full_tau2(p)]
@@ -1419,7 +1410,7 @@ def rma_mv(
     init = np.concatenate([c.init(tau2_val) for c in components])
     bounds = [b for c in components for b in c.bounds()]
 
-    def obj(params):
+    def obj(params, check_cone: bool = True):
         D_list = []
         offset = 0
         penalty = 0.0
@@ -1427,12 +1418,21 @@ def rma_mv(
             piece = params[offset : offset + c.n_params]
             offset += c.n_params
             valid = getattr(c, "is_valid", None)
-            if valid is not None and not valid(piece):
-                # Only reachable when parameters are pinned (the free path is
-                # optimised on the Cholesky vector, which cannot leave the
-                # cone).  A smooth quadratic barrier pushes the iterate back
-                # inside instead of a hard wall, which would stall the line
-                # search on a non-smooth cliff.
+            if check_cone and valid is not None and not valid(piece):
+                # Reachable when the *external* (tau2, rho) vector is optimised:
+                # a rho inside its box can still give an indefinite R.  A
+                # smooth quadratic barrier pushes the iterate back inside
+                # instead of a hard wall, which would stall the line search on
+                # a non-smooth cliff.
+                #
+                # Not applied on the Cholesky route (`check_cone=False`): there
+                # G = L L' is positive semidefinite by construction, and
+                # rejecting a point because the *reconstructed* correlation is
+                # +-1 punished the route for reaching the boundary it exists to
+                # describe.  Measured on the tvhr fixture: with the cone check
+                # left on, the corrected Cholesky bounds returned a
+                # log-likelihood of -5.79 where the rho route reaches -5.29,
+                # because the barrier at |rho| = 1 stalled the line search.
                 lam = float(np.linalg.eigvalsh(c.corr_matrix(piece))[0])
                 if lam <= 1e-6:
                     return 1e5 + 1e7 * (1e-6 - lam) ** 2
@@ -1489,9 +1489,21 @@ def rma_mv(
                    and not np.any(c._fixed_rho)]
         if len(components) == 1 and len(free_un) == 1:
             comp = free_un[0]
+            # One start, and the corrected box.  Correcting the box alone used
+            # to make fits *worse* -- on the tvhr fixture the log-likelihood
+            # fell from -5.29 to -5.79 -- and the cause was not the box but the
+            # cone test inside ``obj``: once the box admits |rho| = 1, the
+            # reconstructed correlation matrix is singular, ``is_valid`` says
+            # no, and the objective jumps to 1e5 exactly where the optimiser
+            # needs to pass.  With ``check_cone=False`` the same start reaches
+            # -5.29 again, so the two boxes, the second start and the doubled
+            # cost that came with them are all gone.
             l0 = comp.to_chol_vec(init)
             l_opt = _mv_optimise(
-                lambda l: obj(comp.from_chol_vec(l)),
+                # check_cone=False: on this route G = L L' is positive
+                # semidefinite by construction, and the cone test rejects
+                # exactly the boundary solutions the route exists to describe
+                lambda l: obj(comp.from_chol_vec(l), check_cone=False),
                 l0, comp.chol_bounds(), components, minimize, minimize_scalar)
             params = comp.from_chol_vec(l_opt)
         else:
