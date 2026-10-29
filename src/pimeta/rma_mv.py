@@ -992,20 +992,27 @@ class _UNComp:
     def chol_bounds(self) -> list:
         """Bounds for the Cholesky vector: non-negative diagonal, free elsewhere.
 
-        FIXME(1.2): the vector is column-major (``L00, L10, L20, L11, L21,
+        FIXME(1.1.5): the vector is column-major (``L00, L10, L20, L11, L21,
         L22`` for ``J = 3``), so the diagonal is *not* the first ``J`` entries.
-        Binding those pins ``L10``/``L20`` above zero -- every fit whose
-        correlation between the first inner level and the others is negative
-        starts outside its own box and is clipped to the boundary -- and leaves
-        ``L11``/``L22`` free, which duplicates the parameter space (``L`` and
-        the column-signed ``L`` give the same ``G``) and flattens the surface
-        along that direction.
+        Binding the first ``J`` pins ``L10``/``L20`` above zero and leaves
+        ``L11``/``L22`` free.  Measured on a 60-study, three-outcome simulation
+        whose true correlations are (-0.60, 0.20, -0.30):
 
-        The one-line fix is to bind ``i == j`` instead, and it is *not* applied
-        here because it changes the iteration path of every ``UN`` fit: with it,
-        five tests whose numbers are pinned to metafor move in the sixth digit
-        (tests/test_tvhr_joint.py, tests/test_ipd_curve.py).  That is a
-        re-validation, not a patch -- see the 1.2 plan.
+        * as shipped, ``rho`` comes back ``(0.0000, 0.2854, -0.1272)`` -- the
+          pair in the first column cannot go negative at all, because its
+          starting point ``L10 = -0.60`` is clipped onto the bound at the first
+          iteration, while the pairs outside the first column are recovered;
+        * binding ``i == j`` instead returns ``(-0.3345, 0.3206, -0.2126)``.
+
+        The fix is one line (``(0.0, None) if i == j else (None, None)``) and it
+        is *not* applied here because it moves every ``UN`` fit onto the part of
+        the cone the old bounds excluded, which re-positions five tests that pin
+        the ridge of the tvhr fixture (``test_the_unstructured_fit_matches_metafor_loosely``,
+        ``test_the_linear_trend_matches_metafor``, the trend-statistic pin, the
+        "shipped fit is interior" assertion, and the ipd_curve centring check).
+        Those numbers describe where the optimiser stopped on a flat
+        likelihood, not what the data say, so they need re-deriving rather than
+        re-tolerancing.  See the 1.1.5 plan.
         """
         return (
             [(0.0, None)] * self._n_free_tau2
