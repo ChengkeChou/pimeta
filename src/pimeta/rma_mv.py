@@ -990,7 +990,23 @@ class _UNComp:
         return out
 
     def chol_bounds(self) -> list:
-        """Bounds for the Cholesky vector: non-negative diagonal, free elsewhere."""
+        """Bounds for the Cholesky vector: non-negative diagonal, free elsewhere.
+
+        FIXME(1.2): the vector is column-major (``L00, L10, L20, L11, L21,
+        L22`` for ``J = 3``), so the diagonal is *not* the first ``J`` entries.
+        Binding those pins ``L10``/``L20`` above zero -- every fit whose
+        correlation between the first inner level and the others is negative
+        starts outside its own box and is clipped to the boundary -- and leaves
+        ``L11``/``L22`` free, which duplicates the parameter space (``L`` and
+        the column-signed ``L`` give the same ``G``) and flattens the surface
+        along that direction.
+
+        The one-line fix is to bind ``i == j`` instead, and it is *not* applied
+        here because it changes the iteration path of every ``UN`` fit: with it,
+        five tests whose numbers are pinned to metafor move in the sixth digit
+        (tests/test_tvhr_joint.py, tests/test_ipd_curve.py).  That is a
+        re-validation, not a patch -- see the 1.2 plan.
+        """
         return (
             [(0.0, None)] * self._n_free_tau2
             + [(None, None)] * self._n_free_rho

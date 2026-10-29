@@ -412,7 +412,7 @@ deliberate: it matches the R object being mirrored.
 |---|---|
 | `result.I2` is a **percentage** | `92.22`, not `0.9222` — identical to R's `r$I2`. Same for `H2` and `R2`. |
 | `confint(result)` returns a **dict** | `{"tau2", "ci_lb", "ci_ub", "level"}` — the QP/profile confidence interval for τ², mirroring `confint.rma()`. |
-| `result.b` is always an **array** | Even intercept-only models give `np.ndarray` of length 1, like R's `r$b`. Use `float(r.b[0])`. |
+| `result.b` is always a **vector** | Even intercept-only models give a one-element `list[float]`, like R's `r$b`. Use `float(r.b[0])`; `result.vb`, `result.X` and `result.mods` are `np.ndarray`, and every per-study field (`yi`, `vi`, `se`, `fitted`, `residuals`, `weights`) is a `list[float]`. |
 | `escalc()` returns **log-scale** `yi` for ratio measures | `RR` / `OR` / `IRR` are log-transformed; use `math.exp()` to get the reported ratio. |
 | `netrank(...).ranking_random` holds **P-scores**, not ranks | netmeta 3.7-0 names the field `ranking.random` even though it contains P-scores. `Pmatrix_random` holds the pairwise probability matrix. |
 | Plots return a matplotlib `Axes` | Pass `filename="x.png"` to also write the figure, otherwise it stays in memory. The backend is forced to `Agg`, so nothing blocks a headless script. |
@@ -778,7 +778,7 @@ print(ma.trimfill(d.yi, d.vi).k0)   # 剪补法
 |---|---|
 | `r.I2` 是**百分数** | `92.22` 而不是 `0.9222`，和 R 的 `r$I2` 相同；`H2`、`R2` 同理 |
 | `confint(r)` 返回 **dict** | `{"tau2", "ci_lb", "ci_ub", "level"}`，对应 R 的 `confint.rma()` 给出的 τ² 置信区间 |
-| `r.b` 永远是**数组** | 即使只有截距也是长度为 1 的 `np.ndarray`，取值用 `float(r.b[0])` |
+| `r.b` 永远是**向量** | 即使只有截距也是长度为 1 的 `list[float]`（同 R 的 `r$b`），取值用 `float(r.b[0])`；`r.vb`、`r.X`、`r.mods` 是 `np.ndarray`，逐研究的字段（`yi`、`vi`、`se`、`fitted`、`residuals`、`weights`）都是 `list[float]` |
 | `escalc()` 对 RR/OR/IRR 返回**对数尺度** | 要报告比值本身请用 `math.exp()` |
 | 画图返回 matplotlib `Axes` | 加 `filename="x.png"` 才会落盘；后端强制 `Agg`，脚本里不会弹窗卡住 |
 
