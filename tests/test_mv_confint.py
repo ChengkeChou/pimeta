@@ -58,8 +58,21 @@ R_TAU2_2_LB = 0.000114155555519552           # see the module docstring
 R_TAU2_2_UB = 0.118651077618005
 
 # metafor: profile(res, rho = 1, xlim = c(v, v + 1e-7), steps = 2)$ll
+#
+# One entry is not metafor's number.  At rho = -0.7 metafor's optimiser stops
+# at tau2 = (0.0188, 0.0654) with ll = 1.3104115673, while the maximum over
+# tau2 at that same rho is 1.3813334389, attained on the boundary
+# tau2 = (0.0308411479, 0).  Two independent checks: a one-dimensional search
+# along tau2_1 at tau2_2 = 0 reproduces 1.3813334389, and a restricted
+# likelihood written from the algebra (metabench/reference/un_reml.py, twelve
+# starts, rho pinned) reaches 1.3813252758 -- 8e-6 short, because it
+# parameterises a variance as exp(a) and therefore cannot sit exactly on zero.
+#
+# The profile is supposed to be the maximum, so pimeta reports the larger
+# number and the fixture records which is which.  The other six points agree
+# with metafor to 1e-13.
 R_PROFILE_RHO = [
-    (-0.7, 1.3104115672929302),
+    (-0.7, 1.3813334389338898),      # metafor stops short: 1.3104115673
     (-0.5, 2.1501039792277314),
     (-0.3, 2.6741059321273104),
     (0.0, 3.1865565399910567),

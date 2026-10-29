@@ -34,6 +34,7 @@ from typing import Any
 import numpy as np
 
 from .parallel import map_ordered, resolve_jobs
+from ._tolerance import BOUNDARY_TOL
 
 __all__ = [
     "SCHEMA_VERSION",
@@ -319,12 +320,12 @@ def summarise_fits(estimates: list[dict[str, Any]], mu: float,
             "tau2_bias": tau2_bias,
             "tau2_bias_mcse": _mcse_mean(tau2_hat),
             "tau2_rmse": tau2_rmse,
-            "tau2_at_boundary": float(np.mean(tau2_hat <= 1e-10)),
+            "tau2_at_boundary": float(np.mean(tau2_hat <= BOUNDARY_TOL)),
             "i2_mean": float(i2.mean()),
         },
         "reliability": {
             "fraction_finite": float(n / n_all),
-            "fraction_tau2_at_boundary": float(np.mean(tau2_hat <= 1e-10)),
+            "fraction_tau2_at_boundary": float(np.mean(tau2_hat <= BOUNDARY_TOL)),
             "note": "fraction_finite below 1 means some replications failed; "
                     "the summaries above describe only the rest",
         },

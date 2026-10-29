@@ -42,6 +42,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from ._tolerance import BOUNDARY_TOL
+
 __all__ = ["Diagnostic", "SCHEMA_VERSION", "diagnose", "software_versions"]
 
 #: Bumped whenever a field is renamed or removed from a result's ``to_dict``.
@@ -136,7 +138,7 @@ def _check_tau2_zero(fit) -> Diagnostic | None:
     # make diagnose() raise on a whole model family - worse than not diagnosing
     values = np.atleast_1d(np.asarray(tau2, dtype=float)).ravel()
     values = values[np.isfinite(values)]
-    if values.size == 0 or float(np.max(values)) > 1e-10:
+    if values.size == 0 or float(np.max(values)) > BOUNDARY_TOL:
         return None
     return Diagnostic(
         code="tau2_zero", category="boundary", severity="warning",
@@ -155,7 +157,7 @@ def _check_variance_component(fit) -> Diagnostic | None:
     values = np.atleast_1d(np.asarray(sigma2, dtype=float)).ravel()
     if values.size < 2:
         return None                      # a single component is tau2_zero
-    zero = int(np.sum(values <= 1e-10))
+    zero = int(np.sum(values <= BOUNDARY_TOL))
     if zero == 0:
         return None
     return Diagnostic(

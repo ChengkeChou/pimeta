@@ -4,6 +4,76 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-10-29
+
+Five changes, each one chosen because a measurement said so. The measurements
+are in `metabench/reports/D_covariance.md` (screening grid: 8 cells, 250
+replicates each, an independent likelihood written from the algebra, three
+parameterisations).
+
+### Performance
+
+- **The restricted likelihood is evaluated block by block** when `M` is block
+diagonal -- one random term, and sampling covariances that do not cross its
+groups, which is every model with `~ 1 | study` or `~ outcome | study`. The
+determinant, `X'M^-1 X` and `r'M^-1 r` all factorise, so the cost is `O(k J^3)`
+instead of `O((kJ)^3)`. Measured at k=30, J=5 (a 150x150 matrix): 16.2 ms per
+evaluation becomes 0.37 ms, and one fit goes from 9.0 s to 1.0-1.7 s. The
+partition is *checked* (`_independent_blocks`) rather than assumed, and
+`tests/test_blocked_loglik.py` compares the two paths point by point on every
+shape of model in the suite.
+
+### Fixed
+
+- **One starting point was not enough.** With a 3x3 UN covariance at k=10, the
+single L-BFGS-B start returned a matrix 1-3 log-likelihood units below the
+maximum in about one data set in ten (11.6% of 250 replicates, the worst gap
+3.03), while the same surface restarted elsewhere reached the maximum. The
+optimiser now also starts from the opposite side of the box and keeps the
+better answer (`_alternate_start`); ties are left alone so that established
+parity answers do not move.
+- **The stall fallback was unbounded in practice.** Nelder-Mead was allowed
+100,000 evaluations of an objective that costs 16 ms at k=30, J=5, which is
+what made a fit take minutes on some data sets and what kept the largest cells
+of the D grid from being measured at all. The budget is now 1,000 -- except for
+`struct="GEN"`, which genuinely needs the long walk (capping it moved a
+fixture's `tau2` from 3009.8 to 3.86).
+- **`from_chol_vec` took `sqrt(diag(L L'))` unguarded.** A row of `L` that
+rounds to zero can make that entry `-1e-30`, and `sqrt` of it is NaN: one fit
+emitted 248 `RuntimeWarning`s this way, all from intermediate points of a fit
+that succeeded. Clipped at zero, with the same guard in `_UNComp._G`,
+`_HCS`/`_HAR` and the BLUP path.
+- **The cone barrier was five orders of magnitude above the likelihood it
+guarded** (`1e5 + 1e7(1e-6-lam)^2`), which turns the edge of the cone into a
+wall: a reference implementation using exactly that barrier had its own six
+starts disagree in **78%** of 150 data sets, against 0.7% for a smooth
+reparameterisation. It is now proportional to the deficit and of the order of a
+log-likelihood (`1e2`), and `1e300` in `_mv_loglik` became `1e20` -- a wall
+that stays finite when a line search multiplies it.
+- **The profile likelihood at `rho = -0.7` in `tests/data` now reports
+1.3813334 instead of metafor's 1.3104116.** metafor's optimiser stops at
+`tau2 = (0.0188, 0.0654)`; the maximum over `tau2` at that same `rho` is on the
+boundary `tau2 = (0.0308411, 0)`, confirmed by a one-dimensional search and by
+the independent likelihood (which reaches 1.3813253, 8e-6 short, because it
+parameterises a variance as `exp(a)` and cannot sit exactly on zero). A profile
+is the maximum, so the larger number is the right one. The other six profile
+points agree with metafor to 1e-13.
+
+### Changed
+
+- **"A variance is at zero" now means `<= 1e-8`, stated once.**
+  `checks.py`, `ipd_curve.py` and `validation.py` each compared against `1e-10`,
+  which is below the optimiser's own resolution (`ftol=1e-12` stops within about
+  `1e-9` of the bound): on an IPD cohort whose likelihood puts every variance at
+  zero, 1.1.5 stopped at exactly `0.0` and reported all four components at the
+  boundary, while 1.1.6 -- same model, same data, one more starting point --
+  stopped at `9e-10` and reported three.  A diagnostic that flips on the last
+  digits is worse than none, so the threshold lives in `pimeta/_tolerance.py`
+  with its justification.
+- `_mv_loglik` accepts an optional `groups` argument naming the independent
+blocks; without it the full-matrix path runs and nothing changes for callers
+that do not pass it (`_profile_loglik`, the diagnostics, third-party use).
+
 ## [1.1.5] - 2026-10-29
 
 ### Fixed

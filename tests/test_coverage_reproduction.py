@@ -50,15 +50,25 @@ def quiet():
 
 
 def test_the_ipd_harness_reproduces_the_lkj_direction(quiet):
-    """LKJ(2) must reduce the boundary rate and not make the edge worse.
+    """LKJ(2) must remove the *singular* boundary, at a measured price.
 
-    At 12 replications the boundary *rate* is noise; the count of fitting
-    studies is not, and neither is the five-covariate coverage vector's shape.
+    The two kinds of boundary this model can hit are not equal.  A correlation
+    at +-1 makes `Sigma` singular: the likelihood is flat along that ridge, a
+    region built from `Sigma` is built from nothing, and two correct
+    implementations land on different points.  A variance at zero says the
+    data support no between-study heterogeneity in that direction, which with
+    12 studies and 10 variance parameters is the honest answer.
+
+    Measured on these 12 cohorts: with `eta=0` five fits put a correlation on
+    +-1; with `eta=2` none do, and the boundary moves entirely into the
+    variances.  The union of the two kinds therefore *rises*, so counting them
+    together would call the penalty a failure for doing what it is for.
     """
     plain = _band_reps(0.0)
     penalised = _band_reps(2.0)
     assert plain["fitted"] >= 10 and penalised["fitted"] >= 10
-    assert penalised["boundary"] <= plain["boundary"]
+    assert penalised["rho_boundary"] <= 1
+    assert plain["rho_boundary"] >= 3
     # every covariate keeps a coverage in the plausible range for 12 reps; this
     # is a smoke test of the machinery, not a second measurement
     for value in penalised["coverage"]:
@@ -69,7 +79,8 @@ def _band_reps(eta: float) -> dict:
     hits = np.zeros(len(band_harness.GRID))
     truth = band_harness.truth(band_harness.GRID)
     fitted = 0
-    boundary = 0
+    rho_boundary = 0
+    tau2_boundary = 0
     for rep in range(REPS):
         study, age, treat, y = band_harness.simulate(rep)
         try:
@@ -79,13 +90,16 @@ def _band_reps(eta: float) -> dict:
         except ValueError:                       # pragma: no cover - unstable fit
             continue
         fitted += 1
-        boundary += bool(fit.identifiability()["boundary"])
+        detail = fit.identifiability()
+        rho_boundary += bool(detail["rho_at_bound"])
+        tau2_boundary += bool(detail["tau2_at_zero"])
         # the default `df`, not an explicit one: the point of this test is that
         # the path a user gets is the one the baseline describes
         curve = fit.curve(band_harness.GRID, robust=True)
         hits += (curve.ci_lb <= truth) & (truth <= curve.ci_ub)
     return {"fitted": fitted,
-            "boundary": boundary,
+            "rho_boundary": rho_boundary,
+            "tau2_boundary": tau2_boundary,
             "coverage": hits / max(fitted, 1)}
 
 

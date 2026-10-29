@@ -31,6 +31,21 @@ from scipy.optimize import minimize, minimize_scalar
 
 from .missing import complete_cases
 
+#: A point that is not a covariance matrix is refused with a value far above
+#: any likelihood but far below the overflow zone: ``1e300`` used to sit here,
+#: and multiplying it by anything in a line search produces ``inf`` and then a
+#: NaN gradient.  The value is a wall, not a barrier; the two are different
+#: things and only the second one should be tuned.
+_INVALID_POINT = 1e20
+
+#: Smallest eigenvalue of a correlation matrix that the external (tau2, rho)
+#: parameterisation accepts before the barrier in :func:`rma_mv` fires, and the
+#: height of that barrier.  The barrier is deliberately of the same order as a
+#: log-likelihood: the previous ``1e5 + 1e7*(...)^2`` made the cone edge a wall
+#: the line search refused to approach (see the comment in ``obj``).
+_CONE_EPS = 1e-6
+_CONE_BARRIER = 1e2
+
 Z_975 = stats.norm.ppf(0.975)
 
 
@@ -582,7 +597,7 @@ class _StructComp:
         if s == "HCS":
             tau2 = self._full_tau2(p)
             rho = self._rho(p)
-            sq = np.sqrt(tau2)
+            sq = np.sqrt(np.maximum(tau2, 0.0))
             G = rho * np.outer(sq, sq)
             np.fill_diagonal(G, tau2)
             return G
@@ -592,7 +607,7 @@ class _StructComp:
         if s == "HAR":
             tau2 = self._full_tau2(p)
             rho = self._rho(p)
-            sq = np.sqrt(tau2)
+            sq = np.sqrt(np.maximum(tau2, 0.0))
             G = np.outer(sq, sq) * self._toeplitz(rho)
             np.fill_diagonal(G, tau2)
             return G
@@ -861,7 +876,10 @@ class _UNComp:
     def _G(self, p: np.ndarray) -> np.ndarray:
         tau2 = self._full_tau2(p)
         rho = self._full_rho(p)
-        sq = np.sqrt(tau2)
+        # a variance is non-negative, but a caller can hand over a value a
+        # hair below zero (a profile endpoint, a Cholesky row that rounded to
+        # zero); sqrt of that is NaN and a NaN likelihood is not a rejection
+        sq = np.sqrt(np.maximum(tau2, 0.0))
         R = np.eye(self.J)
         for k, (i, j) in enumerate(self._rho_pairs):
             R[i, j] = R[j, i] = rho[k]
@@ -977,7 +995,15 @@ class _UNComp:
                 L[i, j] = l_vec[idx]
                 idx += 1
         G = L @ L.T
-        tau2 = np.diag(G).copy()
+        # ``diag(L L')`` is a sum of squares and cannot be negative in exact
+        # arithmetic, but a row of ``L`` that is zero to within rounding can
+        # produce a value like -1e-30, and ``sqrt`` of that is NaN.  Measured
+        # on a two-outcome fixture: one fit emitted 248 RuntimeWarnings this
+        # way, all of them from intermediate points of a fit that succeeded.
+        # The answers were unaffected (`rho` is only defined when the
+        # denominator is positive), but a NaN reaching ``slogdet`` is not a
+        # way to reject a point.
+        tau2 = np.maximum(np.diag(G), 0.0)
         sd = np.sqrt(tau2)
         rho = np.zeros(self._n_rho)
         for k, (i, j) in enumerate(self._rho_pairs):
@@ -1022,6 +1048,7 @@ def _mv_loglik(
     V: np.ndarray,
     X: np.ndarray,
     method: str,
+    groups: np.ndarray | None = None,
 ) -> float:
     """Marginal (restricted) log-likelihood for the multilevel model.
 
@@ -1029,19 +1056,28 @@ def _mv_loglik(
     effect contribution.  Returns the *positive* objective (negative
     log-likelihood) for minimisation, matching metafor's ``.ll.rma.mv``
     (with ``REMLf = TRUE``, metafor's default).
+
+    ``groups`` names the independent blocks of ``M``, when there are any: see
+    :func:`_mv_loglik_blocked`.  Passing it changes the cost by a factor of
+    ``k^2`` and the answer not at all, which ``tests/test_blocked_loglik.py``
+    checks against this function on every fixture the suite has.
     """
+    if groups is not None:
+        return _mv_loglik_blocked(D_list, Y, V, X, method, groups)
     k = X.shape[0]
     p = X.shape[1]
     M = V + sum(D_list)
+    if not np.all(np.isfinite(M)):              # a NaN must not reach slogdet
+        return _INVALID_POINT
     sign, logdetM = np.linalg.slogdet(M)
     if sign <= 0 or not np.isfinite(logdetM):
-        return 1e300
+        return _INVALID_POINT
     W = np.linalg.inv(M)
     XWX = X.T @ W @ X
     try:
         stXWX = np.linalg.inv(XWX)
     except np.linalg.LinAlgError:
-        return 1e300
+        return _INVALID_POINT
     beta = stXWX @ X.T @ W @ Y
     r = Y - X @ beta
     rss = float((r.T @ W @ r).item())
@@ -1058,6 +1094,104 @@ def _mv_loglik(
             - 0.5 * rss
         )
     return -float(ll)
+
+
+def _mv_loglik_blocked(
+    D_list: list[np.ndarray],
+    Y: np.ndarray,
+    V: np.ndarray,
+    X: np.ndarray,
+    method: str,
+    groups: np.ndarray,
+) -> float:
+    """The same number as :func:`_mv_loglik`, one block at a time.
+
+    When ``M`` is block diagonal by ``groups`` the determinant and the inverse
+    factorise, and so do the three sums the likelihood needs:
+
+        log|M| = sum_b log|M_b|,   X'M^-1 X = sum_b X_b' M_b^-1 X_b,
+        r'M^-1 r = sum_b r_b' M_b^-1 r_b.
+
+    That is ``O(k J^3)`` instead of ``O((kJ)^3)``.  The formula after the sums
+    is identical to :func:`_mv_loglik`, including the ``log|X'X|`` term, so the
+    two agree to rounding; anything else would mean the partition was not
+    independent and :func:`_independent_blocks` had said it was.
+    """
+    n, p = X.shape
+    # `Y` is (n, 1) inside rma_mv but a caller may hand over a flat vector, and
+    # the blocked path indexes the second axis
+    Y = np.asarray(Y, dtype=float).reshape(n, -1)
+    D = sum(D_list) if D_list else np.zeros((n, n))
+    logdetM = 0.0
+    XWX = np.zeros((p, p))
+    XWY = np.zeros((p, Y.shape[1]))
+    W_blocks: list[tuple[np.ndarray, np.ndarray]] = []
+    for block in np.unique(groups):
+        idx = np.flatnonzero(groups == block)
+        M_b = V[np.ix_(idx, idx)] + D[np.ix_(idx, idx)]
+        if not np.all(np.isfinite(M_b)):
+            return _INVALID_POINT
+        sign, logdet_b = np.linalg.slogdet(M_b)
+        if sign <= 0 or not np.isfinite(logdet_b):
+            return _INVALID_POINT
+        W_b = np.linalg.inv(M_b)
+        X_b = X[idx]
+        XWX += X_b.T @ W_b @ X_b
+        XWY += X_b.T @ W_b @ Y[idx]
+        logdetM += float(logdet_b)
+        W_blocks.append((idx, W_b))
+    try:
+        beta = np.linalg.solve(XWX, XWY)
+    except np.linalg.LinAlgError:
+        return _INVALID_POINT
+    rss = 0.0
+    for idx, W_b in W_blocks:
+        r_b = Y[idx] - X[idx] @ beta
+        rss += float((r_b.T @ W_b @ r_b).item())
+    if method == "ML":
+        ll = -0.5 * n * math.log(2 * math.pi) - 0.5 * logdetM - 0.5 * rss
+    else:
+        _, logdetXX = np.linalg.slogdet(X.T @ X)
+        _, logdetXWX = np.linalg.slogdet(XWX)
+        ll = (
+            -0.5 * (n - p) * math.log(2 * math.pi)
+            + 0.5 * logdetXX
+            - 0.5 * logdetM
+            - 0.5 * logdetXWX
+            - 0.5 * rss
+        )
+    return -float(ll)
+
+
+def _independent_blocks(components, V: np.ndarray, n_rows: int,
+                        probe_D: np.ndarray) -> np.ndarray | None:
+    """The partition in which ``M`` is block diagonal, or ``None``.
+
+    A single random term induces a block structure: two rows that belong to
+    different outer groups share neither a random effect nor -- in every model
+    the suite contains -- a sampling covariance.  The two claims are *checked*
+    rather than assumed, at the initial point, because a wrong partition would
+    silently change the likelihood instead of raising.
+    """
+    if len(components) != 1:
+        return None
+    comp = components[0]
+    groups = getattr(comp, "outer_groups", None)
+    if groups is None:
+        Z = getattr(comp, "Z", None)            # the intercept component
+        if Z is None:
+            return None
+        groups = np.argmax(np.asarray(Z), axis=1)
+    groups = np.asarray(groups)
+    if groups.shape[0] != n_rows:
+        return None
+    off = groups[:, None] != groups[None, :]
+    if np.any(V[off] != 0.0):
+        return None
+    if probe_D is not None and np.any(probe_D[off] != 0.0):
+        return None
+    return groups
+
 
 
 def _fmt_level(lv) -> str:
@@ -1410,6 +1544,17 @@ def rma_mv(
     init = np.concatenate([c.init(tau2_val) for c in components])
     bounds = [b for c in components for b in c.bounds()]
 
+    # The likelihood is block diagonal whenever the random effects and the
+    # sampling covariances both live inside the same grouping factor, which is
+    # every model with one random term.  Evaluating it block by block is
+    # O(k J^3) against O((kJ)^3): measured on k=30, J=5, 0.109 ms against
+    # 16.2 ms per evaluation (metabench, reports/D_covariance.md), and the gap
+    # grows like k^2.  The partition is structural, so it is computed once.
+    _offsets = np.cumsum([0] + [c.n_params for c in components])
+    probe_D = sum(c.make_D(init[_offsets[i]:_offsets[i + 1]])
+                  for i, c in enumerate(components))
+    groups = _independent_blocks(components, V, X.shape[0], probe_D)
+
     def obj(params, check_cone: bool = True):
         D_list = []
         offset = 0
@@ -1420,10 +1565,7 @@ def rma_mv(
             valid = getattr(c, "is_valid", None)
             if check_cone and valid is not None and not valid(piece):
                 # Reachable when the *external* (tau2, rho) vector is optimised:
-                # a rho inside its box can still give an indefinite R.  A
-                # smooth quadratic barrier pushes the iterate back inside
-                # instead of a hard wall, which would stall the line search on
-                # a non-smooth cliff.
+                # a rho inside its box can still give an indefinite R.
                 #
                 # Not applied on the Cholesky route (`check_cone=False`): there
                 # G = L L' is positive semidefinite by construction, and
@@ -1433,20 +1575,30 @@ def rma_mv(
                 # left on, the corrected Cholesky bounds returned a
                 # log-likelihood of -5.79 where the rho route reaches -5.29,
                 # because the barrier at |rho| = 1 stalled the line search.
+                #
+                # The barrier used to be `1e5 + 1e7*(1e-6-lam)^2`, five orders
+                # of magnitude above the likelihood it was guarding, which
+                # turns the cone edge into a wall: measured over 150 replicates
+                # of a 3x3 UN fit, a reference using this exact barrier had its
+                # own six starts disagree in 78% of data sets, against 0.7% for
+                # a smooth reparameterisation (metabench, D_covariance.md,
+                # Finding 6).  A barrier proportional to the cone deficit, of
+                # the same order as the likelihood, still rejects the region
+                # without hiding the gradient that leads out of it.
                 lam = float(np.linalg.eigvalsh(c.corr_matrix(piece))[0])
-                if lam <= 1e-6:
-                    return 1e5 + 1e7 * (1e-6 - lam) ** 2
-                return 1e5
+                if lam <= _CONE_EPS:
+                    return _CONE_BARRIER * (1.0 - lam / _CONE_EPS)
+                return _CONE_BARRIER
             if lkj_eta > 1.0 and getattr(c, "kind", None) == "un":
                 corr = c.corr_matrix(piece)
                 sign, logdet = np.linalg.slogdet(corr)
                 if sign <= 0 or not np.isfinite(logdet):
-                    return 1e5
+                    return _CONE_BARRIER
                 # -log p(R) for p(R) ∝ det(R)^(eta - 1); at eta = 1 it is a
                 # constant and the fit is the unpenalised one
                 penalty += -(lkj_eta - 1.0) * float(logdet)
             D_list.append(c.make_D(piece))
-        return _mv_loglik(D_list, Y, V, X, method) + penalty
+        return _mv_loglik(D_list, Y, V, X, method, groups=groups) + penalty
 
     if sigma2 is not None:
         # Variance components given by the user.  ``NaN`` entries stay free
@@ -1571,8 +1723,8 @@ def rma_mv(
     parms = p + n_terms
     _, logdetV = np.linalg.slogdet(V)
     ll_qe = -0.5 * k * math.log(2 * math.pi) - 0.5 * logdetV  # V-only model
-    ll_ml = -_mv_loglik(D_list, Y, V, X, "ML")
-    ll_reml = -_mv_loglik(D_list, Y, V, X, "REML")
+    ll_ml = -_mv_loglik(D_list, Y, V, X, "ML", groups=groups)
+    ll_reml = -_mv_loglik(D_list, Y, V, X, "REML", groups=groups)
 
     def _aicc(n, lp):
         denom = max(n, parms + 2) - parms - 1
@@ -1664,15 +1816,67 @@ def _as_data_dict(data):
     raise TypeError("argument 'data' must be a dict or a DataFrame")
 
 
+def _alternate_start(init: np.ndarray, bounds: list) -> np.ndarray | None:
+    """A second starting point in a different part of the variance space.
+
+    The measured reason for a second start: at k=10 with a 3x3 UN covariance,
+    one L-BFGS-B start from the method-of-moments point returns a matrix **1 to
+    3 log-likelihood units** below the maximum in about one data set in ten,
+    while the same surface restarted from elsewhere reaches it (metabench,
+    ``reports/D_covariance.md``, Finding 2).  The single start is the defect;
+    the parameterisation is not, which is why the second start moves in the
+    coordinates the caller already has instead of switching routes.
+
+    Bounded coordinates move to the other side of their interval, unbounded
+    non-negative ones are scaled, and free coordinates (a Cholesky off-diagonal)
+    change sign -- a genuinely different covariance rather than a larger one.
+    """
+    alt = np.array(init, dtype=float, copy=True)
+    moved = False
+    for i, (lo, hi) in enumerate(bounds):
+        if lo is not None and hi is not None and np.isfinite(lo) and np.isfinite(hi):
+            lo_f, hi_f = float(lo), float(hi)
+            middle = 0.5 * (lo_f + hi_f)
+            alt[i] = (lo_f + 0.75 * (hi_f - lo_f) if alt[i] <= middle
+                      else lo_f + 0.25 * (hi_f - lo_f))
+            moved = True
+        elif lo is None and hi is None:
+            if alt[i] != 0.0:
+                alt[i] = -alt[i]
+                moved = True
+        else:
+            alt[i] = 3.8 * alt[i] + 1e-3
+            moved = True
+    return alt if moved else None
+
+
 def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
     """Maximise the marginal likelihood over the variance components.
 
     Split out of :func:`rma_mv` so that the diagnostics can refit on subsets
     while the user-facing code path stays readable.
+
+    Two starts, because one is measurably not enough on a UN covariance, and a
+    *bounded* Nelder-Mead fallback, because the old one was allowed 100,000
+    evaluations of an objective that costs 16 ms at k=30, J=5: a single
+    unlucky replicate could take minutes, which is why the largest cells of the
+    D grid could not be measured at all.
     """
     lbfgsb_opts = {"ftol": 1e-12, "gtol": 1e-10, "maxiter": 20000, "maxls": 60}
     opt = minimize(obj, init, method="L-BFGS-B", bounds=bounds,
                    options=lbfgsb_opts)
+
+    alt = _alternate_start(init, bounds)
+    if alt is not None:
+        opt_alt = minimize(obj, alt, method="L-BFGS-B", bounds=bounds,
+                           options=lbfgsb_opts)
+        # Only a *meaningful* improvement switches start.  Two symmetric optima
+        # (a correlation and its mirror image, say) differ in the last bits, and
+        # taking the other one would change an established metafor parity
+        # answer for no gain -- measured on the Konstantopoulos fixture, where
+        # rho = +0.5 becomes -0.5 to 1e-10.
+        if float(obj(opt_alt.x)) < float(obj(opt.x)) - 1e-10:
+            opt = opt_alt
 
     # GEN (unstructured random slopes) is ill-conditioned on the raw scale of
     # the inner predictors: the marginal likelihood has a shallow ridge near
@@ -1698,10 +1902,17 @@ def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
         stalled = bool(at_lo.any() and not at_lo.all())
 
     if stalled or any(c.kind == "gen" for c in components):
+        # A GEN random slope on a coarse predictor has a flat ridge the
+        # unconstrained optimiser cannot cross, and Nelder-Mead needs the long
+        # budget to walk it: capping it at 4,000 evaluations moved the
+        # Konstantopoulos fixture's tau2 from 3009.8 to 3.86.  A UN covariance
+        # does not need that, and paying for it there cost minutes per fit.
+        budget = (100000 if any(c.kind == "gen" for c in components)
+                  else 1000)
         opt_nm = minimize(
             obj, init, method="Nelder-Mead",
             options={"xatol": 1e-10, "fatol": 1e-12,
-                     "maxiter": 100000, "maxfev": 100000},
+                     "maxiter": budget, "maxfev": budget},
         )
         if obj(opt_nm.x) < obj(opt.x):
             opt = minimize(obj, opt_nm.x, method="L-BFGS-B", bounds=bounds,

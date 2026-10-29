@@ -52,6 +52,7 @@ from scipy import stats
 from .basis import Basis, rcs
 from .ipd import StudyFit, _label, linear_model, logistic_model
 from .levels import level_to_alpha, level_to_percent
+from ._tolerance import BOUNDARY_TOL, RHO_BOUNDARY_TOL
 
 __all__ = ["IpdCurve", "IpdCurveResult", "ipd_two_stage_curve"]
 
@@ -458,9 +459,9 @@ class IpdCurveResult:
         rho = np.asarray(
             self.fit.rho if self.fit.rho is not None else [], dtype=float)
         n_vc = int((self.fit.parms or (self.fit.p + tau2.size)) - self.fit.p)
-        at_zero = [i + 1 for i, v in enumerate(tau2) if v <= 1e-10]
+        at_zero = [i + 1 for i, v in enumerate(tau2) if v <= BOUNDARY_TOL]
         at_bound = [i + 1 for i, v in enumerate(rho)
-                    if abs(abs(v) - 1.0) <= 1e-6]
+                    if abs(abs(v) - 1.0) <= RHO_BOUNDARY_TOL]
         singular = np.linalg.svd(np.asarray(self.Sigma, dtype=float),
                                  compute_uv=False)
         condition = (float(singular[0] / singular[-1])
