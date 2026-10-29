@@ -17,9 +17,15 @@ parameterisations).
 diagonal -- one random term, and sampling covariances that do not cross its
 groups, which is every model with `~ 1 | study` or `~ outcome | study`. The
 determinant, `X'M^-1 X` and `r'M^-1 r` all factorise, so the cost is `O(k J^3)`
-instead of `O((kJ)^3)`. Measured at k=30, J=5 (a 150x150 matrix): 16.2 ms per
-evaluation becomes 0.37 ms, and one fit goes from 9.0 s to 1.0-1.7 s. The
-partition is *checked* (`_independent_blocks`) rather than assumed, and
+instead of `O((kJ)^3)`. Measured at k=30, J=5 (a 150x150 matrix): one evaluation
+of the likelihood costs 12.8 ms before and 0.85 ms after, a factor of 15, and
+one fit goes from 9.2 s to 4.6 s in the slowest data set measured and from
+4.5 s to 1.9 s in the common one. The per-fit gain is smaller than the
+per-evaluation gain because a fit now runs two starts. Most of what remains is
+numpy call overhead per block rather than arithmetic: stacking the blocks into
+one `(k, J, J)` array and using batched `inv`/`slogdet` measured 0.11-0.37 ms
+on the same data, which is the next step and not this release. The partition is
+*checked* (`_independent_blocks`) rather than assumed, and
 `tests/test_blocked_loglik.py` compares the two paths point by point on every
 shape of model in the suite.
 
