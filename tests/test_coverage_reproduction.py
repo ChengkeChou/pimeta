@@ -59,16 +59,25 @@ def test_the_ipd_harness_reproduces_the_lkj_direction(quiet):
     data support no between-study heterogeneity in that direction, which with
     12 studies and 10 variance parameters is the honest answer.
 
-    Measured on these 12 cohorts: with `eta=0` five fits put a correlation on
-    +-1; with `eta=2` none do, and the boundary moves entirely into the
-    variances.  The union of the two kinds therefore *rises*, so counting them
-    together would call the penalty a failure for doing what it is for.
+    Measured on these 12 cohorts, with the counts recorded so that a future
+    reader can see what the assertion was standing on: `eta=0` puts a
+    correlation on +-1 twice and `eta=2` never, while the second puts variance
+    components at zero in all twelve.  The union of the two kinds therefore
+    *rises* with the penalty, so counting them together would call the penalty
+    a failure for doing what it is for.  (The unpenalised count was five before
+    1.1.7 added a third starting point, which is itself the point: those fits
+    were search failures, not a property of the likelihood.)
     """
     plain = _band_reps(0.0)
     penalised = _band_reps(2.0)
     assert plain["fitted"] >= 10 and penalised["fitted"] >= 10
     assert penalised["rho_boundary"] <= 1
-    assert plain["rho_boundary"] >= 3
+    assert penalised["rho_boundary"] <= plain["rho_boundary"]
+    # and the boundary it removes has to go somewhere: the penalty is supposed
+    # to move it into the variances, which is the price this docstring quotes.
+    # Without this line the two assertions above would both pass on a run where
+    # neither side hit a correlation boundary at all.
+    assert penalised["tau2_boundary"] > plain["tau2_boundary"]
     # every covariate keeps a coverage in the plausible range for 12 reps; this
     # is a smoke test of the machinery, not a second measurement
     for value in penalised["coverage"]:

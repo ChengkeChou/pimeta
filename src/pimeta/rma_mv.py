@@ -1122,6 +1122,11 @@ def _mv_loglik_blocked(
     # the blocked path indexes the second axis
     Y = np.asarray(Y, dtype=float).reshape(n, -1)
     D = sum(D_list) if D_list else np.zeros((n, n))
+    if not np.all(np.isfinite(D)):
+        return _INVALID_POINT
+    layout = _uniform_layout(groups, n)
+    if layout is not None:
+        return _mv_loglik_stacked(V, D, Y, X, method, *layout)
     logdetM = 0.0
     XWX = np.zeros((p, p))
     XWY = np.zeros((p, Y.shape[1]))
@@ -1157,6 +1162,85 @@ def _mv_loglik_blocked(
             -0.5 * (n - p) * math.log(2 * math.pi)
             + 0.5 * logdetXX
             - 0.5 * logdetM
+            - 0.5 * logdetXWX
+            - 0.5 * rss
+        )
+    return -float(ll)
+
+
+def _uniform_layout(groups: np.ndarray, n: int) -> tuple[int, int] | None:
+    """``(k, J)`` when the rows are ``J`` contiguous rows per group, else None.
+
+    The common vectors -- `~ 1 | study`, `~ outcome | study` -- give every
+    group the same number of rows in order, and then the blocks are slices of
+    the matrices rather than fancy-indexed copies.  Anything else falls back to
+    the loop, which is correct for any partition.
+    """
+    counts = np.bincount(groups)
+    if counts.size == 0 or np.any(counts == 0):
+        return None
+    J = int(counts[0])
+    if J == 0 or counts.size * J != n or np.any(counts != J):
+        return None
+    if not np.array_equal(groups, np.repeat(np.arange(counts.size), J)):
+        return None
+    return int(counts.size), J
+
+
+def _mv_loglik_stacked(V: np.ndarray, D: np.ndarray, Y: np.ndarray,
+                       X: np.ndarray, method: str, k: int, J: int) -> float:
+    """`_mv_loglik_blocked` with the blocks stacked into ``(k, J, J)`` arrays.
+
+    The sums are the same ones; only the *shape* of the work changes.  One
+    batched `slogdet`, one batched `inv` and one `einsum` replace `k` rounds of
+    small calls.  Measured on the k=30, J=5 cell of the D grid, one evaluation
+    costs 13.1 ms with the full `kJ x kJ` matrix, 0.151 ms with the per-block
+    loop and 0.127 ms here -- so 1.2x over the loop, on top of the 87x that the
+    loop already had.  The remaining cost is the arithmetic itself; stacking the
+    blocks is worth doing because it is strictly less work, not because it is
+    the big win, and the docstring says so to keep it from being quoted as one.
+    """
+    V_stack = np.stack([V[s * J:(s + 1) * J, s * J:(s + 1) * J]
+                        for s in range(k)])
+    D_stack = np.stack([D[s * J:(s + 1) * J, s * J:(s + 1) * J]
+                        for s in range(k)])
+    M = V_stack + D_stack
+    if not np.all(np.isfinite(M)):
+        return _INVALID_POINT
+    sign, logdet = np.linalg.slogdet(M)
+    if np.any(sign <= 0) or not np.all(np.isfinite(logdet)):
+        return _INVALID_POINT
+    W = np.linalg.inv(M)
+    Y_blocks = Y.reshape(k, J, -1)
+    X_blocks = X.reshape(k, J, X.shape[1])
+    # X'M^-1 X and X'M^-1 y, block by block.  These are batched matrix
+    # products (BLAS) rather than one fancy `einsum`: a three-operand einsum
+    # with `s` summed is 2 to 3 times slower here, and this function is called
+    # a few thousand times per fit.  Writing the first form as
+    # `einsum("sij,sjk->ik", W, X)` looks equivalent and is not -- it contracts
+    # the wrong axis and returns a rectangular array that only fails later, in
+    # `solve`.
+    A = X_blocks.transpose(0, 2, 1) @ W            # (k, p, J)
+    XWX = np.einsum("sij,sjk->ik", A, X_blocks)    # (p, p)
+    XWY = np.einsum("sij,sjk->ik", A, Y_blocks)    # (p, 1)
+    try:
+        beta = np.linalg.solve(XWX, XWY)
+    except np.linalg.LinAlgError:
+        return _INVALID_POINT
+    r = Y_blocks - X_blocks @ beta
+    Wr = W @ r
+    rss = float((r * Wr).sum())
+    n = X.shape[0]
+    p = X.shape[1]
+    if method == "ML":
+        ll = -0.5 * n * math.log(2 * math.pi) - 0.5 * float(logdet.sum()) - 0.5 * rss
+    else:
+        _, logdetXX = np.linalg.slogdet(X.T @ X)
+        _, logdetXWX = np.linalg.slogdet(XWX)
+        ll = (
+            -0.5 * (n - p) * math.log(2 * math.pi)
+            + 0.5 * logdetXX
+            - 0.5 * float(logdet.sum())
             - 0.5 * logdetXWX
             - 0.5 * rss
         )
@@ -1850,6 +1934,40 @@ def _alternate_start(init: np.ndarray, bounds: list) -> np.ndarray | None:
     return alt if moved else None
 
 
+def _cone_start(init: np.ndarray, bounds: list) -> np.ndarray | None:
+    """A start on the far side of the cone: negative correlations, larger variances.
+
+    The measured reason: across 1250 replicates of the D grid, *every* fit that
+    stopped below the maximum did so on a boundary -- 0 of them at an interior
+    point -- and 46 of 65 were on a correlation at +-1.  The trap is the corner
+    where a variance is zero and the likelihood is compensated for by
+    correlations that are never tried; the escape usually needs a large
+    *negative* correlation, which neither of the other two starts proposes.
+
+    Bounded coordinates (a correlation in the external parameterisation) go to
+    the lower end of their interval, unbounded non-negative ones (a variance)
+    are enlarged, and free ones (a Cholesky off-diagonal) are set to a negative
+    multiple of the typical diagonal -- which is what makes the implied
+    correlation of that pair strongly negative.
+    """
+    alt = np.array(init, dtype=float, copy=True)
+    diagonal = [abs(float(alt[i])) for i, (lo, hi) in enumerate(bounds)
+                if lo == 0.0 and hi is None]
+    scale = float(np.median(diagonal)) if diagonal else 1.0
+    moved = False
+    for i, (lo, hi) in enumerate(bounds):
+        if lo is not None and hi is not None and np.isfinite(lo) and np.isfinite(hi):
+            alt[i] = float(lo) + 0.1 * (float(hi) - float(lo))
+            moved = True
+        elif lo == 0.0 and hi is None:
+            alt[i] = max(1.5 * float(alt[i]), 1e-6)
+            moved = True
+        elif lo is None and hi is None:
+            alt[i] = -0.8 * scale
+            moved = True
+    return alt if moved else None
+
+
 def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
     """Maximise the marginal likelihood over the variance components.
 
@@ -1857,10 +1975,11 @@ def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
     while the user-facing code path stays readable.
 
     Two starts, because one is measurably not enough on a UN covariance, and a
-    *bounded* Nelder-Mead fallback, because the old one was allowed 100,000
-    evaluations of an objective that costs 16 ms at k=30, J=5: a single
-    unlucky replicate could take minutes, which is why the largest cells of the
-    D grid could not be measured at all.
+    third that crosses the cone, because every measured failure sat on a
+    boundary.  Plus a *bounded* Nelder-Mead fallback, because the old one was
+    allowed 100,000 evaluations of an objective that costs 16 ms at k=30, J=5:
+    a single unlucky replicate could take minutes, which is why the largest
+    cells of the D grid could not be measured at all.
     """
     lbfgsb_opts = {"ftol": 1e-12, "gtol": 1e-10, "maxiter": 20000, "maxls": 60}
     opt = minimize(obj, init, method="L-BFGS-B", bounds=bounds,
@@ -1877,6 +1996,13 @@ def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
         # rho = +0.5 becomes -0.5 to 1e-10.
         if float(obj(opt_alt.x)) < float(obj(opt.x)) - 1e-10:
             opt = opt_alt
+
+    cone = _cone_start(init, bounds)
+    if cone is not None:
+        opt_cone = minimize(obj, cone, method="L-BFGS-B", bounds=bounds,
+                            options=lbfgsb_opts)
+        if float(obj(opt_cone.x)) < float(obj(opt.x)) - 1e-10:
+            opt = opt_cone
 
     # GEN (unstructured random slopes) is ill-conditioned on the raw scale of
     # the inner predictors: the marginal likelihood has a shallow ridge near
@@ -1914,9 +2040,19 @@ def _mv_optimise(obj, init, bounds, components, minimize, minimize_scalar):
             options={"xatol": 1e-10, "fatol": 1e-12,
                      "maxiter": budget, "maxfev": budget},
         )
-        if obj(opt_nm.x) < obj(opt.x):
-            opt = minimize(obj, opt_nm.x, method="L-BFGS-B", bounds=bounds,
-                           options=lbfgsb_opts)
+        if float(obj(opt_nm.x)) < float(obj(opt.x)) - 1e-10:
+            # Keep Nelder-Mead's point as it stands, and only improve on it.
+            # It is called without bounds, so a Cholesky diagonal can come back
+            # negative -- and that is a different *spelling* of the same
+            # covariance, not a worse one: on the hard replicate below,
+            # ``from_chol_vec`` of the mirrored vector returned the identical
+            # (tau2, rho) and the identical log-likelihood.  Polishing it inside
+            # the box made scipy clip that sign to zero, which is not a small
+            # change but a different covariance altogether: the objective jumped
+            # from 8.687910 to 11.759299, and the fit returned 3.03 units short
+            # of an optimum the search had already found.  A polish is only
+            # worth having if it is allowed to lose.
+            opt = opt_nm
 
     # With a single variance component the profile likelihood is very flat
     # around its maximum and L-BFGS-B stops a few 1e-8 short of it.  Golden

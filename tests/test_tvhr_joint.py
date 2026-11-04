@@ -130,18 +130,31 @@ def test_the_unstructured_fit_matches_metafor_loosely(joint_un):
 
     Older fixtures put this fit on the correlation ridge (rho 0.9998), where
     two correct optimisers can stop at different points.  The regenerated
-    fixture sits well inside the cone (rho 0.864 / 0.637 / 0.163), so the
-    Cholesky parameterisation reproduces metafor to six decimals.  The test
-    name keeps "loosely" as a reminder of why the ridge used to matter.
+    fixture moved the boundary out of the *correlations* -- 0.864 / 0.637 /
+    0.163, all well inside the box -- but not out of the matrix: those three
+    correlations give a correlation matrix whose determinant is zero to
+    sixteen decimals, so the maximum lies on the cone boundary and the fitted
+    Sigma is singular.  That is a property of the data (metafor's own estimate
+    has it), not of the search, and it is why the last assertion below asks for
+    positive *semi*definiteness rather than a Cholesky factor.
     """
     assert joint_un.beta == pytest.approx(R_UN_BETA, abs=1e-6)
     assert joint_un.se == pytest.approx(R_UN_SE, abs=1e-6)
     assert joint_un.tau2 == pytest.approx(R_UN_TAU2, abs=1e-6)
     sd = np.sqrt(np.diag(joint_un.Sigma))
-    rho = (joint_un.Sigma / np.outer(sd, sd))[np.triu_indices(3, 1)]
+    R = joint_un.Sigma / np.outer(sd, sd)
+    rho = R[np.triu_indices(3, 1)]
     assert rho == pytest.approx(R_UN_RHO, abs=1e-5)
-    # the matrix is a correlation matrix: Cholesky, not clipping
-    np.linalg.cholesky(joint_un.Sigma / np.outer(sd, sd))
+    # The matrix is a correlation matrix, not a clipped one.  A strict
+    # `np.linalg.cholesky` cannot express that here: on this fixture it
+    # decides the test with the last bit of one BLAS -- measured on the same
+    # wheel, numpy on Linux raised LinAlgError at det(R) = -1.3e-16 where
+    # numpy on Windows returned a factor at det(R) = +7.5e-17.  What the
+    # Cholesky route guarantees is semidefiniteness, so that is what is
+    # asserted, at a tolerance that separates "singular because the maximum is
+    # on the boundary" from "the wrong side of it".
+    eig = np.linalg.eigvalsh(0.5 * (R + R.T))
+    assert eig.min() >= -1e-12 * eig.max()
 
 
 def test_the_linear_trend_matches_metafor(joint_un):

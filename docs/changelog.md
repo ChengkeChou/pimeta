@@ -4,6 +4,82 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-11-04
+
+Three changes, each one chosen by measurement. The measurements are the same
+D grid as 1.1.6 (8 cells, 250 replicates each, seed 20261029, an independent
+likelihood written from the algebra); the before column is the 1.1.6 run.
+
+### Fixed
+
+- **A Nelder-Mead result that beat every start was being discarded.** The stall
+  fallback calls Nelder-Mead *without* bounds, so its answer can carry a
+  negative Cholesky diagonal -- and that is a different spelling of the same
+  covariance, not a worse one: on the hardest replicate of the D grid (k=10,
+  three outcomes, true correlation 0.3) `from_chol_vec` of the mirrored vector
+  returns the identical `(tau2, rho)` and the identical log-likelihood. The
+  polish step then handed that point to L-BFGS-B *with* the box, scipy clipped
+  the negative entry to zero, and the clipped point is a different covariance
+  altogether: the objective went 8.687910 -> 11.759299 on the clip and
+  11.721971 after the polish, and that worse fit was shipped -- 3.03
+  log-likelihood units below an optimum the same call had already found (the
+  three starts reach it; only the polish lost it). The polish now only replaces
+  a point it improves. The fit reports 8.687910 with
+  `tau2 = (0.0356, 0.1645, 0.1101)` and `rho = (-0.0155, -0.9778, 0.2244)`,
+  against the independent reference's 8.687910328.
+
+### Changed
+
+- **`struct="UN"` fits get a third starting point** (`_cone_start`) on the far
+  side of the cone: every fit of the D grid that stopped below the maximum did
+  so on a boundary (0 of 65 at an interior point, 46 of 65 with a correlation
+  at +-1), and the escape from that corner usually needs a large *negative*
+  correlation, which neither of the other two starts proposes. Measured over the
+  full grid, the share of fits below the maximum:
+
+  | cell | 1.1.6 | 1.1.7 | worst gap | fit time (median) |
+  |---|---|---|---|---|
+  | `k10-J2-rho30` (control) | 0.0% | 0.0% | 0.000 -> 0.000 | 0.39 -> 0.28 s |
+  | `k10-J3-mixed` | 5.2% | **0.4%** | 2.596 -> 0.000 | 0.88 -> 0.80 s |
+  | `k10-J3-rho30` | 6.4% | **0.4%** | 3.034 -> 0.000 | 1.06 -> 0.82 s |
+  | `k10-J3-rho70` | 5.6% | **1.6%** | 0.824 -> 0.000 | 1.10 -> 0.78 s |
+  | `k30-J3-rho30` | 0.8% | **0.0%** | 0.742 -> 0.000 | 1.63 -> 1.52 s |
+  | `k30-J3-tiny` | 8.8% | **1.2%** | 3.655 -> 0.000 | 2.86 -> 1.99 s |
+  | `k30-J5-rho30` | 4.0% | 3.0% | 0.041 -> 0.041 | 7.89 -> 8.17 s |
+  | `k30-J5-rho70` | 11.0% | **6.0%** | 0.066 -> 0.066 | 10.13 -> 9.40 s |
+
+  The control cell does not move, the gap to the maximum goes to exactly zero
+  in every J=3 cell, and the boundary rate falls with the suboptimal rate
+  (18.8 -> 12.8%, 22.8 -> 17.2%, 13.6 -> 5.6%) -- the fits are finding the
+  maximum *and* spending less time parked on a face. Two honest notes: at k=30,
+  J=5, `rho30` the change costs 3.5% of the fit time for one replicate
+  (4 -> 3 of 100), and the Frobenius error does not move anywhere (the third
+  start changes which optimum is found, not how well the data pin the matrix).
+- **The block-wise likelihood is evaluated in one batched call**
+  (`_mv_loglik_stacked`, reached through `_uniform_layout`) instead of one call
+  per block. Measured on the k=30, J=5 cell: one evaluation costs 13.1 ms with
+  the full `kJ x kJ` matrix, 0.151 ms with 1.1.6's per-block loop, and 0.127 ms
+  batched -- 1.2x over the loop, on top of the 87x the loop already had. It is
+  strictly less work and the tests compare the batched, the per-block and the
+  full-matrix paths point by point (`tests/test_blocked_loglik.py`), but it is
+  not the headline, and the docstring says so.
+
+### Fixed (measurement)
+
+- **`metabench`'s covariance family counted a boundary fit as an invalid
+  matrix.** The adapter's flag is a strict `min(eig) > 0`, so a fit that lands
+  on a *singular* Sigma -- a correlation matrix of rank 2, which is where the
+  maximum often is -- was decided by the last bit of the arithmetic: 23 of 250
+  fits in `k30-J3-rho30` were counted invalid with a smallest eigenvalue
+  between -1e-19 and -6e-18. The metric now separates "indefinite" from "on the
+  boundary to machine precision" (`NON_PD_TOL = 1e-8` of the largest variance),
+  and the old flag is kept as `non_pd_raw_rate` so that older runs can still be
+  read against it. Summaries are recomputable from the raw JSONL
+  (`tools/resummarise.py`), which is how both sides of the table above were
+  produced without re-simulating. Note that this is a harness correction, not a
+  `pimeta` change: the rate it printed for 1.1.6 (up to 25%) was never a
+  property of the estimator, and both columns now read 0.0%.
+
 ## [1.1.6] - 2026-10-29
 
 Five changes, each one chosen because a measurement said so. The measurements
