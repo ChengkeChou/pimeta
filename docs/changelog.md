@@ -64,7 +64,7 @@ likelihood written from the algebra); the before column is the 1.1.6 run.
   full-matrix paths point by point (`tests/test_blocked_loglik.py`), but it is
   not the headline, and the docstring says so.
 
-### Fixed (measurement)
+### Fixed (tests and measurement)
 
 - **`metabench`'s covariance family counted a boundary fit as an invalid
   matrix.** The adapter's flag is a strict `min(eig) > 0`, so a fit that lands
@@ -79,6 +79,18 @@ likelihood written from the algebra); the before column is the 1.1.6 run.
   produced without re-simulating. Note that this is a harness correction, not a
   `pimeta` change: the rate it printed for 1.1.6 (up to 25%) was never a
   property of the estimator, and both columns now read 0.0%.
+- **`test_the_unstructured_fit_matches_metafor_loosely` asked for a Cholesky
+  factor of a matrix that is singular by construction.** The tvhr fixture's
+  correlations (0.864 / 0.637 / 0.163) are well inside the box but give a
+  correlation matrix with determinant zero to sixteen decimals, so the maximum
+  lies on the cone boundary and the fitted Sigma has a zero eigenvalue --
+  metafor's own estimate included. A strict `np.linalg.cholesky` therefore
+  decided the test with the last bit of one BLAS: the same wheel raised
+  `LinAlgError` at `det = -1.3e-16` under WSL and returned a factor at
+  `det = +7.5e-17` on Windows. The assertion is now semidefiniteness at
+  `1e-12` of the largest eigenvalue, and the docstring says where the boundary
+  actually is. (The 1.1.7 estimate is unchanged: `beta`, `se` and `tau2` match
+  metafor's to 1e-6 and `rho` to 1e-5 on both platforms.)
 
 ## [1.1.6] - 2026-10-29
 
