@@ -1,6 +1,6 @@
 # Coming from R
 
-pimeta mirrors the R packages closely enough that most code translates
+pimeta implements the same models with the same argument names, so most code translates
 mechanically. This page lists every construct where it does not.
 
 ## Library names

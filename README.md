@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-1050%20passing-brightgreen.svg)](https://github.com/ChengkeChou/pimeta/actions/workflows/publish.yml)
 
-**Pure-Python meta-analysis — a faithful, numerically verified port of R's
+**Pure-Python meta-analysis -- a numerically verified reimplementation of R's
 [`metafor`](https://cran.r-project.org/package=metafor),
 [`netmeta`](https://cran.r-project.org/package=netmeta) and
 [`meta`](https://cran.r-project.org/package=meta).**
@@ -720,6 +720,28 @@ Every public symbol carries a docstring that names the R function it mirrors.
 
 MIT. This package contains an independent Python implementation; it does not
 contain or link against R or any GPL R package source code.
+
+## Acknowledgements
+
+The models implemented here, the conventions that make their output comparable,
+and the reference values the test suite is built on come from:
+
+- Viechtbauer, W. (2010). Conducting meta-analyses in R with the metafor
+  package. *Journal of Statistical Software*, 36(3), 1-48.  R package
+  `metafor` (GPL >= 2).
+- Balduzzi, S., Ruecker, G., Nikolakopoulou, A., Papakonstantinou, T.,
+  Salanti, G., Efthimiou, O., Schwarzer, G. (2023). netmeta: An R package for
+  network meta-analysis with frequentist methods. *Journal of Statistical
+  Software*, 106(4), 1-32.  R packages `netmeta` and `meta` (GPL >= 2).
+- The individual estimators, as cited in the docstrings of the modules that
+  implement them (DerSimonian & Laird 1986; Hedges 1983; Higgins & Thompson
+  2002; Paule & Mandel 1982; Sidik & Jonkman 2005; Ruecker et al. 2011;
+  Krahn et al. 2013; Ruecker & Schwarzer 2015; Copas & Shi 2000, 2001; Vevea &
+  Hedges 1995; Opricovic & Tzeng 2004).
+
+The scripts in `tools/*.R` are ours: they call those R packages to write the
+expected values under `tests/data/`, which is how parity is checked.  They are
+development tooling, are not imported by the library, and require R to run.
 
 ## Citation
 

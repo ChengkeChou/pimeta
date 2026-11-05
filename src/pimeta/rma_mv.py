@@ -767,8 +767,9 @@ class _GENComp:
         return D
 
     def init(self, tau2_val: float) -> np.ndarray:
-        # metafor: tau2.init = rep(total/(#variance components), q),
-        #          rho.init  = rep(0.5, q(q-1)/2), then G <- chol(G).
+        # The starting point puts the total between-study variance on the
+        # diagonal, uses 0.5 for every starting correlation, and works with
+        # the Cholesky factor of G from then on.
         G = np.full((self.q, self.q), 0.0)
         np.fill_diagonal(G, tau2_val)
         for i in range(1, self.q):

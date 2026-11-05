@@ -89,7 +89,7 @@ def _multiarm(r):
         small_neg = (w < 0.0) & (np.abs(w) / denom < 0.001)
         w = np.where(small_neg, 0.0, w)
 
-    # V = 1 / W element-wise (R's ``V <- 1 / W`` is element-wise).
+    # The variances are the element-wise reciprocals of the weights.
     with np.errstate(divide="ignore", invalid="ignore"):
         vmat = 1.0 / w
 

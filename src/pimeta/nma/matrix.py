@@ -15,7 +15,7 @@ from .component import NetcombResult, _compsplit, _create_c_matrix
 
 def _by_summary(x, index1, index2=None, func="mode", ties_method="first",
                 sep=":", rng=None):
-    """``netmeta:::bySummary`` with ``long = FALSE``.
+    """Collapse a network matrix by summary (``long = False``).
 
     Returns a dict of columns ``indices``, ``sum``, ``min``, ``max``,
     ``mean``, ``median``, ``mode`` — one row per distinct index (pair).

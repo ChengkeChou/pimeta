@@ -128,7 +128,8 @@ def egger_test(y, v, model: str = "rma", method: str = "REML") -> EggerResult:
     se = np.sqrt(v)
 
     if model == "lm":
-        # metafor: fit <- lm(yi ~ 0 + X, weights=1/vi); X = [1, sei]
+        # No-intercept weighted least squares of the effects on [1, se], with
+# weights 1/vi.
         X = np.column_stack([np.ones(k), se])
         w = 1.0 / v
         beta, cov_no_disp = _wls_beta(X, w, y)
@@ -614,7 +615,7 @@ class MetabiasResult:
 
 
 def _linregcore(te, se, covar=None, model="lm", method_tau="DL", alpha=0.05):
-    """``meta:::linregcore`` — the regression core shared by the bias tests.
+    """The weighted regression core shared by the bias tests.
 
     ``model="lm"``  weighted least squares (``w = 1/se^2``) with a
                     multiplicative dispersion factor and a t test on ``k - 2``
@@ -660,7 +661,7 @@ def _linregcore(te, se, covar=None, model="lm", method_tau="DL", alpha=0.05):
 
 
 def _hypergeom_mean_var(n1, m1, N, psi):
-    """Mean and variance of ``meta:::hypergeometric``'s *noncentral* law.
+    """Mean and variance of the noncentral hypergeometric law.
 
     ``meta`` builds the distribution of the upper-left cell of a 2x2 table
     with margins ``n1``/``m1``/``N`` and **odds ratio** ``psi`` — i.e.

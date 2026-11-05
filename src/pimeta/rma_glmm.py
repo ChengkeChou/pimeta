@@ -241,7 +241,7 @@ def _u_profile_twoarm(theta, beta, gamma_j, st, nt, sc, nc, link):
 def _pirls_twoarm(th, lp0, Xf, Z, s, n, y, link, tolPwrss=1e-7, maxit=2000):
     """PIRLS joint solve of ``(beta, gamma, u)`` at fixed theta (lme4 PQL).
 
-    Faithful to lme4's ``pwrssUpdate`` for the identity-link (RD) two-arm
+    Same construction as lme4's ``pwrssUpdate`` for the identity-link (RD) two-arm
     model: iterated penalised weighted least squares on the linear predictor
     with ``mu = linkinv(eta)`` and working weights
     ``W = n * muEta^2 / variance``, objective ``drsum + sqrL`` (the binomial

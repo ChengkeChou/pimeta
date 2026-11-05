@@ -4,8 +4,8 @@ Implements ``metafor::deltamethod``, ``metafor::tes`` (test of excess
 significance), ``metafor::vif`` (generalized variance-inflation factors) and
 ``metafor::permutest`` (permutation test for the fixed effects).
 
-All routines are pure NumPy/SciPy transcriptions; numerical derivatives replace
-the ``calculus`` package that metafor uses for :func:`deltamethod`.
+All routines are pure NumPy/SciPy; numerical derivatives are used where
+:func:`deltamethod` needs them.
 """
 
 from __future__ import annotations
@@ -571,14 +571,14 @@ def vif(result, btt=None, intercept=False):
 
     bttspec = btt is not None
     if btt is None:
-        # metafor: btt <- as.list(2:x$p)  -> one VIF per coefficient
+        # Coefficients 2..p are tested one at a time: one VIF per coefficient.
         if has_icpt and not intercept:
             btt = [[i] for i in range(2, p + 1)]
         else:
             btt = [[i] for i in range(1, p + 1)]
     else:
         # a flat specification is a single (joint) set, like metafor's
-        # `if (!is.list(btt)) btt <- list(btt)`
+        # A single index is wrapped in a list.
         if isinstance(btt, str):
             btt = [[btt]]
         elif isinstance(btt, (list, tuple)) and btt and not isinstance(btt[0], (list, tuple)):
@@ -607,7 +607,7 @@ def vif(result, btt=None, intercept=False):
             if idx == [1]:
                 raise ValueError("cannot compute VIF(s) for the specified 'btt' argument")
             # 1-based index i (i >= 2) -> 0-based column i-2 once the intercept
-            # is dropped (metafor's `.compvif` does `btt <- btt - 1` on the
+            # is dropped (the index set is shifted by one on the
             # reduced 1-based index, which is the same thing).
             btt0 = [i - 2 for i in idx if i > 1]
         else:
@@ -675,7 +675,7 @@ _PERM_COMPTOL = math.sqrt(2.220446049250313e-16)
 
 
 def _perm_fit(y, vi, X, *, method, test):
-    """``rma.uni`` with ``X`` used verbatim (metafor: ``intercept = FALSE``)."""
+    """``rma.uni`` with ``X`` used as given (``intercept=False``)."""
     from .rma_uni import rma
 
     p = X.shape[1]

@@ -205,7 +205,7 @@ def conv_fivenum(min=None, q1=None, median=None, q3=None, max=None, n=None,
     Note:
         Only ``dist="norm"`` is supported; metafor's log-normal back-transform
         (``dist="lnorm"``) and the ``estmeansd``/``metaBLUE`` based methods
-        (``qe``/``bc``/``mln``/``blue``) are not transcribed.
+        (``qe``/``bc``/``mln``/``blue``) are not implemented.
     """
     if all(v is None for v in (min, q1, median, q3, max)):
         raise ValueError(
@@ -535,7 +535,7 @@ def _is_na(v):
 
 
 def _rec2x2diag(sens, spec, ppv, ni, round_=True):
-    """``metafor:::.rec2x2diag`` — cell counts implied by sens/spec/PPV."""
+    """Cell counts implied by sensitivity, specificity, PPV and NPV."""
     den = sens * (1.0 - ppv) + ppv * (1.0 - spec)
     ai = ni * sens * ppv * (1.0 - spec) / den
     bi = ni * sens * (1.0 - ppv) * (1.0 - spec) / den
@@ -548,7 +548,7 @@ def _rec2x2diag(sens, spec, ppv, ni, round_=True):
 
 
 def _funconv2x2diag(par, obs, ni):
-    """``metafor:::.funconv2x2diag`` — squared-error loss of the reconstruction."""
+    """Squared-error loss of the 2x2 reconstruction."""
     if par[0] * (1.0 - par[2]) + par[2] * (1.0 - par[1]) <= sys.float_info.epsilon:
         return 10.0
     rec = _rec2x2diag(par[0], par[1], par[2], ni, round_=False)
@@ -563,7 +563,7 @@ def _funconv2x2diag(par, obs, ni):
 
 
 def _largestremaindermethod(x, n):
-    """``metafor:::.largestremaindermethod`` — round while preserving the total."""
+    """Round to integers while preserving the total (largest remainder method)."""
     xfloor = [math.floor(v) for v in x]
     remainder = int(round(n - sum(xfloor)))
     x_int = list(xfloor)
@@ -584,7 +584,7 @@ def conv_2x2(ori=None, ri=None, x2i=None, ni=None, n1i=None, n2i=None,
     Cell counts can be recovered from either an odds ratio (``ori``), a phi
     coefficient (``ri``) or a chi-square statistic (``x2i``) together with the
     marginal counts ``n1i``/``n2i``, or from at least three of
-    sensitivity/specificity/PPV/NPV.  This is a faithful transcription of
+    sensitivity/specificity/PPV/NPV.  This implements
     ``metafor::conv.2x2`` including the ``"simple"``, ``"optim"`` and
     ``"search"`` reconstruction methods.
 

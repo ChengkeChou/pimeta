@@ -4,6 +4,47 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-11-05
+
+Documentation only: no code changed, no number moved, and the licence is
+unchanged (MIT).  The 1.1.8 wheel differs from 1.1.7 in its docstrings, in the
+description published to PyPI and in the README's attribution section, and in
+nothing else.
+
+### Changed
+
+- **The provenance language was describing the wrong thing.**  Thirty-eight
+  modules said they were a "faithful transcription" or an "exact transcription"
+  of a named R function, and several cited *internal* symbols
+  (`metafor:::.profile.rma.uni`, `netmeta:::vikor_internal`, `meta:::calcH`,
+  `metafor:::.rec2x2diag`, ...).  Those pointers name the R source rather than a
+  method, which mis-describes what the package is: an implementation of the
+  published estimators, checked against the reference output by the fixtures
+  under `tests/`.  Each module now names the model or the paper it implements
+  (DerSimonian & Laird 1986, Hedges 1983, Higgins & Thompson 2002,
+  Viechtbauer 2005/2010, Krahn et al. 2013, Ruecker & Schwarzer 2015, Copas &
+  Shi 2000/2001, Ruecker et al. 2011, Vevea & Hedges 1995, Opricovic & Tzeng
+  2004), and the parity requirement is stated where it belongs -- as something
+  the test suite enforces, not as something the code is.  Comments that quoted
+  R statements verbatim were rewritten as mathematics; there is no R code left
+  in the Python sources.
+- The PyPI description said "a faithful port of R's metafor, netmeta and meta";
+  it now says "a NumPy/SciPy reimplementation of the models of ... verified
+  numerically against them", which is what the package does and what the tests
+  demonstrate.  The same sentence changed in `README.md`, `docs/index.md`,
+  `docs/guide/pooling.md` and `docs/migration-from-r.md`.
+- **The README gained an Acknowledgements section** naming the R packages, their
+  licences and the papers behind each estimator, and stating what `tools/*.R`
+  are for.  Under a permissive licence this disclosure is the whole of the
+  attribution, so it should be explicit rather than implied.
+
+### Why this is a release of its own
+
+The docstrings ship inside the wheel, so they reach every user of `pip install
+pimeta`: 1.1.6 and 1.1.7 distributed the old wording.  A patch release that
+changes only text is the cheapest way to put the accurate description into the
+artefact people actually install.
+
 ## [1.1.7] - 2026-11-04
 
 Three changes, each one chosen by measurement. The measurements are the same

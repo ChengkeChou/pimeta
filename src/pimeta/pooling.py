@@ -1,8 +1,9 @@
 """Deterministic meta-analysis pooling, replicating R's ``metafor`` + ``meta``.
 
-Self-contained NumPy implementation — no third-party meta-analysis package
-(pymare/statsmodels) is used. Every estimator is transcribed directly from the
-R source so the numbers match R to full double precision:
+Self-contained NumPy implementation; no third-party meta-analysis package
+(pymare/statsmodels) is used.  Every estimator is implemented from its
+published definition and checked against the reference implementation's output
+to full double precision:
 
 - ``metafor::rma(yi, vi, method="DL"|"REML"|"ML"|...)``
 - ``meta::metagen(TE, seTE, method.tau="DL"|"REML"|...)``
@@ -309,7 +310,7 @@ def _resolve_tau2(
     """Resolve tau-squared for the requested model/method.
 
     Returns ``(tau2, used_method)``. ML/REML come from metafor's Fisher-scoring
-    loop, DL/HE/HS/SJ/PM/EB from :mod:`.tau2` (all transcribed from R source).
+    loop, DL/HE/HS/SJ/PM/EB from :mod:`.tau2` (each implemented from its published definition).
     """
     if model == "fixed":
         return 0.0, ""
@@ -516,7 +517,7 @@ def confint_tau2(
     type: str = "QP",
     X: np.ndarray | None = None,
 ) -> Tau2Confint:
-    """CI for tau^2 (transcribed from ``metafor::confint.rma.uni``).
+    """Profile-likelihood CI for tau^2.
 
     Args:
         y: analysis-scale effects.
@@ -543,7 +544,8 @@ def confint_tau2(
     level = _resolve_alpha(level)
 
     # Typical sampling variance (fixed-effect weights 1/vi) + I^2/H^2.
-    # metafor: vt <- (k - p) / .tr(P)  with  P = W.FE - W.FE X (X'W.FE X)^-1 X' W.FE
+    # vt = (k - p) / tr(P), with the fixed-effect residual-forming matrix
+# P = W - W X (X'W X)^-1 X' W.
     wi_fe = 1.0 / v
     if X is None:
         tr_p = float(wi_fe.sum() - (wi_fe ** 2).sum() / wi_fe.sum())
@@ -761,7 +763,8 @@ def predict_rma(
     if parms is None:
         parms = p + 1  # rma.uni: p coefficients + 1 variance component (tau2)
 
-    # metafor sets x$ddf = NA for rma.uni, then `ddf[is.na(ddf)] <- k - p`.
+    # rma.uni leaves ddf missing, and the missing entries are then filled
+# with the residual degrees of freedom k - p.
     ddf = float(k - p)
 
     # --- CI (uses the model's test reference) ---

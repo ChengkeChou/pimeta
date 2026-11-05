@@ -22,7 +22,7 @@ Heterogeneity (``meta``'s Q-based convention, *not* metafor's tau^2-based one):
 * ``I2 = (H^2 - 1) / H^2``  (equivalently ``(Q - (k-1)) / Q``), a proportion
   in ``[0, 1]``.
 * ``H``/``I2`` confidence intervals come from Higgins-Thompson's approximation
-  on the log-H scale (``meta:::calcH`` + ``meta:::isquared``).
+  on the log-H scale (Higgins & Thompson 2002).
 """
 
 from __future__ import annotations
@@ -83,14 +83,14 @@ SM_RATE = {"IR", "IRLN", "IRS", "IRFT"}
 
 ALL_SM = SM_BIN | SM_CONT | SM_COR | SM_INC | SM_MEAN | SM_PROP | SM_RATE
 
-# meta:::is_relative_effect  +  meta:::is_log_effect
+# classification helpers: relative vs absolute effect, log vs linear scale
 RELATIVE_EFFECT = {"HR", "OR", "RR", "IRR", "ROM", "DOR"}
 LOG_EFFECT = {"PLN", "IRLN", "MLN"}
 _LOG_SM = RELATIVE_EFFECT | LOG_EFFECT
 
 
 # ---------------------------------------------------------------------------
-# transformation helpers (meta source, transcribed literally)
+# transformation helpers (the usual closed-form effect-size transforms)
 # ---------------------------------------------------------------------------
 def _cor2z(x):
     """meta::cor2z — Fisher's r-to-z transform."""
@@ -205,12 +205,12 @@ def _zip_nt(x, nt):
 
 
 # ---------------------------------------------------------------------------
-# heterogeneity statistics (meta:::calcH, meta:::isquared, meta:::hetcalc)
+# heterogeneity statistics (H, I^2 and the Q test)
 # ---------------------------------------------------------------------------
 def _calc_h(Q: float, df: int, level: float) -> dict:
-    """meta:::calcH — H = max(sqrt(Q/df), 1) with an approximate CI.
+    """H = max(sqrt(Q/df), 1) with an approximate CI.
 
-    Mirrors ``meta:::calcH``: ``H`` is floored at 1 before the log-scale CI, so
+    ``H`` is floored at 1 before the log-scale CI, so ``H`` is floored at 1 before the log-scale CI, so
     ``I^2`` is never negative (matches R exactly for Q < k-1).
     """
     k = df + 1
@@ -247,7 +247,7 @@ def _calc_h(Q: float, df: int, level: float) -> dict:
 
 
 def _isquared(Q: float, df: int, level: float) -> dict:
-    """meta:::isquared — I^2 = (H^2 - 1)/H^2."""
+    """I^2 = (H^2 - 1)/H^2."""
     t = _calc_h(Q, df, level)
     f = lambda hh: (hh ** 2 - 1.0) / hh ** 2  # noqa: E731
     return {
@@ -258,7 +258,7 @@ def _isquared(Q: float, df: int, level: float) -> dict:
 
 
 def _hetcalc(y, v, method_tau: str, level: float) -> dict:
-    """meta:::hetcalc for the default (no subgroup, no ``TE.tau``) case.
+    """The Q test for the default (no subgroup, no ``TE.tau``) case.
 
     ``tau2`` comes from ``metafor::rma.uni`` (so DL is the DerSimonian-Laird
     moment estimator, ML/REML the Fisher-scoring loop); ``Q`` is Cochran's Q.
@@ -527,7 +527,7 @@ def metagen(
 
     z = stats.norm.ppf(1.0 - (1.0 - level) / 2.0)  # qnorm((1+level)/2)
 
-    # study-level CI (analysis scale, z reference, meta:::ci with df=NULL).
+    # study-level CI (analysis scale, z reference, df=None).
     statistic = (TE - null_effect) / seTE
     pval = 2.0 * stats.norm.sf(np.abs(statistic))
     lower = TE - z * seTE

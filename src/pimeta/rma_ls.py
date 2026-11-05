@@ -70,7 +70,7 @@ def _ls_pieces(alpha, yi, vi, X, Z, link):
 
 
 def _ls_loglik(alpha, yi, vi, X, Z, reml, link, remlf=True):
-    """``metafor:::.ll.rma.ls`` (the ``randhet`` extension is not supported)."""
+    """The location-scale log-likelihood (the ``randhet`` extension is not supported)."""
     pic = _ls_pieces(alpha, yi, vi, X, Z, link)
     if pic is None:
         return -math.inf

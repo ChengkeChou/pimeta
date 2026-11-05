@@ -1,6 +1,6 @@
 """Sampling covariance matrix of dependent effect sizes.
 
-Port of ``metafor::vcalc``.  Dependency arises in four ways, and each one has
+Implements the ``vcalc`` variance-covariance construction.  Dependency arises in four ways, and each one has
 its own argument:
 
 ===========================  ==========================================

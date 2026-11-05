@@ -141,15 +141,16 @@ def _pm(y, v, n=None) -> float:
 
 
 def _eb(y, v, n=None) -> float:
-    """Empirical Bayes: metafor's Fisher-scoring iteration.
+    r"""Empirical Bayes: Fisher scoring on the adjusted tau^2.
 
-    Starts from the HE/CO/VC value ``(RSS - trPV)/(k - p)`` (see ``rma.uni``'s
-    combined HE/ML/REML/EB block) and iterates
+    Starts from the HE/CO/VC value ``(RSS - trPV)/(k - p)`` and iterates
 
-        ``adj <- (Y' P Y * k/(k - p) - k) / sum(wi)``
+    .. math::
 
-    with ``wi = 1/(vi + tau2)``, stopping once the change falls below
-    ``con$threshold`` (1e-5).
+        adj = \frac{Y' P Y \, k/(k - p) - k}{\sum_i w_i}
+
+    with ``w_i = 1/(v_i + tau^2)``, stopping once the change falls below the
+    convergence threshold ``TAU2_THRESHOLD`` (1e-5).
     """
     ya = np.asarray(y, dtype=float)
     va = np.asarray(v, dtype=float)

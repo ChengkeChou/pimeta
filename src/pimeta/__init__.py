@@ -1,7 +1,9 @@
 """Meta-analysis toolkit replicating metafor, meta and netmeta in pure Python.
 
-Numeric engine: self-contained NumPy/SciPy transcriptions of the R source —no
-third-party meta-analysis package (pymare/statsmodels) is used anywhere.
+Numeric engine: self-contained NumPy/SciPy implementations of the published
+estimators; no third-party meta-analysis package (pymare/statsmodels) is used
+anywhere.  Numerical parity with the R packages is enforced by the fixtures
+under ``tests/``.
 
 Submodules
 ----------

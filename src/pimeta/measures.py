@@ -1,6 +1,6 @@
 """Effect-measure conversions —?``meta`` package parity.
 
-Transcriptions of ``meta::asin2ir``, ``asin2p``, ``p2asin``, ``cor2z``,
+Conversions between effect measures (``asin2ir``, ``asin2p``, ``p2asin``, ``cor2z``,
 ``z2cor``, ``logit2p``, ``p2logit``, ``smd2or``, ``or2smd``, ``logVR2VE``,
 ``VE2logVR``, ``rd`` and ``nnt``.
 
@@ -171,18 +171,18 @@ def or2smd(lnOR, selnOR, method="HH"):
 # --------------------------------------------------------------------------- #
 
 def _logRR2rd(te, pc):
-    """meta:::logRR2rd — RD = p.e - p.c with p.e = exp(logRR) * p.c."""
+    """RD = p.e - p.c with p.e = exp(logRR) * p.c."""
     return np.exp(te) * pc - pc
 
 
 def _logOR2rd(te, pc):
-    """meta:::logOR2rd — RD = p.e - p.c with the OR-derived p.e."""
+    """RD = p.e - p.c with the odds-ratio-derived p.e."""
     e = np.exp(te)
     return e * pc / (1.0 - pc + e * pc) - pc
 
 
 def _logHR2rd(te, pc, pscale=1.0):
-    """meta:::logHR2rd — RD = p.e - p.c assuming exponentially distributed events."""
+    """RD = p.e - p.c assuming exponentially distributed events."""
     e = np.exp(te)
     return pc ** e - pc
 

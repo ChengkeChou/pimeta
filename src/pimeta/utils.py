@@ -98,9 +98,9 @@ def bldiag(*blocks, order=None):
             )
         if idx.dtype == bool or idx.size == 0:
             idx = np.flatnonzero(idx)
-        # R: out[sort.vec, sort.vec] <- out with sort.vec <- order(order) for a
-        # plain index vector, i.e. the *inverse* permutation (one argsort on the
-        # 0-based indices, not two).
+        # Reordering rows and columns by a plain index vector applies the
+        # *inverse* permutation to the matrix, which is one argsort on the
+        # 0-based indices rather than two.
         inv = np.argsort(idx)
         tmp = np.zeros_like(out)
         tmp[np.ix_(inv, inv)] = out
@@ -559,8 +559,8 @@ def rcalc(x, ni, data=None, rtoz=False, nfun="min", upper=False,
     if rtoz:
         ri = np.arctanh(ri)
 
-    # R: I <- matrix(seq_len(dims), dims, dims)  (recycled -> row index)
-    #    J <- matrix(seq_len(dims), dims, dims, byrow = TRUE)  (-> column index)
+    # Row and column index matrices, so that the pair (i, j) of a contrast
+    # can be recovered after the lower triangle is flattened.
     im = np.broadcast_to(np.arange(1, dims + 1)[:, None], (dims, dims))
     jm = np.broadcast_to(np.arange(1, dims + 1)[None, :], (dims, dims))
     sel_i = im[tri[0][order], tri[1][order]]
@@ -1230,7 +1230,7 @@ def jama_labels(author, year, citation):
 
 
 def ci(te, seTE, level=0.95, df=None, null_effect=0.0):
-    """``meta:::ci`` — confidence interval and test for an effect estimate.
+    """Confidence interval and test for an effect estimate.
 
     Args:
         te: effect estimate(s).

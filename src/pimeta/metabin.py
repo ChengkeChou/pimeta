@@ -199,7 +199,7 @@ def _mh_rd(a, b, c, d, n1, n2):
 
 
 def lrp_common(event_e, n_e, event_c, n_c) -> tuple[float, float, float]:
-    """Penalised-likelihood log OR and its SE (``meta:::runLRP``).
+    """Penalised-likelihood log OR and its SE (Firth-type correction).
 
     Fits ``cbind(events, nonevents) ~ treat + study`` by Jeffreys-penalised
     logistic regression (Firth), i.e. exactly what ``glm(..., method =

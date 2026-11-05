@@ -58,13 +58,19 @@ class NetmeasuresResult:
 
 
 def _htilde(H, groups):
-    """``H.tilde`` — absolute-sum aggregation within design (or study) blocks.
+    r"""``H.tilde`` -- absolute-sum aggregation within design (or study) blocks.
 
-    R::
+    For each block ``b`` the aggregate is the midpoint of the signed and the
+    absolute sum over that block's columns:
 
-        l <- lapply(split(H, <block index>), function(x) matrix(x, nrow(H)))
-        H.tilde <- sapply(l, function(x) apply(x, 1, function(x)
-                       0.5 * (abs(sum(x)) + sum(abs(x)))))
+    .. math::
+
+        \tilde{H}_{i b} = \tfrac{1}{2}\left(
+            \Big|\sum_{j \in b} H_{i j}\Big| + \sum_{j \in b} |H_{i j}|
+        \right)
+
+    so a block whose contributions cancel is not mistaken for a block that
+    carries no inconsistency.
     """
     order = list(dict.fromkeys(groups))
     out = np.zeros((H.shape[0], len(order)))

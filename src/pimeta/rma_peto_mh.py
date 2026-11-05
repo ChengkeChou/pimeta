@@ -327,9 +327,9 @@ def rma_mh(
 # metafor gives both models their own cumul(), leave1out(), rstandard(),
 # rstudent(), weights(), confint() and qqnorm() implementations; each simply
 # refits the (very cheap, closed-form) estimator on subsets of the 2x2 tables.
-# They are transcribed here and wired up through the package's generic
+# They are implemented here and wired up through the package's generic
 # dispatch, so ``weights(mh)``, ``cumul(mh)``, ``leave1out(mh)``, ... work
-# exactly as they do in R.
+# on these models as they do on the others.
 
 _MH_RESULTS = (RmaPetoResult, RmaMhResult)
 

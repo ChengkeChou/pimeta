@@ -123,7 +123,7 @@ class SelModelResult:
 
 
 # --------------------------------------------------------------------------- #
-# Small numeric helpers transcribed from metafor internals
+# Small numeric helpers used by the selection-model likelihood
 # --------------------------------------------------------------------------- #
 
 def _plogis(x):
@@ -1123,7 +1123,7 @@ def selmodel(
     else:
         raise ValueError(f"unsupported selection model type: {type_!r}")
 
-    # metafor: mapfun <- delta.transf.fun only when the type forces the
+    # The delta-transformation function is used only when the type forces the
     # unbounded map or delta.max is infinite; otherwise .mapfun is called with
     # fun=NA and falls back to the scaled logistic on [delta.min, delta.max].
     # ``truncest`` then pins the cut-point to the identity scale.

@@ -1,6 +1,6 @@
 # pimeta
 
-**Pure-Python meta-analysis — a numerically verified port of R's
+**Pure-Python meta-analysis -- a numerically verified reimplementation of R's
 [metafor](https://cran.r-project.org/package=metafor),
 [netmeta](https://cran.r-project.org/package=netmeta) and
 [meta](https://cran.r-project.org/package=meta).**

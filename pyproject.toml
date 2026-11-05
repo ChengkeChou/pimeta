@@ -8,8 +8,8 @@ build-backend = "setuptools.build_meta"
 # (Plain "pmeta" was taken: an unrelated 1 KB stub registered it in 2020.)
 # Source repository: https://github.com/ChengkeChou/pimeta
 name = "pimeta"
-version = "1.1.7"
-description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots — a faithful port of R's metafor, netmeta and meta."
+version = "1.1.8"
+description = "Pure-Python meta-analysis: fixed/random-effects, network meta-analysis, meta-regression, publication bias and plots -- a NumPy/SciPy reimplementation of the models of R's metafor, netmeta and meta, verified numerically against them."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"

@@ -1,6 +1,6 @@
 """Copas selection model: adjusting a pooled effect for selection bias.
 
-Port of ``metasens::copas`` (Copas and Shi 2000, 2001).  The model says a
+Implements the Copas selection model (Copas and Shi 2000, 2001).  The model says a
 study is published when an unobserved score clears a threshold,
 
 .. math::

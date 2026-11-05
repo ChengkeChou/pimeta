@@ -937,8 +937,7 @@ def _decomp_tau(te_raw, se_raw, treat1_raw, treat2_raw, studlab_raw,
 
 def _tau_within(te_raw, se_raw, treat1_raw, treat2_raw, studlab_raw,
                 narms_raw, trts_sorted, reference_group=""):
-    """Transcription of ``netmeta::tau.within`` (DL tau under the
-    inconsistency model)."""
+    """DL tau under the inconsistency model (Krahn et al. 2013)."""
     nmak = _nma_krahn_full(te_raw, se_raw, treat1_raw, treat2_raw,
                            studlab_raw, narms_raw, trts_sorted,
                            reference_group, 0.0)
@@ -1109,16 +1108,17 @@ def decomp_design(result: NetmetaResult, tau_preset=None) -> DecompDesignResult 
 def netheat_matrix(result: NetmetaResult, random: bool = False,
                    tau_preset: float | None = None
                    ) -> tuple[np.ndarray, list[str]] | None:
-    """Design x design matrix drawn by ``netmeta::netheat`` (netmeta 3.7-0).
+    r"""Design-by-design heat matrix of the Krahn decomposition (netmeta 3.7-0).
 
-    R computes it inside ``netheat()`` from the Krahn decomposition:
+    The matrix is built from the same decomposition as the inconsistency
+    statistic.  With ``r_i`` the residuals of design ``i`` and ``V`` the
+    within-study covariance, the typical inconsistency of that design is
 
-    .. code-block:: r
+    .. math::
 
-        Q.inc.design.typ <- apply(residuals, 2, function(x)
-                                  t(x) %*% solve(V) * x)
-        diff <- Q.inc.design - Q.inc.design.typ
-        t1   <- -diff
+        Q_i^{typ} = r_i' V^{-1} r_i, \qquad
+        \Delta_i = Q_i^{inc} - Q_i^{typ}, \qquad
+        t_i = -\Delta_i ,
 
     so entry ``[i, j]`` is how much design ``i`` contributes to the
     inconsistency left over once design ``j`` is detached.
@@ -1164,7 +1164,7 @@ def netheat_matrix(result: NetmetaResult, random: bool = False,
     q_typ = solved * residuals
     heat = q_typ - q_inc[:, None]
 
-    # Drop designs whose whole column is NA (R: ``wi <- which(apply(t1, 2, ...))``).
+    # Drop designs whose whole column is missing.
     keep = [j for j in range(heat.shape[1])
             if not bool(np.all(np.isnan(heat[:, j])))]
     heat = heat[np.ix_(keep, keep)]
@@ -1476,7 +1476,7 @@ def netrank(
     result: NetmetaResult,
     small_values: str = "desirable",
 ) -> NetrankResult:
-    """P-scores (R眉cker & Schwarzer 2015), exact transcription of netrank.R.
+    """P-scores (Rücker & Schwarzer 2015).
 
     ``P[i, j]`` = probability treatment *i* is better than treatment *j*,
     computed from the two-sided p-value matrix as a one-sided p-value and
@@ -1511,7 +1511,7 @@ def netrank(
 
 
 def _calc_v_block(x: dict, sm: str) -> np.ndarray:
-    """netmeta:::calcV 鈥?within-study covariance of one (multi-arm) study.
+    """Within-study covariance of one (multi-arm) study.
 
     Off-diagonals all equal the *reference arm's* variance (arm 2 after the
     star-shaped re-orientation); diagonals are ``seTE^2``.
@@ -1682,7 +1682,7 @@ def _nma_tau_ml_reml(
         V = np.diag(np.asarray(cols["seTE"], dtype=float) ** 2)
 
     if k == 1:
-        # R fits rma.uni here and sets tau <- NA.
+        # A two-treatment network has no heterogeneity to decompose: tau is missing.
         return float("nan")
 
     comparison = [f"{cols['treat1'][i]} vs {cols['treat2'][i]}" for i in range(k)]

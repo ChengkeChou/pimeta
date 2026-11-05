@@ -148,7 +148,7 @@ def _firth_loglik(X, y, n, beta) -> float:
 
 
 def dispersion_phi(successes, totals, mu, n_params: int) -> float:
-    """``meta:::phi`` — the c-hat dispersion factor used for LRP standard errors.
+    """The c-hat dispersion factor used for penalised-likelihood standard errors.
 
     ``(sum of squared Pearson residuals / df) / (1 + mean((1-2p)/(n p (1-p))))``
     floored at 1, exactly as ``meta`` computes it.  Returns 1 when the

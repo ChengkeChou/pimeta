@@ -122,7 +122,8 @@ def _fs_tau2_converged(y, v, X, method):
 def _profile_subset(y, v, Xd, method, model, tau2_fixed):
     """Fit one subset and return (beta, k, QE, I2, H2, tau2) or None on failure.
 
-    Mirrors ``metafor:::.profile.rma.uni`` with ``subset = TRUE``. For
+    Fits the graphical-of-study-heterogeneity models on the profile
+    likelihood with ``subset = True``. For
     intercept-only FE/DL models (``model`` 1/2) the closed-form fast path is
     used; otherwise the full ``rma.uni`` fit is reproduced.
     """

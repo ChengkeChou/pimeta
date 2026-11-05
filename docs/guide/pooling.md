@@ -1,6 +1,7 @@
 # Pooling
 
-`rma` is the workhorse — a port of `metafor::rma()`, returning the same `$`
+`rma` is the workhorse -- an implementation of the model behind
+`metafor::rma()`, returning the same `$`
 fields as the R object.
 
 ```python
