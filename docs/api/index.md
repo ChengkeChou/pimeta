@@ -549,3 +549,8 @@ All 545 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`Diagnostic`](misc.md#diagnostic) | Other | — |
 | [`Diagnosis`](misc.md#diagnosis) | Other | — |
 | [`STRATEGIES`](misc.md#strategies) | Other | — |
+| [`describe`](misc.md#describe) | Other | Discovery |
+| [`list_models`](misc.md#list_models) | Other | Discovery |
+| [`list_estimators`](misc.md#list_estimators) | Other | Discovery |
+| [`list_effect_sizes`](misc.md#list_effect_sizes) | Other | Discovery |
+| [`list_diagnostics`](misc.md#list_diagnostics) | Other | Discovery |

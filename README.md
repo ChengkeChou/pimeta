@@ -716,6 +716,47 @@ Every public symbol carries a docstring that names the R function it mirrors.
 
 ---
 
+## Name
+
+The PyPI package `pimeta` (this project) is **not** the CRAN package `pimeta`,
+which implements prediction intervals for random-effects meta-analysis
+(Nagashima et al.).  The two are unrelated and share no code.  When citing this
+package, use the full name and the Python qualifier:
+
+> PIMETA: a Python statistical computing library for meta-analysis
+
+## Which entry point, and how far is it trusted
+
+Several hundred names are exported, so the package answers the two questions a
+new user actually has -- *which function fits my data* and *has its output been
+checked* -- from one table:
+
+```python
+import pimeta as ma
+
+ma.list_models()          # names accepted by describe()
+ma.describe("rma.mv")     # assumptions, methods, default, limitations, evidence
+```
+
+`describe()` returns the assumptions the model makes, the estimation methods it
+accepts, which one is the default and why, the limitations that have been
+*measured* here, the references, and `validation_status`:
+
+| status | meaning |
+|---|---|
+| `validated` | the quantity was measured here and the claim held |
+| `conditional` | measured, and it holds within the stated conditions |
+| `measured-shortfall` | measured, and it does **not** meet the nominal claim -- the numbers are quoted |
+| `parity` | agrees with a reference implementation; says nothing about calibration |
+| `unvalidated` | no measurement exists in this repository |
+
+This matters most where a nominal level is easy to misread.  The joint
+prediction region is filed as `measured-shortfall`, because its measured joint
+coverage is 66.3% at k=10 rising to 87.0% at k=50 against a claimed 95%; the
+region for the *mean* is calibrated, so the cause is the prediction step.  A
+package that does not say this is inviting the wrong conclusion from a
+correctly computed number.
+
 ## License
 
 MIT. This package contains an independent Python implementation; it does not

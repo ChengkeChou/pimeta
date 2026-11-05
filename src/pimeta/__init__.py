@@ -35,6 +35,13 @@ from .basis import (
 )
 from .bayes import Posterior, ess_bulk, ess_tail, rhat, sample_log_posterior
 from .checks import Diagnosis, Diagnostic, diagnose
+from .catalog import (
+    describe,
+    list_diagnostics,
+    list_effect_sizes,
+    list_estimators,
+    list_models,
+)
 from .conv import (
     Conv2x2Result,
     ConvDeltaResult,
@@ -688,6 +695,11 @@ _interop_classes = interop.install_methods(globals())
 
 
 __all__ = [
+    "describe",
+    "list_models",
+    "list_estimators",
+    "list_effect_sizes",
+    "list_diagnostics",
     "StudyEffect",
     "PooledResult",
     "run_meta",

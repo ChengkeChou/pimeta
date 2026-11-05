@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PIMETA: a Python statistical computing library for meta-analysis"
+abstract: >-
+  Pure-Python implementation of fixed- and random-effects meta-analysis,
+  network meta-analysis, meta-regression, publication-bias methods and
+  multilevel/multivariate models, with the numerical conventions of R's
+  metafor, netmeta and meta, verified against their output.
+type: software
+license: MIT
+repository-code: "https://github.com/ChengkeChou/pimeta"
+url: "https://pypi.org/project/pimeta/"
+keywords:
+  - meta-analysis
+  - statistics
+  - python
+  - network-meta-analysis
+  - meta-regression
+authors:
+  - family-names: Zhou
+    given-names: Cheng-ke
+version: 1.1.9
+date-released: "2026-11-05"
+preferred-citation:
+  type: software
+  title: "PIMETA: a Python statistical computing library for meta-analysis"
+  authors:
+    - family-names: Zhou
+      given-names: Cheng-ke
+  year: 2026
+  notes: >-
+    Not to be confused with the CRAN package 'pimeta' (prediction intervals for
+    random-effects meta-analysis, Nagashima et al.), which is unrelated.

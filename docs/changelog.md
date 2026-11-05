@@ -4,6 +4,38 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-11-05
+
+Additive: five new names, no existing behaviour changed.
+
+### Added
+
+- **`describe()` and `list_*()`: what the package can do, and how far each part
+  is trusted.**  `pimeta` exports 545 names; a user who knows the statistics but
+  not this package had no way to learn from `dir(pimeta)` which entry point fits
+  their data, what it assumes, or whether its output has been checked.  The new
+  `pimeta/catalog.py` holds one table, and `ma.describe("rma.mv")` returns
+  `assumptions`, `methods`, `default`, `limitations`, `references`,
+  `validation_status` and `evidence`.  Statuses are a closed vocabulary --
+  `validated`, `conditional`, `measured-shortfall`, `parity`, `unvalidated` --
+  and `evidence` names the file that backs the claim; `tests/test_catalog.py`
+  asserts that the file exists and that no status falls outside the vocabulary,
+  because a catalogue of unbacked claims is worse than none.
+- The first thing the catalogue says is the thing this project measured and did
+  **not** fix: the joint prediction region is filed as `measured-shortfall`,
+  with its measured coverage quoted (66.3% at k=10 to 87.0% at k=50 against a
+  claimed 95%) and the diagnosis beside it (the region for the mean is
+  calibrated, so the prediction step is at fault).
+- `CITATION.cff`, and a README section that separates this package from the
+  unrelated **CRAN** package of the same name (`pimeta`, prediction intervals
+  for random-effects meta-analysis, Nagashima et al.).  Searches and reference
+  managers otherwise merge the two.
+
+### Notes
+
+- No numerical code changed.  `ma.list_models()` and the four other names are
+  new exports; everything that existed keeps its signature and its output.
+
 ## [1.1.8] - 2026-11-05
 
 Documentation only: no code changed, no number moved, and the licence is
