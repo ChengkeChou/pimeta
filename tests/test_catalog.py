@@ -73,9 +73,14 @@ def test_the_lists_are_not_empty_and_agree():
         assert method in listed, f"rma offers {method!r}, which is not catalogued"
 
 
-def test_the_known_gap_is_stated_rather_than_hidden():
-    """The joint region is the one measured defect; it must say so."""
-    info = ma.describe("predict_region")
-    assert info["validation_status"] == "measured-shortfall"
-    assert any("66.3%" in line for line in info["limitations"])
-    assert "B_joint_region.md" in info["evidence"]
+def test_the_known_gaps_are_stated_rather_than_hidden():
+    """The two measured prediction defects have to say so, with numbers."""
+    region = ma.describe("predict_region")
+    assert region["validation_status"] == "measured-shortfall"
+    assert any("0.690" in line for line in region["limitations"])
+    assert "B2_joint_region_formal.md" in region["evidence"]
+
+    interval = ma.describe("predict_rma")
+    assert interval["validation_status"] == "measured-shortfall"
+    assert any("0.797" in line for line in interval["limitations"])
+    assert "C_prediction_interval.md" in interval["evidence"]

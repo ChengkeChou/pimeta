@@ -405,3 +405,33 @@ def test_an_unknown_reference_is_still_refused():
     fit, _ = _small_fit()
     with pytest.raises(ValueError, match="unknown test"):
         ma.predict_region(fit, test="delta")
+
+
+def test_a_measured_crit_scale_multiplies_the_critical_value():
+    """The multiplier is a calibration: it must scale ``crit`` and say so."""
+    fit, _ = _small_fit()
+    plain = ma.predict_region(fit, test="hk")
+    scaled = ma.predict_region(fit, test="hk", crit_scale="measured")
+    assert scaled.crit_scale > 1.0
+    assert scaled.crit_base == pytest.approx(plain.crit, rel=1e-12)
+    assert scaled.crit == pytest.approx(plain.crit * scaled.crit_scale,
+                                        rel=1e-12)
+    assert scaled.to_dict()["crit_scale"] == pytest.approx(scaled.crit_scale)
+    # the covariance is untouched: a scaled region is the same ellipsoid, only
+    # its critical value moves, so the marginal bounds widen by sqrt(scale)
+    assert np.allclose(scaled.cov, plain.cov)
+    assert "scaled by" in str(scaled)
+
+
+def test_a_crit_scale_has_to_be_meaningful():
+    fit, _ = _small_fit()
+    plain = ma.predict_region(fit, test="t")
+    tripled = ma.predict_region(fit, test="t", crit_scale=3.0)
+    assert tripled.crit == pytest.approx(3.0 * plain.crit, rel=1e-12)
+    assert tripled.crit_scale == pytest.approx(3.0)
+    with pytest.raises(ValueError, match="measured against the 'hk' reference"):
+        ma.predict_region(fit, test="t", crit_scale="measured")
+    with pytest.raises(ValueError, match="unknown crit_scale"):
+        ma.predict_region(fit, test="hk", crit_scale="small-k")
+    with pytest.raises(ValueError, match="positive finite"):
+        ma.predict_region(fit, test="hk", crit_scale=0.0)

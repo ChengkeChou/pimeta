@@ -484,7 +484,7 @@ weighted mean of the range- and IQR-based estimates).
 
 **Note**
 
-Only ``dist="norm"`` is supported; metafor's log-normal back-transform (``dist="lnorm"``) and the ``estmeansd``/``metaBLUE`` based methods (``qe``/``bc``/``mln``/``blue``) are not transcribed.
+Only ``dist="norm"`` is supported; metafor's log-normal back-transform (``dist="lnorm"``) and the ``estmeansd``/``metaBLUE`` based methods (``qe``/``bc``/``mln``/``blue``) are not implemented.
 
 ## `conv_2x2`
 
@@ -499,7 +499,7 @@ conv_2x2(ori=None, ri=None, x2i=None, ni=None, n1i=None, n2i=None, sens=None, sp
 Cell counts can be recovered from either an odds ratio (``ori``), a phi
 coefficient (``ri``) or a chi-square statistic (``x2i``) together with the
 marginal counts ``n1i``/``n2i``, or from at least three of
-sensitivity/specificity/PPV/NPV.  This is a faithful transcription of
+sensitivity/specificity/PPV/NPV.  This implements
 ``metafor::conv.2x2`` including the ``"simple"``, ``"optim"`` and
 ``"search"`` reconstruction methods.
 

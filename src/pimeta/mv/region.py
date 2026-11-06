@@ -96,6 +96,10 @@ class PredictionRegion:
     #: variance inflation applied to the *estimation* part of the covariance
     #: (1.0 unless ``test="hk"``); the between-study part is never inflated
     scale: float = 1.0
+    #: multiplier applied to the critical value (1.0 unless ``crit_scale`` was
+    #: given), and the critical value before it was applied
+    crit_scale: float = 1.0
+    crit_base: float = 0.0
 
     @property
     def dim(self) -> int:
@@ -159,6 +163,8 @@ class PredictionRegion:
             "for_observation": bool(self.for_observation),
             "test": self.test,
             "ref_df": list(self.df) if self.df else None,
+            "crit_scale": float(self.crit_scale),
+            "crit_base": float(self.crit_base or self.crit),
         }
 
     def __str__(self) -> str:
@@ -169,9 +175,17 @@ class PredictionRegion:
             f"{what}",
             f"{self._reference()} critical value {self.crit:.4f}, "
             f"from {self.k} studies",
+        ]
+        if self.crit_scale != 1.0:
+            lines.append(
+                f"critical value scaled by {self.crit_scale:.2f} "
+                f"(unscaled {self.crit_base:.4f}); the multiplier is a "
+                "measured small-sample calibration, so this region is not "
+                "the nominal one in the usual sense")
+        lines.extend([
             "",
             f"{'outcome':>12}{'estimate':>10}{'pred_lb':>10}{'pred_ub':>10}",
-        ]
+        ])
         for row in self.marginal():
             lines.append(
                 f"{row['outcome']:>12}{row['estimate']:>10.4f}"
@@ -180,6 +194,91 @@ class PredictionRegion:
         lines.append("the two bounds are the projection of the ellipsoid and "
                      "are therefore wider than per-outcome intervals")
         return "\n".join(lines)
+
+
+#: Measured small-sample multipliers for the critical value of
+#: ``test="hk"``, keyed by the dimension of the region.  Each entry is
+#: ``{k: multiplier}``.
+#:
+#: How they were obtained: at each cell the 95th percentile of
+#: ``(theta - centre)' cov^-1 (theta - centre)`` was computed from 2000
+#: replications (500 for J>2), divided by the critical value the reference used,
+#: and then **applied unchanged to an independent seed**, where it gave the
+#: coverage in the last column.  The measurement, its Monte Carlo errors and the
+#: volume each multiplier costs are in ``metabench/reports/B2_joint_region_formal.md``.
+#:
+#: The table is not a formula and cannot be one: the multiplier is not monotone
+#: in ``k``, because the Hotelling and Hartung-Knapp references already adapt
+#: their degrees of freedom, so what is left over is not a smooth function of
+#: ``k`` alone.
+MEASURED_CRIT_SCALE: dict[int, dict[int, float]] = {
+    2: {5: 1.00, 10: 2.11, 20: 2.37, 50: 1.29},
+}
+
+#: coverage the multipliers above were validated at, per ``(J, k)``
+MEASURED_CRIT_COVERAGE: dict[tuple[int, int], float] = {
+    (2, 5): 0.972, (2, 10): 0.956, (2, 20): 0.947, (2, 50): 0.939,
+}
+
+
+def _resolve_crit_scale(spec, *, test: str, k: int, J: int,
+                        crit: float) -> tuple[float, float]:
+    """Turn ``crit_scale`` into ``(multiplier, unscaled crit)``.
+
+    ``"measured"`` reads the table above, interpolating in ``log k`` between the
+    tabulated cells and refusing a ``J`` that was never measured.  A number is
+    taken at face value.  Anything else is a programming error and says so.
+    """
+    if spec is None:
+        return 1.0, float(crit)
+    if isinstance(spec, str):
+        if spec != "measured":
+            raise ValueError(
+                f"unknown crit_scale {spec!r}; pass a number, None, or "
+                "'measured'")
+        if test != "hk":
+            raise ValueError(
+                "crit_scale='measured' was measured against the 'hk' "
+                f"reference; with test={test!r} it would scale a different "
+                "critical value and the calibration would not apply")
+        table = MEASURED_CRIT_SCALE.get(int(J))
+        if table is None:
+            raise ValueError(
+                f"crit_scale='measured' has no calibration for J = {J}; "
+                f"it was measured for J in {sorted(MEASURED_CRIT_SCALE)}.  "
+                "Pass an explicit number if you have your own calibration")
+        keys = sorted(table)
+        if k <= keys[0]:
+            multiplier = table[keys[0]]
+        elif k >= keys[-1]:
+            multiplier = table[keys[-1]]
+        else:
+            upper = next(key for key in keys if key >= k)
+            lower = max(key for key in keys if key <= k)
+            if lower == upper:
+                multiplier = table[lower]
+            else:
+                # interpolate in log k: the multipliers decay roughly like 1/k
+                t = (np.log(k) - np.log(lower)) / (np.log(upper) - np.log(lower))
+                multiplier = float(table[lower]
+                                   + t * (table[upper] - table[lower]))
+        if k < keys[0] or k > keys[-1]:
+            warnings.warn(
+                "crit_scale='measured' was calibrated for k between "
+                f"{keys[0]} and {keys[-1]}; k = {k} is outside that range, so "
+                f"the multiplier {multiplier:.2f} is extrapolated",
+                RuntimeWarning, stacklevel=3)
+        return float(multiplier), float(crit)
+    try:
+        value = float(spec)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"crit_scale must be a number, 'measured' or None, not {spec!r}"
+        ) from exc
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError(
+            f"crit_scale must be a positive finite number, not {value!r}")
+    return float(value), float(crit)
 
 
 def _univariate_sigma(result):
@@ -320,7 +419,7 @@ def _bootstrap_critical(result, *, level, simulate, n_boot: int,
 
 def predict_region(result, *, level=None, observation=None, test="t",
                    df=None, simulate=None, n_boot: int = 200,
-                   seed=None) -> PredictionRegion:
+                   seed=None, crit_scale=None) -> PredictionRegion:
     r"""Joint prediction region for a new study.
 
     Args:
@@ -344,9 +443,9 @@ def predict_region(result, *, level=None, observation=None, test="t",
             by :math:`q = r'M^{-1}r/(k_s - p)` and refers the result to
             :math:`J F_{J,\,k_s-p}`; it is the best of the closed forms at
             small ``k`` (0.87 at ``k = 10``) but not calibrated either.
-            ``"bootstrap"`` is the one that reaches nominal at small ``k``;
-            it costs ``n_boot`` refits and its cutoff is data-dependent by
-            design, so it is opt-in rather than the default.
+            ``"bootstrap"`` carries the estimation error of the whole model
+            but inherits the bias of the covariance it conditions on; measured
+            at ``k = 5, 10, 20`` it reaches 0.81, 0.88 and 0.86.
         df: denominator degrees of freedom for ``test="t"``; defaults to
             ``k - p``.  For ``test="hk"`` it defaults to the number of
             **studies** minus ``p``.  Ignored by ``test="z"``.
@@ -359,6 +458,16 @@ def predict_region(result, *, level=None, observation=None, test="t",
         n_boot: bootstrap replicates; 200 by default, refused below 20.
         seed: seed for the bootstrap generator, so a critical value can be
             reproduced.
+        crit_scale: multiplier for the critical value, or ``"measured"`` for
+            the small-sample multiplier measured on the metabench design.  The
+            closed-form references under-cover at small ``k`` by 10 to 30
+            points and the deficit is a *conditional* one -- the covariance is
+            too small when the variance estimates are small -- so the repair
+            that works is a multiplier on the critical value, and it has to be
+            measured rather than derived.  ``"measured"`` requires
+            ``test="hk"`` (the multiplier was measured against that base) and
+            raises for a model whose ``J`` was not part of the measurement.
+            A number is applied as given, with no claim attached to it.
 
     Returns:
         :class:`PredictionRegion`.
@@ -366,36 +475,56 @@ def predict_region(result, *, level=None, observation=None, test="t",
     Raises:
         ValueError: when the fit has no between-study covariance matrix, when
             ``observation`` has the wrong shape, when that matrix is not
-            positive definite, or when ``test="t"`` is asked for with too few
-            degrees of freedom to form the reference.
+            positive definite, when ``test="t"`` is asked for with too few
+            degrees of freedom to form the reference, or when ``crit_scale``
+            is not available for this ``J``.
 
     Warns:
         RuntimeWarning: with ``test="z"`` and 20 or fewer residual degrees of
-            freedom, quoting the measured coverage at small ``k``.
+            freedom, quoting the measured coverage at small ``k``; and when a
+            ``crit_scale`` multiplier is used, because a scaled region is no
+            longer the nominal one in the usual sense -- its coverage was
+            measured, and the measurement is what makes it usable.
 
     Note:
+        Two measurements exist, on two designs.  They agree in direction and
+        differ in size, which is itself the useful part.
+
+        On the internal two-outcome baseline
+        (``tests/reference/coverage_predict_region.json``, 100 replications),
+        coverage at ``k = 10`` and ``k = 20`` was: chi-square 0.830 and 0.940,
+        Hotelling 0.830 and 0.940, Hartung-Knapp 0.870 and 0.960, and the
+        parametric bootstrap 0.910 and 0.970.
+
+        On the metabench design (two outcomes, ``rho = 0.3``,
+        ``tau^2 = (0.04, 0.09)``, 2000 replications per cell) the same
+        references give 0.690 at ``k = 10`` and 0.768 at ``k = 20`` under
+        chi-square, 0.741 and 0.793 under Hotelling, 0.863 and 0.846 under
+        Hartung-Knapp, and the bootstrap 0.880 and 0.860 for 3.7 to 4.6 times
+        the chi-square volume.  What differs between the designs is the size of
+        the deficit, not its existence.
+
         The ``F`` reference is exact for a *known* Wishart covariance with
         ``m - 1`` degrees of freedom.  A meta-analysis estimates the
         between-study covariance by REML from the same ``k`` studies, so its
         effective degrees of freedom are fewer than ``k - p``, and the region
-        still under-covers at ``k = 10``.
+        still under-covers at ``k = 10``.  The bootstrap carries that estimation
+        error but also *inherits the bias* of the ``Sigma-hat`` it conditions
+        on, which is why it improves coverage without reaching nominal.
 
-        ``test="bootstrap"`` is the reference that carries that estimation
-        error.  Measured through this function (199 replicates per fit, 100
-        replications of the two-outcome harness): 0.910 at ``k = 10`` against
-        0.830 for both closed-form references, and 0.970 at ``k = 20`` against
-        0.940.  A second run with 99 replicates gave 0.940 and 0.970.  So it is
-        an improvement of 5 to 8 points at ``k = 10`` rather than a fix, and it
-        slightly over-covers at ``k = 20``.  Its cutoff is also *data
-        dependent* by design: on a ``k = 10`` fit whose replicate covariances
-        vary a lot it can be several times the asymptotic one, because that is
-        what the data justify.  That is why it is opt-in and ``test="t"`` is
-        still the default.
+        ``crit_scale="measured"`` is the option that was measured to restore
+        nominal coverage: the multiplier was read off a 2000-replicate run and
+        then applied unchanged to an independent seed, where it gave 0.947 at
+        ``k = 10`` and 0.956 at ``k = 20`` for 3.2 to 4.1 times the
+        chi-square volume.  It is opt-in because it is a calibrated table, not
+        a theorem.
 
     Example:
         >>> r = ma.predict_region(fit)                 # doctest: +SKIP
         >>> r.contains([-0.3, 0.4])                    # doctest: +SKIP
         >>> r.marginal()                               # doctest: +SKIP
+        >>> r = ma.predict_region(fit, test="hk",       # doctest: +SKIP
+        ...                       crit_scale="measured")
     """
     if not isinstance(result, RmaMvResult):
         raise TypeError("'result' must be an RmaMvResult from rma_mv()")
@@ -443,6 +572,7 @@ def predict_region(result, *, level=None, observation=None, test="t",
 
     alpha = level_to_alpha(result.level if level is None else level)
     J = int(mu.size)
+    visited_studies = _n_studies(result)
     ref_df = None
     if test == "bootstrap":
         if simulate is None:
@@ -498,6 +628,11 @@ def predict_region(result, *, level=None, observation=None, test="t",
             "region is unbounded; the between-study covariance is probably "
             "singular (see confint_rma_mv for the same diagnostic)") from exc
 
+    crit_scale_value, crit_base = _resolve_crit_scale(
+        crit_scale, test=test, k=visited_studies, J=J, crit=crit)
+    if crit_scale_value != 1.0:
+        crit = float(crit) * crit_scale_value
+
     return PredictionRegion(
         names=list(names) if names else [f"outcome {i + 1}"
                                          for i in range(mu.size)],
@@ -510,4 +645,6 @@ def predict_region(result, *, level=None, observation=None, test="t",
         test=test,
         df=ref_df,
         scale=float(scale),
+        crit_scale=float(crit_scale_value),
+        crit_base=float(crit_base),
     )

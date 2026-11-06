@@ -9,7 +9,7 @@
 | [`run_meta`](#run_meta) | rma |
 | [`pool_yv`](#pool_yv) | — |
 | [`result_to_dict`](#result_to_dict) | — |
-| [`confint_tau2`](#confint_tau2) | confint.rma.uni |
+| [`confint_tau2`](#confint_tau2) | — |
 | [`Tau2Confint`](#tau2confint) | confint |
 | [`predict_rma`](#predict_rma) | predict.rma |
 | [`PredictResult`](#predictresult) | predict.rma |
@@ -170,9 +170,7 @@ Serialize a PooledResult to a plain ``dict`` of Python scalars.
 confint_tau2(y: 'ArrayLike', v: 'ArrayLike', tau2: 'float', method: 'str' = 'REML', level: 'float' = 0.05, type: 'str' = 'QP', X: 'np.ndarray | None' = None) -> 'Tau2Confint'
 ```
 
-*Mirrors R's `confint.rma.uni`.*
-
-CI for tau^2 (transcribed from ``metafor::confint.rma.uni``).
+Profile-likelihood CI for tau^2.
 
 **Args**
 
@@ -2161,7 +2159,7 @@ A profile-likelihood interval for one variance component.
 ## `predict_region`
 
 ```python
-predict_region(result, *, level=None, observation=None, test='t', df=None, simulate=None, n_boot: 'int' = 200, seed=None) -> 'PredictionRegion'
+predict_region(result, *, level=None, observation=None, test='t', df=None, simulate=None, n_boot: 'int' = 200, seed=None, crit_scale=None) -> 'PredictionRegion'
 ```
 
 Joint prediction region for a new study.
@@ -2171,11 +2169,12 @@ Joint prediction region for a new study.
 - `result` — a `RmaMvResult` with a multivariate random term (``random="~ outcome | study"`` with ``struct="UN"`` or similar).
 - `level` — confidence level, accepted as ``95``, ``0.95`` or ``0.05``; defaults to the level the model was fitted with.
 - `observation` — the new study's sampling covariance (``J x J``), when the question is where its *observed* estimates would fall rather than where its true effects would.
-- `test` — ``"t"`` (default) for the Hotelling :math:`F` small-sample reference, ``"z"`` for the asymptotic :math:`\chi^2_J` one, ``"hk"`` for the multivariate Hartung-Knapp one, or ``"bootstrap"`` for a critical value calibrated by re-simulating and **refitting** the model (see ``simulate``).  ``"t"`` is the default because it was measured to be better at every ``k`` -- 0.83 against 0.77 at ``k = 10``, 0.93 against 0.92 at ``k = 20``, 0.95 against 0.94 at ``k = 40`` -- and because a reference that under-covers by 12 points at ``k = 10`` is not a defensible default.  ``"hk"`` inflates the estimation part of the covariance by :math:`q = r'M^{-1}r/(k_s - p)` and refers the result to :math:`J F_{J,\,k_s-p}`; it is the best of the closed forms at small ``k`` (0.87 at ``k = 10``) but not calibrated either. ``"bootstrap"`` is the one that reaches nominal at small ``k``; it costs ``n_boot`` refits and its cutoff is data-dependent by design, so it is opt-in rather than the default.
+- `test` — ``"t"`` (default) for the Hotelling :math:`F` small-sample reference, ``"z"`` for the asymptotic :math:`\chi^2_J` one, ``"hk"`` for the multivariate Hartung-Knapp one, or ``"bootstrap"`` for a critical value calibrated by re-simulating and **refitting** the model (see ``simulate``).  ``"t"`` is the default because it was measured to be better at every ``k`` -- 0.83 against 0.77 at ``k = 10``, 0.93 against 0.92 at ``k = 20``, 0.95 against 0.94 at ``k = 40`` -- and because a reference that under-covers by 12 points at ``k = 10`` is not a defensible default.  ``"hk"`` inflates the estimation part of the covariance by :math:`q = r'M^{-1}r/(k_s - p)` and refers the result to :math:`J F_{J,\,k_s-p}`; it is the best of the closed forms at small ``k`` (0.87 at ``k = 10``) but not calibrated either. ``"bootstrap"`` carries the estimation error of the whole model but inherits the bias of the covariance it conditions on; measured at ``k = 5, 10, 20`` it reaches 0.81, 0.88 and 0.86.
 - `df` — denominator degrees of freedom for ``test="t"``; defaults to ``k - p``.  For ``test="hk"`` it defaults to the number of **studies** minus ``p``.  Ignored by ``test="z"``.
 - `simulate` — ``test="bootstrap"`` only.  A callable that takes a seeded ``numpy.random.Generator`` and returns a **refitted** result of the same model on data simulated from the fit at hand.  The library cannot build one itself: a fitted result does not carry the sampling covariances the simulation needs, and guessing them would turn a calibration study into a different study.
 - `n_boot` — bootstrap replicates; 200 by default, refused below 20.
 - `seed` — seed for the bootstrap generator, so a critical value can be reproduced.
+- `crit_scale` — multiplier for the critical value, or ``"measured"`` for the small-sample multiplier measured on the metabench design.  The closed-form references under-cover at small ``k`` by 10 to 30 points and the deficit is a *conditional* one -- the covariance is too small when the variance estimates are small -- so the repair that works is a multiplier on the critical value, and it has to be measured rather than derived.  ``"measured"`` requires ``test="hk"`` (the multiplier was measured against that base) and raises for a model whose ``J`` was not part of the measurement. A number is applied as given, with no claim attached to it.
 
 **Returns**
 
@@ -2183,41 +2182,57 @@ Joint prediction region for a new study.
 
 **Raises**
 
-- `ValueError` — when the fit has no between-study covariance matrix, when ``observation`` has the wrong shape, when that matrix is not positive definite, or when ``test="t"`` is asked for with too few degrees of freedom to form the reference.
+- `ValueError` — when the fit has no between-study covariance matrix, when ``observation`` has the wrong shape, when that matrix is not positive definite, when ``test="t"`` is asked for with too few degrees of freedom to form the reference, or when ``crit_scale`` is not available for this ``J``.
 
 Warns:
     RuntimeWarning: with ``test="z"`` and 20 or fewer residual degrees of
-        freedom, quoting the measured coverage at small ``k``.
+        freedom, quoting the measured coverage at small ``k``; and when a
+        ``crit_scale`` multiplier is used, because a scaled region is no
+        longer the nominal one in the usual sense -- its coverage was
+        measured, and the measurement is what makes it usable.
 
 **Note**
 
+Two measurements exist, on two designs.  They agree in direction and
+differ in size, which is itself the useful part.
+On the internal two-outcome baseline
+(``tests/reference/coverage_predict_region.json``, 100 replications),
+- `coverage at ``k = 10`` and ``k = 20`` was` — chi-square 0.830 and 0.940,
+Hotelling 0.830 and 0.940, Hartung-Knapp 0.870 and 0.960, and the
+parametric bootstrap 0.910 and 0.970.
+On the metabench design (two outcomes, ``rho = 0.3``,
+``tau^2 = (0.04, 0.09)``, 2000 replications per cell) the same
+references give 0.690 at ``k = 10`` and 0.768 at ``k = 20`` under
+chi-square, 0.741 and 0.793 under Hotelling, 0.863 and 0.846 under
+Hartung-Knapp, and the bootstrap 0.880 and 0.860 for 3.7 to 4.6 times
+the chi-square volume.  What differs between the designs is the size of
+the deficit, not its existence.
 The ``F`` reference is exact for a *known* Wishart covariance with
 ``m - 1`` degrees of freedom.  A meta-analysis estimates the
 between-study covariance by REML from the same ``k`` studies, so its
 effective degrees of freedom are fewer than ``k - p``, and the region
-still under-covers at ``k = 10``.
-``test="bootstrap"`` is the reference that carries that estimation
-error.  Measured through this function (199 replicates per fit, 100
-- `replications of the two-outcome harness)` — 0.910 at ``k = 10`` against
-0.830 for both closed-form references, and 0.970 at ``k = 20`` against
-0.940.  A second run with 99 replicates gave 0.940 and 0.970.  So it is
-an improvement of 5 to 8 points at ``k = 10`` rather than a fix, and it
-slightly over-covers at ``k = 20``.  Its cutoff is also *data
-- `dependent* by design` — on a ``k = 10`` fit whose replicate covariances
-vary a lot it can be several times the asymptotic one, because that is
-what the data justify.  That is why it is opt-in and ``test="t"`` is
-still the default.
+still under-covers at ``k = 10``.  The bootstrap carries that estimation
+error but also *inherits the bias* of the ``Sigma-hat`` it conditions
+on, which is why it improves coverage without reaching nominal.
+``crit_scale="measured"`` is the option that was measured to restore
+- `nominal coverage` — the multiplier was read off a 2000-replicate run and
+then applied unchanged to an independent seed, where it gave 0.947 at
+``k = 10`` and 0.956 at ``k = 20`` for 3.2 to 4.1 times the
+chi-square volume.  It is opt-in because it is a calibrated table, not
+a theorem.
 
 **Example**
 
 - `>>> r = ma.predict_region(fit)                 # doctest` — +SKIP
 - `>>> r.contains([-0.3, 0.4])                    # doctest` — +SKIP
 - `>>> r.marginal()                               # doctest` — +SKIP
+- `>>> r = ma.predict_region(fit, test="hk",       # doctest` — +SKIP
+...                       crit_scale="measured")
 
 ## `PredictionRegion`
 
 ```python
-PredictionRegion(names: 'list[str]', center: 'np.ndarray', cov: 'np.ndarray', crit: 'float', level: 'float', k: 'int', for_observation: 'bool' = False, test: 'str' = 'z', df: 'list[float] | None' = None, scale: 'float' = 1.0) -> None
+PredictionRegion(names: 'list[str]', center: 'np.ndarray', cov: 'np.ndarray', crit: 'float', level: 'float', k: 'int', for_observation: 'bool' = False, test: 'str' = 'z', df: 'list[float] | None' = None, scale: 'float' = 1.0, crit_scale: 'float' = 1.0, crit_base: 'float' = 0.0) -> None
 ```
 
 An ellipsoidal prediction region for a new study's effect vector.

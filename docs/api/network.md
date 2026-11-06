@@ -263,7 +263,7 @@ Comparison-level data produced by `pairwise`.
 netrank(result: 'NetmetaResult', small_values: 'str' = 'desirable') -> 'NetrankResult'
 ```
 
-P-scores (R眉cker & Schwarzer 2015), exact transcription of netrank.R.
+P-scores (Rücker & Schwarzer 2015).
 
 ``P[i, j]`` = probability treatment *i* is better than treatment *j*,
 computed from the two-sided p-value matrix as a one-sided p-value and

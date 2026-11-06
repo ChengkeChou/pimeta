@@ -34,7 +34,6 @@ from .basis import (
     wald_test,
 )
 from .bayes import Posterior, ess_bulk, ess_tail, rhat, sample_log_posterior
-from .checks import Diagnosis, Diagnostic, diagnose
 from .catalog import (
     describe,
     list_diagnostics,
@@ -42,6 +41,7 @@ from .catalog import (
     list_estimators,
     list_models,
 )
+from .checks import Diagnosis, Diagnostic, diagnose
 from .conv import (
     Conv2x2Result,
     ConvDeltaResult,

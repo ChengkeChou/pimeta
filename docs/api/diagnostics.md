@@ -59,7 +59,7 @@
 | [`inches2units`](#inches2units) | inches2units |
 | [`units2inches`](#units2inches) | units2inches |
 | [`jama_labels`](#jama_labels) | JAMAlabels |
-| [`ci`](#ci) | ci |
+| [`ci`](#ci) | — |
 | [`getmfopt`](#getmfopt) | getmfopt |
 | [`setmfopt`](#setmfopt) | setmfopt |
 | [`estimates`](#estimates) | estimates |
@@ -959,9 +959,7 @@ jama_labels(author, year, citation)
 ci(te, seTE, level=0.95, df=None, null_effect=0.0)
 ```
 
-*Mirrors R's `ci`.*
-
-``meta:::ci`` — confidence interval and test for an effect estimate.
+Confidence interval and test for an effect estimate.
 
 **Args**
 

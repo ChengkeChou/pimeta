@@ -13,9 +13,9 @@ The intended use is::
     ['metabin', 'metacont', 'netmeta', 'rma', 'rma.glmm', 'rma.mv', ...]
     >>> info = ma.describe("predict_region")
     >>> info["validation_status"]
-    'unvalidated'
+    'measured-shortfall'
     >>> info["limitations"]
-    ['...measured joint coverage 66.3% at k=10 against a claimed 95%...']
+    ['Measured joint coverage of the *prediction* region, 2000 replicates ...']
 
 Design rules, because a catalogue of claims is worse than none if it drifts:
 
@@ -119,7 +119,8 @@ _CATALOGUE: dict[str, dict[str, Any]] = {
             "Viechtbauer (2010) J Stat Softw 36(3) - rma.mv",
             "Berkey et al. (1998) Stat Med 17 - the multivariate model",
         ],
-        evidence="metabench/reports/D_covariance.md; families D1-D8",
+        evidence="docs/guide/validation-evidence.md; "
+                 "metabench/reports/D_covariance.md; families D1-D8",
     ),
     "predict_region": _entry(
         kind="inference",
@@ -129,22 +130,82 @@ _CATALOGUE: dict[str, dict[str, Any]] = {
             "Sigma-hat is treated as known",
             "the region is an ellipsoid from a chi-square (or F) reference",
         ],
-        methods=["z", "t"],
-        default="test='z' (chi-square reference)",
+        methods=["z", "t", "hk", "bootstrap"],
+        default="test='t' (Hotelling reference)",
         validation_status="measured-shortfall",
         limitations=[
-            "Measured joint coverage of the *prediction* region is 66.3% at "
-            "k=10 and 87.0% at k=50 against a claimed 95% (chi-square "
-            "reference, 6 cells, MCSE about 0.05 at n=250); the deficit shrinks "
-            "like 1/k. The region for the *mean* is calibrated (93.3-99.3%), "
-            "so the cause is the prediction step, not the estimate.",
+            "Measured joint coverage of the *prediction* region, 2000 "
+            "replicates per cell, two correlated outcomes: 0.670 at k=5, "
+            "0.690 at k=10, 0.768 at k=20 and 0.870 at k=50 against a claimed "
+            "95% (chi-square reference; MC half-width 0.02). Hotelling "
+            "reaches 0.825/0.741/0.793/0.877, Hartung-Knapp "
+            "0.972/0.863/0.846/0.893. The region for the *mean* is calibrated "
+            "(0.96-1.00), so the cause is the prediction step, not the "
+            "estimate.",
+            "The deficit is not a scale error: the median of the pivot is "
+            "already 1.5-2.3x its chi-square value and its 95th percentile is "
+            "4.6-5.7x the chi-square critical value, so a fixed widening "
+            "repairs the average and not the tail.",
+            "test='bootstrap' lifts coverage to 0.810/0.880/0.860 at k=5/10/20 "
+            "for 3.7-4.6x the chi-square volume; it inherits the bias of the "
+            "Sigma-hat it conditions on, so it under-corrects.",
+            "A measured multiplier on the Hotelling or Hartung-Knapp critical "
+            "value does reach nominal off-sample (0.947-0.956 at k=10-20) but "
+            "costs 3.2-5.8x the chi-square volume and the multiplier is not "
+            "monotone in k, so it is a calibrated table rather than a formula; "
+            "predict_region(crit_scale='measured') applies it and refuses a J "
+            "that was not measured.",
+            "With more outcomes the closed forms collapse: measured coverage "
+            "at k=20 is 0.646 for J=3 and 0.342 for J=5, while Hartung-Knapp "
+            "holds at 0.836 and 0.880. A calibrated J=5 region is 26x the "
+            "chi-square volume, at which point per-outcome intervals are the "
+            "more useful answer.",
             "Do not read the nominal level as coverage at small k.",
         ],
         references=[
             "Riley, Higgins & Deeks (2011) Stat Med 30 - multivariate prediction",
             "Cheung (2015) Res Synth Methods 6 - multivariate meta-analysis",
         ],
-        evidence="metabench/reports/B_joint_region.md, tests/reference/coverage_predict_region.json",
+        evidence="docs/guide/validation-evidence.md; "
+                 "metabench/reports/B2_joint_region_formal.md, "
+                 "metabench/reports/B_joint_region.md",
+    ),
+    "predict_rma": _entry(
+        kind="inference",
+        entry_point="predict_rma",
+        summary="Prediction interval for the true effect of one new study.",
+        assumptions=[
+            "the new study is exchangeable with the fitted ones, so its true "
+            "effect is drawn from the same N(mu, tau^2)",
+            "tau^2 is treated as known once estimated",
+        ],
+        methods=["default", "t"],
+        default="t reference with k-1 df on sqrt(tau^2 + se^2)",
+        validation_status="measured-shortfall",
+        limitations=[
+            "Measured coverage of the *true effect* of a new study, 2000 "
+            "replicates per cell: 0.797 at k=5, 0.836 at k=10, 0.888 at k=20, "
+            "0.919 at k=50 and 0.931 at k=100 against a claimed 95% "
+            "(MC half-width 0.011-0.018). predtype='t' is better everywhere "
+            "(0.893/0.867/0.900/) and still short at k<=20; the confidence "
+            "interval from the same fits covers 0.885-0.949.",
+            "The width collapses when tau^2_hat does: the correlation between "
+            "the half-width and tau^2_hat is 0.97, while the correlation "
+            "between the half-width and the error it has to cover is 0.03, and "
+            "tau^2_hat is 0 at 28% of k=5 replicates.",
+            "A scale factor does not repair it: even at twice the width, k=5 "
+            "reaches 0.925. Blending 20% of the way to the 95% upper bound for "
+            "tau^2 reaches nominal at k=10 off-sample (0.947) for 1.5x the "
+            "width, is conservative at k=5 (0.977, 2.2x) and 0.938 at k=20.",
+        ],
+        references=[
+            "Higgins, Thompson & Spiegelhalter (2009) JRSS-A 172 - "
+            "re-evaluating random-effects meta-analysis",
+            "Riley, Higgins & Deeks (2011) BMJ 342 - interpretation of random "
+            "effects meta-analysis",
+        ],
+        evidence="docs/guide/validation-evidence.md; "
+                 "metabench/reports/C_prediction_interval.md",
     ),
     "ipd_two_stage_curve": _entry(
         kind="model",

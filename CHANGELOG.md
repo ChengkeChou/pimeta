@@ -4,6 +4,60 @@ All notable changes to `pimeta` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.10] - 2026-11-06
+
+Additive, plus the three fixes that had been keeping the build red.
+**1.1.9 was tagged but never reached PyPI**: its own new catalogue test failed in
+CI, which runs the whole suite before it uploads.
+
+### Added
+
+- **`predict_region(crit_scale=...)`: a critical value that is calibrated rather
+  than nominal.**  Measured at 2000 replicates per cell, the joint prediction
+  region covers 0.670 at `k = 5`, 0.690 at `k = 10`, 0.768 at `k = 20` and 0.870
+  at `k = 50` against a claimed 0.95 -- and the deficit is *conditional*: the
+  covariance is too small exactly when the variance estimates are small, so a
+  larger sample or a different reference distribution does not repair it.  What
+  does repair it is a multiplier on the critical value, and it has to be
+  measured: `crit_scale="measured"` applies the multipliers read off that run
+  (1.00 / 2.11 / 2.37 / 1.29 at k = 5 / 10 / 20 / 50, on the `hk` reference) and
+  then **validated on a seed that was not used to compute them**, where they
+  give 0.947-0.956 for 3.2-4.1x the chi-square volume.  It refuses a `J` that was
+  not measured rather than interpolating into one (the multiplier is 2.11 at
+  k = 10 with two outcomes, 1.59 with `rho = 0.7` and 1.53 with three), refuses
+  `test` values other than `"hk"`, and records `crit_scale` and `crit_base` on
+  the result so that a scaled region cannot be mistaken for a nominal one.
+- `docs/guide/validation-evidence.md`: the measured numbers behind every
+  `describe()` status, shipped with the package, so that the `evidence` paths
+  resolve without the measurement harness being checked out.
+- The catalogue gains `predict_rma` as its ninth entry, because the univariate
+  prediction interval had never been measured: 0.797 at `k = 5`, 0.836 at `k = 10`,
+  0.888 at `k = 20`, 0.919 at `k = 50`, 0.931 at `k = 100`.  Its diagnosis is the
+  same as the region's -- the width collapses when `tau^2` does (correlation 0.97)
+  while the error it must cover does not (0.03) -- and the same repair works
+  (a partial move towards the upper bound for `tau^2` reaches 0.947 at `k = 10`
+  off-sample for 1.5x the width).
+
+### Changed
+
+- `predict_region` quotes the 2000-replicate measurement instead of the 300-
+  replicate screening run, and names the parametric bootstrap's failure mode:
+  it inherits the bias of the `Sigma-hat` it conditions on, so it improves
+  coverage (0.741 to 0.880 at `k = 10`) without reaching nominal.
+- `_mv_loglik_blocked` accumulates the between-study matrix explicitly instead
+  of calling `sum()` on the component list.  Identical arithmetic; the `int`
+  that `sum()` returns for an empty list is what made the expression an
+  `int | ndarray` union that CI's mypy rejects.
+
+### Fixed
+
+- **The build.**  Three jobs were red: `ruff` (three unsorted import blocks and
+  a missing trailing newline), `mypy` (the union above), and `shard 1/4` on every
+  Python version, because `test_evidence_points_at_a_file_that_exists` required
+  the `metabench` reports to be present while CI checks out this repository
+  alone.  The evidence page added above is shipped here, so the assertion holds
+  in a bare checkout and still holds locally, where the full reports exist.
+
 ## [1.1.9] - 2026-11-05
 
 Additive: five new names, no existing behaviour changed.
@@ -3279,6 +3333,9 @@ First public release. Complete pure-Python reproduction of R's `metafor`
 - No R, rpy2, or third-party meta-analysis package is used or required.
 
 [1.0.0]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.0.0
+[1.1.10]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.10
+[1.1.9]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.9
+[1.1.8]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.8
 [1.1.7]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.7
 [1.1.6]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.6
 [1.1.5]: https://github.com/ChengkeChou/pimeta/releases/tag/v1.1.5

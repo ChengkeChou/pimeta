@@ -750,12 +750,40 @@ accepts, which one is the default and why, the limitations that have been
 | `parity` | agrees with a reference implementation; says nothing about calibration |
 | `unvalidated` | no measurement exists in this repository |
 
-This matters most where a nominal level is easy to misread.  The joint
-prediction region is filed as `measured-shortfall`, because its measured joint
-coverage is 66.3% at k=10 rising to 87.0% at k=50 against a claimed 95%; the
-region for the *mean* is calibrated, so the cause is the prediction step.  A
-package that does not say this is inviting the wrong conclusion from a
-correctly computed number.
+This matters most where a nominal level is easy to misread.  Both prediction
+steps are filed as `measured-shortfall`, with their numbers:
+
+- the joint prediction region covers **0.670 at k=5, 0.690 at k=10, 0.768 at
+  k=20 and 0.870 at k=50** against a claimed 0.95 (2000 replicates per cell);
+- the univariate prediction interval covers **0.797 at k=5, 0.836 at k=10, 0.888
+  at k=20, 0.919 at k=50 and 0.931 at k=100**.
+
+In both cases the interval about the *mean* is calibrated, so the cause is the
+prediction step and not the estimate: both treat the estimated heterogeneity as
+if it were known.  A package that does not say this is inviting the wrong
+conclusion from a correctly computed number.
+
+Measured corrections are recorded too, because a defect with a price is more
+useful than a warning: scaling the Hotelling or Hartung-Knapp critical value by a
+measured factor reaches 0.947-0.956 off-sample at k=10-20 for 3.2-5.8x the
+chi-square volume, and building the univariate interval from
+`tau^2_hat + 0.2(tau^2_ub - tau^2_hat)` reaches 0.947 at k=10 for 1.5x the
+width.  Neither is the default; the tables are in
+`metabench/reports/B2_joint_region_formal.md` and
+`metabench/reports/C_prediction_interval.md`.
+
+The region multiplier is available as an option rather than baked in, because it
+is a calibration and not a theorem:
+
+```python
+region = ma.predict_region(fit, test="hk", crit_scale="measured")
+region.crit_scale, region.crit_base   # what was applied, and to what
+```
+
+It refuses any `J` that was not measured rather than interpolating into one —
+measured, the multiplier is 2.11 at k=10 with two outcomes, 1.59 with `rho=0.7`
+and 1.53 with three, so a table keyed on `k` alone would be wrong as soon as the
+design moves.
 
 ## License
 

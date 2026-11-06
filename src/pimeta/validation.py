@@ -33,8 +33,8 @@ from typing import Any
 
 import numpy as np
 
-from .parallel import map_ordered, resolve_jobs
 from ._tolerance import BOUNDARY_TOL
+from .parallel import map_ordered, resolve_jobs
 
 __all__ = [
     "SCHEMA_VERSION",

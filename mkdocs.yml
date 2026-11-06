@@ -62,6 +62,7 @@ nav:
   - Coming from R: migration-from-r.md
   - Guides:
       - Capability matrix: guide/capability-matrix.md
+      - Validation evidence: guide/validation-evidence.md
       - Roadmap: guide/roadmap.md
       - Effect sizes: guide/effect-sizes.md
       - Pooling: guide/pooling.md

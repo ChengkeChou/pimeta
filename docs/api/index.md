@@ -1,6 +1,6 @@
 # API reference
 
-All 545 public names in `pimeta.__all__`, generated from the source docstrings.
+All 550 public names in `pimeta.__all__`, generated from the source docstrings.
 
 | Name | Section | Mirrors in R |
 |---|---|---|
@@ -102,7 +102,7 @@ All 545 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`run_meta`](models.md#run_meta) | Models | rma |
 | [`pool_yv`](models.md#pool_yv) | Models | — |
 | [`result_to_dict`](models.md#result_to_dict) | Models | — |
-| [`confint_tau2`](models.md#confint_tau2) | Models | confint.rma.uni |
+| [`confint_tau2`](models.md#confint_tau2) | Models | — |
 | [`Tau2Confint`](models.md#tau2confint) | Models | confint |
 | [`predict_rma`](models.md#predict_rma) | Models | predict.rma |
 | [`PredictResult`](models.md#predictresult) | Models | predict.rma |
@@ -404,7 +404,7 @@ All 545 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`inches2units`](diagnostics.md#inches2units) | Diagnostics and utilities | inches2units |
 | [`units2inches`](diagnostics.md#units2inches) | Diagnostics and utilities | units2inches |
 | [`jama_labels`](diagnostics.md#jama_labels) | Diagnostics and utilities | JAMAlabels |
-| [`ci`](diagnostics.md#ci) | Diagnostics and utilities | ci |
+| [`ci`](diagnostics.md#ci) | Diagnostics and utilities | — |
 | [`getmfopt`](diagnostics.md#getmfopt) | Diagnostics and utilities | getmfopt |
 | [`setmfopt`](diagnostics.md#setmfopt) | Diagnostics and utilities | setmfopt |
 | [`estimates`](diagnostics.md#estimates) | Diagnostics and utilities | estimates |
@@ -545,12 +545,12 @@ All 545 public names in `pimeta.__all__`, generated from the source docstrings.
 | [`settings_netmeta`](s3.md#settings_netmeta) | S3-style generics and reporting | — |
 | [`META_DEFAULTS`](s3.md#meta_defaults) | S3-style generics and reporting | — |
 | [`NETMETA_DEFAULTS`](s3.md#netmeta_defaults) | S3-style generics and reporting | — |
+| [`describe`](misc.md#describe) | Other | — |
+| [`list_models`](misc.md#list_models) | Other | — |
+| [`list_estimators`](misc.md#list_estimators) | Other | — |
+| [`list_effect_sizes`](misc.md#list_effect_sizes) | Other | — |
+| [`list_diagnostics`](misc.md#list_diagnostics) | Other | — |
 | [`diagnose`](misc.md#diagnose) | Other | — |
 | [`Diagnostic`](misc.md#diagnostic) | Other | — |
 | [`Diagnosis`](misc.md#diagnosis) | Other | — |
 | [`STRATEGIES`](misc.md#strategies) | Other | — |
-| [`describe`](misc.md#describe) | Other | Discovery |
-| [`list_models`](misc.md#list_models) | Other | Discovery |
-| [`list_estimators`](misc.md#list_estimators) | Other | Discovery |
-| [`list_effect_sizes`](misc.md#list_effect_sizes) | Other | Discovery |
-| [`list_diagnostics`](misc.md#list_diagnostics) | Other | Discovery |

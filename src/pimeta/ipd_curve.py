@@ -49,10 +49,10 @@ from typing import Any
 import numpy as np
 from scipy import stats
 
+from ._tolerance import BOUNDARY_TOL, RHO_BOUNDARY_TOL
 from .basis import Basis, rcs
 from .ipd import StudyFit, _label, linear_model, logistic_model
 from .levels import level_to_alpha, level_to_percent
-from ._tolerance import BOUNDARY_TOL, RHO_BOUNDARY_TOL
 
 __all__ = ["IpdCurve", "IpdCurveResult", "ipd_two_stage_curve"]
 

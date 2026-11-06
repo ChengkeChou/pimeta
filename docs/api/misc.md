@@ -1,13 +1,65 @@
 # Other
 
-*4 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
+*9 public names, generated from `pimeta.__all__` and the docstrings in `src/pimeta/`. Do not edit this page by hand — run `python tools/gen_api_docs.py`.*
 
 | Name | Mirrors in R |
 |---|---|
+| [`describe`](#describe) | — |
+| [`list_models`](#list_models) | — |
+| [`list_estimators`](#list_estimators) | — |
+| [`list_effect_sizes`](#list_effect_sizes) | — |
+| [`list_diagnostics`](#list_diagnostics) | — |
 | [`diagnose`](#diagnose) | — |
 | [`Diagnostic`](#diagnostic) | — |
 | [`Diagnosis`](#diagnosis) | — |
 | [`STRATEGIES`](#strategies) | — |
+
+## `describe`
+
+```python
+describe(name: 'str') -> 'dict[str, Any]'
+```
+
+Everything this repository can say about one entry point.
+
+Returns a dict with ``kind``, ``entry_point``, ``summary``,
+``assumptions``, ``methods``, ``default``, ``validation_status``,
+``limitations``, ``references`` and ``evidence``.  The status is one of
+``validated``, ``conditional``, ``parity`` or ``unvalidated``; see the
+module docstring for what each means, and ``evidence`` for the file that
+backs it.
+
+## `list_models`
+
+```python
+list_models() -> 'list[str]'
+```
+
+Names accepted by `describe`.
+
+## `list_estimators`
+
+```python
+list_estimators() -> 'dict[str, str]'
+```
+
+The tau^2 estimators, by the name accepted in ``method=``.
+
+## `list_effect_sizes`
+
+```python
+list_effect_sizes() -> 'dict[str, str]'
+```
+
+The effect-size families, and the measures in each.
+
+## `list_diagnostics`
+
+```python
+list_diagnostics() -> 'dict[str, str]'
+```
+
+The diagnostics a fit can report, and what each answers.
 
 ## `diagnose`
 
@@ -58,36 +110,3 @@ The diagnostics for one fit, with the worst severity first.
 ## `STRATEGIES`
 
 *Mapping (`dict`) with 3 keys:* `complete_case`, `available_case`, `likelihood`
-
-## Discovery
-
-Five functions answer "what can this package do, and how far is each part
-trusted" without reading the source.
-
-```python
-import pimeta as ma
-
-ma.list_models()          # names accepted by describe()
-ma.list_estimators()      # tau^2 estimators, by the name used in method=
-ma.list_effect_sizes()    # effect-size families and the measures in each
-ma.list_diagnostics()     # the diagnostics a fit can report
-ma.describe("rma.mv")     # assumptions, methods, default, limitations, evidence
-```
-
-`describe()` returns `kind`, `entry_point`, `summary`, `assumptions`,
-`methods`, `default`, `validation_status`, `limitations`, `references` and
-`evidence`.  The status is one of:
-
-| status | meaning |
-|---|---|
-| `validated` | the quantity was measured here and the claim held |
-| `conditional` | measured, and it holds within the stated conditions |
-| `measured-shortfall` | measured, and it does **not** meet the nominal claim; the numbers are quoted |
-| `parity` | agrees with a reference implementation; says nothing about calibration |
-| `unvalidated` | no measurement exists in this repository |
-
-`evidence` names the file that backs the claim, and
-`tests/test_catalog.py` asserts that the file exists and that the status is in
-the vocabulary -- a catalogue of unbacked claims is worse than none.
-
-::: pimeta.catalog

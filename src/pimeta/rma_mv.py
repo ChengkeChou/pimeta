@@ -1122,7 +1122,12 @@ def _mv_loglik_blocked(
     # `Y` is (n, 1) inside rma_mv but a caller may hand over a flat vector, and
     # the blocked path indexes the second axis
     Y = np.asarray(Y, dtype=float).reshape(n, -1)
-    D = sum(D_list) if D_list else np.zeros((n, n))
+    # `sum()` over an empty list is the int 0, and mypy is right that the union
+    # then leaks into the matrix arithmetic below; the explicit accumulator keeps
+    # the type and the behaviour identical.
+    D = np.zeros((n, n))
+    for block_D in D_list:
+        D = D + block_D
     if not np.all(np.isfinite(D)):
         return _INVALID_POINT
     layout = _uniform_layout(groups, n)
